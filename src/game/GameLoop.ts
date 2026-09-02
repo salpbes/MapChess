@@ -48,6 +48,7 @@ export class GameLoop {
     this.selected = null;
     this.busy = false;
     this.deps.view.showPosition(this.deps.engine.pieces());
+    this.deps.bus.emit('game-started', { players: this.players });
     this.refreshHighlights();
     this.publishStatus();
     void this.maybePlayAi();

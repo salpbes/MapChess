@@ -278,3 +278,21 @@ Point attractors slide their cell toward the feature (50 %) and push its corners
 **Decision:** Each cell is classified as grass / wood / scrub / water / sand from the feature polygons (centroid counts 3, corners 1 each; majority wins) or, on coastal boards, from mean elevation < 1.5 m. Every cover has a light and a dark variant so the a1-dark checker pattern survives; risers are one earth colour; every platform edge gets a thin dark outline.
 
 **Why:** a cell must read both as "forest" and as "a dark square". Two shades per cover does both; the outline covers the case where neighbouring cells share a cover and a shade would otherwise be the only cue. Merged by (cover, shade) so the whole board is at most a dozen draw calls.
+
+## D-031 — Piece identities: per-colour halves, two-pass greedy, knights before bishops
+
+**Date:** 2026-09-02 · **Phase:** 10
+
+**Decision:** Each colour draws its sixteen identities from the 32 cells of its own half (ranks 1–4 / 5–8). Each piece type has a scorer with a primary rule and terrain-only fallbacks (rook: summit → ridge → headland → highest ground; bishop: place of worship → religious name → historic → old name → wood; knight: ford → pass → horse/cattle/crossing name → stream → moor; king/queen: settlement rank → historic → named; pawns: minor places → named → borrowed → low ground). Assignment is two-pass: every piece with a strong match (≥ 600) takes it first; the rest fill from what is left. Within a pass, knights pick before bishops.
+
+**Why:** a single greedy pass let a knight's weak fallback ("any named cell") take the church before the bishop was considered, and let the second bishop take the only ford. Two passes fix both without a global optimiser, and stay deterministic and explainable ("the summit of Ashberry Hill, 99 m").
+
+**Rejected:** identities tied to the piece's home square's own cell (a1 is rarely a peak); a global assignment solver (correct but opaque — the reason string matters more than optimality).
+
+## D-032 — Cell names are unique across the board; borrowed and generated names are phrased, not embedded
+
+**Date:** 2026-09-02 · **Phase:** 10
+
+**Decision:** After the fallback chain, a uniqueness pass keeps one cell per duplicate name (the one holding the named point feature, else the first) and re-names the others with height-relative or positional words ("Upper Abbot Hagg Wood", "Abbot Hagg Wood Edge"; "Above River Rye", "Beside River Rye"). Reason strings append "at X" / "of X" only for real names; borrowed and generated names would read as nonsense there.
+
+**Why:** a wood spanning six cells and a river along eight gave eight pawns the same name and produced "the ridge at Near Nessend". Unique names make the reveal legible and give Phase 11's move list something to say.

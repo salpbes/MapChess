@@ -11,10 +11,12 @@
 
 import { FlatBoardLayout } from '@domain/board/FlatBoardLayout';
 import { WarpedBoardLayout } from '@domain/board/WarpedBoardLayout';
+import { buildBoardTheme } from '@domain/theme/buildBoardTheme';
 import { buildTerrainInputs } from '@mapdata/board/buildTerrainInputs';
 import { classifyCellCover } from '@mapdata/board/classifyCellCover';
 import type { HeightField } from '@mapdata/model/HeightField';
 import type { MapFeature } from '@mapdata/model/MapFeature';
+import { buildCellFacts } from '@mapdata/theme/buildCellFacts';
 import type { WorldModel } from '@world/builders/WorldModel';
 
 export type BoardMode = 'flat' | 'warped';
@@ -72,6 +74,11 @@ export class BoardComposer {
     const terrain = buildTerrainInputs(this.boardSizeMeters, this.heights, this.features);
     const layout = new WarpedBoardLayout(terrain);
     const cover = classifyCellCover(layout, this.features, this.heights);
+    const { scale, baseMeters } = layout.terraceInfo;
+    const facts = buildCellFacts(layout, this.features, cover, {
+      yToMeters: (y) => (scale > 0 ? y / scale + baseMeters : baseMeters),
+    });
+    const theme = buildBoardTheme(facts);
     this.onBoard({
       mode: 'warped',
       model: {
@@ -80,10 +87,8 @@ export class BoardComposer {
         heights: this.heights,
         features: this.features,
         cover,
-        exaggeration: {
-          scale: layout.terraceInfo.scale,
-          baseMeters: layout.terraceInfo.baseMeters,
-        },
+        exaggeration: { scale, baseMeters },
+        theme,
       },
     });
   }
@@ -98,6 +103,7 @@ export class BoardComposer {
         features: null,
         cover: null,
         exaggeration: null,
+        theme: null,
       },
     });
   }

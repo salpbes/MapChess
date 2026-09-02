@@ -558,3 +558,59 @@ Phase 10 — terrain theming: score cells and features to give every piece an id
 - **Labels overlap pieces** at the default camera angle; they sit at 2.2 label-heights above the platform. Phase 10 replaces them with per-cell identity shown on selection, so I have not tuned them further.
 - **Shadow acne on steep risers** is visible at some angles on Glen Coe. `normalBias` is already set; the map is one 2048² cascade. If it bites, a second cascade or a larger bias.
 - **No terrain under the flat board.** In flat mode the landscape is hidden entirely; a "flat board in its landscape" would be a cheap addition if wanted.
+
+---
+
+## Phase 10 — Terrain theming
+
+**Date:** 2026-09-02
+**Project completion: 91%**
+
+### In plain English
+
+Every piece is now somebody. Click White's rook at Rievaulx and a card appears: _♖ Ashberry Hill — White's rook — the summit of Ashberry Hill, 99 m_. The bishop is St Mary the Virgin; the king is the village; a knight is Bridge Cottage, because of its name. Black takes its own identities from its own side of the valley. Every one of the 64 cells has a name too — a real one where OpenStreetMap has one, a borrowed one ("Below Ashberry Hill") where a named thing is close by, and a made-up one ("High Moor", "Nether Meadow") where there is nothing at all — so the board is never blank, even in an empty field. The identities follow the pieces as they move.
+
+### What I built
+
+- `src/domain/theme/types.ts` — `CellFacts` in, `CellIdentity` + `PieceIdentity` + `BoardTheme` out; the theme's own vocabulary, no mapdata imports.
+- `src/domain/theme/wordlists.ts` — religious and horse/cattle stems (whole-word matching), generated-name vocabulary.
+- `src/domain/theme/nameCells.ts` — the fallback chain (old_name → historic → name → nearby → generated), ground descriptions, a uniqueness pass (D-032).
+- `src/domain/theme/assignPieces.ts` — scorers per piece type; per-colour halves; two-pass greedy with knights before bishops (D-031).
+- `src/domain/theme/buildBoardTheme.ts` — the entry point.
+- `src/mapdata/theme/buildCellFacts.ts` — `IBoardLayout` + `MapFeature[]` + `CellCover` → `CellFacts[]`: features inside each cell, named features within 450 m at their distance, real heights via the exaggeration inverse, coastal flag.
+- `src/game/PieceTracker.ts` — identities follow moves, captures, castling, promotion (+ undo).
+- `src/game/ThemeTracker.ts` — wires the tracker to `game-started` / `move-played`; answers "what is on this square?".
+- `src/game/GameEvents.ts`, `GameLoop.ts` — new `game-started` event.
+- `src/ui/IdentityCard.ts` — the reveal on `selection-changed`.
+- `src/app/BoardComposer.ts`, `WorldModel.ts` — the theme is built with the warped board and travels in the model.
+- `tests/domain/theme/theme.test.ts` (13) and `tests/game/PieceTracker.test.ts` (3) — the chain rule by rule, the assignment rules on a hand-built board, a board with **no data at all**, determinism, completeness + uniqueness + own-half on all three fixtures, and named expectations (Rievaulx → king/queen, an Abbey/St Mary bishop, Ashberry Hill rook; Glen Coe rooks are summits/ridges/highest). 203 total.
+
+### Why it was done this way
+
+- **Domain stays pure.** The theme never sees `MapFeature`; the adapter translates once. It is tested with hand-written facts in the same file as the fixture runs.
+- **Two-pass assignment (D-031).** One greedy pass let a knight's weak fallback take the church and a bishop take the only ford. Strong matches first, fallbacks after, is simple, deterministic and keeps the "why" string honest.
+- **Terrain-only floors everywhere.** Every scorer bottoms out in height, cover or water, so an empty rural square still gives rooks the high ground, knights the streams, bishops the woods — BUILD_PLAN §8's sparse-naming case, built alongside the happy path as §1 demanded.
+- **Uniqueness pass (D-032).** Real areas have one wood across six cells and one river along eight; without it, eight pawns were all "Abbot Hagg Wood".
+- **Identities live in `game/`, not the engine.** chess.js knows squares; `PieceTracker` remembers who is who through captures, castling and promotion ("a queen, once a pawn").
+- **Rejected:** identity from the home square's own cell (a1 is rarely a peak); a global assignment optimiser (opaque); putting the reveal in the 3D scene (a DOM card is legible and free).
+
+### How to check it yourself
+
+1. `npm run dev` → `/?debug` → **Example areas… → Rievaulx**.
+2. Click White's h1 rook: _♖ Above High Ash Plantation — the highest ground on this side, 169 m_. Click the g1 knight: _the crossing where Hagg Hall meets the water_. Click a pawn: _from the wooded low ground, by a stream_, standing on Abbot Hagg Farm.
+3. Click an empty cell: just its name and ground (_e4 · wooded low ground, on the river, 71 m_).
+4. Move a piece; click it again on its new square — same identity, new "standing on".
+5. **→ Glencoe**: bishops carry the Gaelic _Abhainn Chomhann_ as an old name; rooks are summits and ridges. **→ Lindisfarne**: bishops are St Cuthbert's, rooks the cliffs and ridges, the queen is Red Brae.
+6. `npm run test` → 17 files, 203 tests.
+
+### What's left
+
+Phase 11 — the game shell: menu, new game, side and difficulty, move list, captured pieces, undo, resign, game over, save/load (with the area), loading and error states. The pieces now have names for the move list to use.
+
+### Risks / things I'm unsure about
+
+- **Rievaulx's kings are humble.** White's half has no village, so its king is "the isolated dwelling of Scawton Croft" — correct by the rules, a little bathetic. A future refinement could let one colour borrow the other half's second-best settlement when its own half has none above "farm".
+- **Borrowed names dominate rural boards.** Glen Coe is 28 "By/Near/Below X" cells out of 64. Honest, but repetitive; more varied prefixes or blending with generated nouns ("Coe Water Meadow") would read better.
+- **Stem lists are English-first.** Gaelic/Welsh church and horse words (cill, llan, each, capall) are absent after I removed two fuzzy stems; a curated list per language is the proper fix.
+- **Reasons are templated English.** They read fine ("the summit of Ashberry Hill, 99 m") but a native speaker will spot the seams ("the isolated dwelling of").
+- **Mid-game area change keeps old identities** (deliberate). Phase 11 should start a new game on area change, which removes the edge case.

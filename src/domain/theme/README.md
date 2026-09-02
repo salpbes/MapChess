@@ -1,11 +1,15 @@
 # `src/domain/theme/` — terrain and names → identity
 
-**Belongs here:** scoring cells and features to assign piece identity (rook = highest cell, bishop = religious/historic name, knight = crossing or pass, king/queen = the two most significant settlements, pawns = the rest) and the display-name fallback chain:
+**Belongs here:** turning facts about cells into names and piece identities. Pure: no mapdata, no three.js.
 
-`old_name` → `historic` name → `name` → nearest natural feature → generated name from terrain type.
+| File                 | Responsibility                                                                                                                                                                                                                                  |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `types.ts`           | `CellFacts` (input), `CellIdentity`, `PieceIdentity`, `BoardTheme` (output).                                                                                                                                                                    |
+| `wordlists.ts`       | Religious and horse/cattle stems; vocabulary for generated names; whole-word `hasStem`.                                                                                                                                                         |
+| `nameCells.ts`       | The fallback chain: old_name → historic → name → nearby ("Below Ashberry Hill") → generated ("High Moor"); uniqueness pass.                                                                                                                     |
+| `assignPieces.ts`    | Per colour, from its own half: king/queen ← settlements, rooks ← summits/ridges/headlands/highest, knights ← fords/passes/names, bishops ← churches/holy names/historic, pawns ← the rest. Two-pass so fallbacks never steal primaries (D-031). |
+| `buildBoardTheme.ts` | `CellFacts[] → BoardTheme`.                                                                                                                                                                                                                     |
 
-**Does not belong here:** rendering labels, fetching OSM data. This layer receives already-normalised `MapFeature[]` and a finished `IBoardLayout` and returns identities.
+**Fed by** `mapdata/theme/buildCellFacts.ts`. **Consumed by** `game/ThemeTracker.ts` (identities follow pieces) and `ui/IdentityCard.ts` (the reveal on selection).
 
-**Hard rule:** a board must never render with a blank cell. The fallback chain is built alongside the happy path, not after.
-
-**Built in:** Phase 10.
+**Hard rule:** a board must never render with a blank cell, and every one of the 32 pieces must get an identity from a distinct cell in its own half — even with zero OSM data. `tests/domain/theme/theme.test.ts` checks this on an empty board and on all three fixtures.

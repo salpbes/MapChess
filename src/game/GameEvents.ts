@@ -10,6 +10,8 @@ import type { Color, GameStatus, Move, MoveRequest } from '@domain/chess/types';
 import type { EventBus } from '@shared/events/EventBus';
 
 export interface GameEvents extends Record<string, unknown> {
+  /** A game began from the start position (also after newGame). */
+  'game-started': { readonly players: Readonly<Record<Color, 'human' | 'ai'>> };
   'status-changed': { readonly status: GameStatus; readonly turn: Color };
   'move-played': Move;
   'move-refused': IllegalMoveError;

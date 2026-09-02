@@ -15,6 +15,7 @@ import { ChessEngine } from '@domain/chess/ChessEngine';
 import type { GameEvents } from '@game/GameEvents';
 import { GameLoop } from '@game/GameLoop';
 import type { Players } from '@game/GameLoop';
+import { ThemeTracker } from '@game/ThemeTracker';
 import { IndexedDbStore, STORES } from '@mapdata/cache/KeyValueStore';
 import { ElevationLoader } from '@mapdata/elevation/ElevationLoader';
 import { fixtureEntries } from '@mapdata/elevation/fixtureAreas';
@@ -42,6 +43,7 @@ import { BoardDebugPanel } from '@ui/BoardDebugPanel';
 import { FeaturesDebugPanel } from '@ui/FeaturesDebugPanel';
 import { FpsMeter } from '@ui/FpsMeter';
 import { HeightmapDebugPanel } from '@ui/HeightmapDebugPanel';
+import { IdentityCard } from '@ui/IdentityCard';
 import { OpponentPanel } from '@ui/OpponentPanel';
 import type { NewGameRequest } from '@ui/OpponentPanel';
 import { PromotionPrompt } from '@ui/PromotionPrompt';
@@ -110,6 +112,8 @@ export function bootstrap(
 
   // --- ui ---
   const statusBar = new StatusBar(uiContainer, bus);
+  const themeTracker = new ThemeTracker(bus);
+  const identityCard = new IdentityCard(uiContainer, bus, themeTracker);
   const initialSeating: NewGameRequest = {
     humanColor: config.defaultHumanColor,
     difficulty: config.defaultDifficulty,
@@ -174,6 +178,7 @@ export function bootstrap(
   const boardScene = new BoardScene({ stage, pieces, highlights, picker });
   const composer = new BoardComposer(config.boardSizeMeters, ({ model, mode }) => {
     boardScene.show(model);
+    themeTracker.setTheme(model.theme);
     // Positions changed under the pieces; re-place them from the engine's position.
     view.showPosition(engine.pieces());
     const t = model.terrain;
@@ -227,6 +232,8 @@ export function bootstrap(
       stopFps();
       fps?.dispose();
       panel.dispose();
+      identityCard.dispose();
+      themeTracker.dispose();
       statusBar.dispose();
       ai.dispose();
       stopAnimator();

@@ -8,6 +8,7 @@
 
 import type { IBoardLayout } from '@domain/board/IBoardLayout';
 import type { TerrainInputs } from '@domain/board/TerrainInputs';
+import type { BoardTheme } from '@domain/theme/types';
 import type { CellCover } from '@mapdata/board/classifyCellCover';
 import type { HeightField } from '@mapdata/model/HeightField';
 import type { MapFeature } from '@mapdata/model/MapFeature';
@@ -26,6 +27,8 @@ export interface WorldModel {
   readonly features: readonly MapFeature[] | null;
   readonly cover: CellCover | null;
   readonly exaggeration: Exaggeration | null;
+  /** Cell names and piece identities; null for the plain board. */
+  readonly theme: BoardTheme | null;
 }
 
 /** Real metres → board Y under the model's exaggeration; identity-from-zero when there is none. */
