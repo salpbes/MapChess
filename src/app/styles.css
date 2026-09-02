@@ -132,38 +132,38 @@ body {
 
 .identity-card {
   position: absolute;
-  bottom: 56px;
-  left: 50%;
-  transform: translateX(-50%);
-  min-width: 280px;
-  max-width: 460px;
-  padding: 10px 16px;
+  top: 12px;
+  right: 12px;
+  width: 220px;
+  padding: 10px 12px;
   border-radius: 8px;
-  background: rgba(20, 22, 26, 0.85);
+  background: rgba(20, 22, 26, 0.82);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-  text-align: center;
+  text-align: left;
   line-height: 1.35;
+  /* Display only: clicks pass through to the board beneath. */
+  pointer-events: none;
 }
 
 .identity-card__piece {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 600;
   color: #ffd447;
 }
 
 .identity-card__reason {
-  font-size: 13px;
+  font-size: 12px;
   color: #e6e6e6;
   margin-bottom: 6px;
 }
 
 .identity-card__cell {
-  font-size: 14px;
+  font-size: 13px;
   color: #c9cdd4;
 }
 
 .identity-card__ground {
-  font-size: 12px;
+  font-size: 11px;
   color: #8fb8ff;
   font-variant-numeric: tabular-nums;
 }
@@ -189,10 +189,10 @@ body {
 
 .features-panel {
   position: absolute;
-  top: 52px;
+  top: 150px;
   right: 12px;
   width: 300px;
-  max-height: calc(100vh - 120px);
+  max-height: calc(100vh - 220px);
   display: flex;
   flex-direction: column;
   gap: 6px;

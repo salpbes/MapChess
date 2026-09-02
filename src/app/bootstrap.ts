@@ -18,10 +18,12 @@ import type { Players } from '@game/GameLoop';
 import { ThemeTracker } from '@game/ThemeTracker';
 import { IndexedDbStore, STORES } from '@mapdata/cache/KeyValueStore';
 import { ElevationLoader } from '@mapdata/elevation/ElevationLoader';
+import type { IElevationView } from '@mapdata/elevation/ElevationLoader';
 import { fixtureEntries } from '@mapdata/elevation/fixtureAreas';
 import { FixtureElevationProvider } from '@mapdata/elevation/FixtureElevationProvider';
 import { TerrariumElevationProvider } from '@mapdata/elevation/TerrariumElevationProvider';
 import { FeatureLoader } from '@mapdata/features/FeatureLoader';
+import type { IFeaturesView } from '@mapdata/features/FeatureLoader';
 import {
   featureFixtureEntries,
   FixtureFeatureProvider,
@@ -122,7 +124,8 @@ export function bootstrap(
     ai.setDifficulty(request.difficulty);
     game.newGame(toPlayers(request.humanColor));
   });
-  const fps = new URLSearchParams(window.location.search).has('debug')
+  const debug = new URLSearchParams(window.location.search).has('debug');
+  const fps = debug
     ? new FpsMeter(uiContainer, () => ({
         calls: stage.renderer.info.render.calls,
         triangles: stage.renderer.info.render.triangles,
@@ -144,8 +147,9 @@ export function bootstrap(
     ),
     browserBase64,
   );
-  const heightmapPanel = new HeightmapDebugPanel(uiContainer);
-  const elevation = new ElevationLoader(elevationProvider, heightmapPanel);
+  // The data panels are development aids; outside ?debug the loaders report to the console only.
+  const heightmapPanel = debug ? new HeightmapDebugPanel(uiContainer) : null;
+  const elevation = new ElevationLoader(elevationProvider, heightmapPanel ?? SILENT_ELEVATION_VIEW);
 
   // Features: fixtures first (offline), then IndexedDB-cached, rate-limited Overpass (D-024).
   const featureProvider = new FixtureFeatureProvider(
@@ -154,8 +158,8 @@ export function bootstrap(
       new IndexedDbStore<CachedFeatures>(STORES.features, isCachedFeatures),
     ),
   );
-  const featuresPanel = new FeaturesDebugPanel(uiContainer);
-  const features = new FeatureLoader(featureProvider, featuresPanel);
+  const featuresPanel = debug ? new FeaturesDebugPanel(uiContainer) : null;
+  const features = new FeatureLoader(featureProvider, featuresPanel ?? SILENT_FEATURES_VIEW);
 
   const areaBar = new AreaBar(uiContainer, config.defaultArea, {
     geocoder: new NominatimGeocoder(),
@@ -197,7 +201,6 @@ export function bootstrap(
     });
   }
 
-  const debug = new URLSearchParams(window.location.search).has('debug');
   const boardDebug = debug
     ? new BoardDebugPanel(
         uiContainer,
@@ -225,9 +228,9 @@ export function bootstrap(
       boardDebug?.dispose();
       boardScene.dispose();
       features.dispose();
-      featuresPanel.dispose();
+      featuresPanel?.dispose();
       elevation.dispose();
-      heightmapPanel.dispose();
+      heightmapPanel?.dispose();
       areaBar.dispose();
       stopFps();
       fps?.dispose();
@@ -244,6 +247,22 @@ export function bootstrap(
     },
   };
 }
+
+/** Loaders still log to the console; without ?debug nothing is drawn for them. */
+const SILENT_ELEVATION_VIEW: IElevationView = {
+  showLoading: () => undefined,
+  showField: () => undefined,
+  showError: (message) => {
+    console.error('Elevation failed:', message);
+  },
+};
+const SILENT_FEATURES_VIEW: IFeaturesView = {
+  showLoading: () => undefined,
+  showFeatures: () => undefined,
+  showError: (message) => {
+    console.error('Features failed:', message);
+  },
+};
 
 function toPlayers(humanColor: NewGameRequest['humanColor']): Players {
   switch (humanColor) {
