@@ -337,3 +337,60 @@ Phase 6 — elevation: the throwaway Terrarium tile spike first, then `HeightFie
 - **Picker is desktop-only.** Mouse events for the square drag; touch comes with D-003's Phase 12 pass.
 - **The selection is not yet used by the board** — deliberately. Phase 8 consumes it; until then the flat board ignores it.
 - **Bundle is 1.6 MB (425 kB gzipped)** now that three.js, chess.js and MapLibre are all in one chunk. Fine for now; Phase 12 should split the picker into its own chunk.
+
+---
+
+## Phase 6 — Elevation layer
+
+**Date:** 2026-09-02
+**Project completion: 52%**
+
+### In plain English
+
+The game can now find out the shape of the ground for any chosen area: how high every point is, in metres. It fetches free elevation tiles from the internet, stitches them into a grid lined up with the board, and remembers them so the second time is instant. A small panel shows the result as a grey-scale picture — white is high, black is low — and you can already recognise Holy Island's outline and Malham's dry valley in it. Three areas ship inside the game so it works with no internet at all.
+
+### What I built
+
+- **Spike first, as the plan demanded (D-022).** Terminal probe: 200, `image/png`, CORS `*`. Browser probe: four areas decoded, min/max sensible (coast −22…18, Alps 1515…2970). Only then was code written.
+- `src/mapdata/elevation/TileMath.ts` — Web Mercator arithmetic, `zoomForResolution`, tile ranges.
+- `src/mapdata/elevation/terrarium.ts` — RGB → metres and the inverse for test fixtures.
+- `src/mapdata/model/HeightField.ts` — the grid type, `sampleHeight` (bilinear) and `sampleStats(polygon)` → min/mean/max.
+- `src/mapdata/elevation/assembleHeightField.ts` — tile mosaic → board-aligned field in one resampling pass (rotation + Mercator handled together).
+- `src/mapdata/elevation/IElevationProvider.ts`, `TerrariumElevationProvider.ts` — the seam and the browser implementation: cache → fetch → decode → assemble, 4 in flight, failed tile = sea level + log.
+- `src/mapdata/cache/TileCache.ts` — `IndexedDbTileCache` (every error degrades to a miss) and `MemoryTileCache`.
+- `src/mapdata/net/fetchJson.ts` — now also `fetchBlob`, sharing the timeout/retry policy.
+- `src/mapdata/elevation/heightFieldFixture.ts`, `fixtureAreas.ts`, `FixtureElevationProvider.ts`, `fixtures/*.json` — three offline areas (D-023), code-split.
+- `scripts/make-fixtures.ts` + `npm run make-fixtures` — regenerates fixtures via the shared assembly code.
+- `src/mapdata/elevation/ElevationLoader.ts` — area chosen → provider → view, with cancellation; defines `IElevationView`.
+- `src/ui/HeightmapDebugPanel.ts` — grey-scale canvas + caption (range, grid, source, timing).
+- `src/shared/encoding/base64.ts` — browser base64 for typed arrays.
+- `tests/mapdata/elevation.test.ts` — 21 tests: tile maths vs. the spike's indices, the Terrarium formula, bilinear sampling on a plane, polygon stats, mosaic assembly (incl. north–south sign), fixture round-trip, the shipped fixtures' ranges, fixture-first routing. 143 total.
+
+### Why it was done this way
+
+- **Resample once into the board frame.** Every consumer gets an axis-aligned grid in metres with +X east / +Z south; rotation and Mercator distortion are solved in one place. Phase 8 samples cells with `sampleStats`; Phase 9 builds a mesh with `sampleHeight`.
+- **Fixtures from the same code path (D-023).** Only the PNG decoder differs between Node and browser; a fixture is therefore a real regression baseline, not a mock.
+- **Fixture → cache → network chain.** `FixtureElevationProvider` wraps `TerrariumElevationProvider`, which wraps `IndexedDbTileCache`. app/ wires one object. Development at the three fixture areas touches no network at all.
+- **Failure degrades, never blocks.** A bad tile is sea level with a console error; a bad request shows its reason in the panel; IndexedDB trouble is a cache miss.
+- **Rejected:** Mapbox Terrain-RGB (needs a token; spike made it unnecessary); caching assembled fields by area instead of tiles (tiles are shared across neighbouring/rotated areas, fields are not); a `<canvas>`-free PNG decoder in the browser (createImageBitmap is fast and already there).
+
+### How to check it yourself
+
+1. `npm run dev`. Under the area bar, a grey-scale square appears almost immediately: _Elevation −1…21 m · 241×241 @ 10 m · offline fixture · ~20 ms_. That is Holy Island — you can see the island, the causeway and the tidal flats.
+2. **Choose area…**, search _Malham Cove_, pick it, **Use this area**. The caption counts tiles, then reads _network, 6 tiles @ z14 · ~800 ms_. The dark line down the middle is the dry valley north of the cove.
+3. Open the picker again and confirm the same area without moving: _cache, 6 tiles · ~35 ms_.
+4. Reload the page and repeat step 2: still _cache_ — it survived the reload (IndexedDB).
+5. `npm run make-fixtures` regenerates the three fixtures from live tiles and prints their ranges.
+6. `npm run test` → 12 files, 143 tests. `npm run build` → three `fixtures` chunks, loaded on demand.
+
+### What's left
+
+Phase 7 — the feature layer: one Overpass query per area for water, coast, forest, peaks and every named place (with `old_name`/`historic`), normalised into `MapFeature[]` in board metres, rate-limited and cached. Then Phase 8 has everything it needs.
+
+### Risks / things I'm unsure about
+
+- **Terrarium is smooth 30 m data upsampled.** Fine for 250 m cells; it will not show a 5 m river bank. The heightmap looks blurry because it _is_ — that is the source, not a bug.
+- **No attribution shown yet** for the terrain data (Mapzen/Tilezen, AWS Open Data; sources include SRTM, EU-DEM, etc.). Recorded for Phase 12 alongside OSM and Stockfish.
+- **`ElevationLoader` lives in `mapdata/`** but is glue rather than data access. It defines `IElevationView` so it never imports `ui/`; if it grows it should move to `game/` or a new `app/services/`.
+- **Vertical exaggeration is not applied here** — heights are true metres. Phase 8 owns the clamp-to-15–20%-of-width rule; the flat Lindisfarne fixture (21 m of relief on a 2 km board) is exactly the case that rule exists for.
+- **Fixture JSON adds ~465 KB to `dist/`** (but only ~42–100 KB gzipped per area, and only fetched when that area is chosen).

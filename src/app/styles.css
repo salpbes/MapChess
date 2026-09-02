@@ -100,6 +100,34 @@ body {
 
 /* ---- Phase 5: area selection ---- */
 
+.heightmap-panel {
+  position: absolute;
+  top: 52px;
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(20, 22, 26, 0.75);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  max-width: 260px;
+}
+
+.heightmap-panel__canvas {
+  width: 160px;
+  height: 160px;
+  image-rendering: pixelated;
+  border: 1px solid #3a3e46;
+  background: #000;
+}
+
+.heightmap-panel__caption {
+  color: #c9cdd4;
+  line-height: 1.35;
+}
+
 .area-bar {
   position: absolute;
   top: 12px;

@@ -1,8 +1,9 @@
-// WHAT: The one way MapChess fetches JSON from the network.
+// WHAT: The one way MapChess fetches from the network: JSON or binary.
 // HOW:  `fetch` with an AbortController timeout, a bounded number of retries
 //       with linear back-off, and a typed `NetworkError` that says which of
-//       timeout / http / network / parse went wrong. Callers pass a validator
-//       so the result is typed without trusting the server.
+//       timeout / http / network / parse went wrong. `fetchJson` adds a
+//       validator so the result is typed without trusting the server;
+//       `fetchBlob` returns raw bytes for image tiles.
 // WHY:  BUILD_PLAN §5 — every network call gets a timeout, a retry limit and
 //       a user-visible failure state. Centralising it means no call can forget.
 
@@ -20,27 +21,76 @@ export class NetworkError extends Error {
   }
 }
 
-export interface FetchJsonOptions<T> {
+export interface FetchPolicy {
   readonly timeoutMs?: number;
   /** Additional attempts after the first. */
   readonly retries?: number;
   readonly headers?: Record<string, string>;
+  readonly signal?: AbortSignal;
+}
+
+export interface FetchJsonOptions<T> extends FetchPolicy {
   /** Turns unknown JSON into T or throws; the throw becomes a 'parse' NetworkError. */
   readonly validate: (data: unknown) => T;
-  readonly signal?: AbortSignal;
 }
 
 const DEFAULT_TIMEOUT_MS = 8000;
 const DEFAULT_RETRIES = 1;
 const RETRY_DELAY_MS = 600;
 
-export async function fetchJson<T>(url: string, options: FetchJsonOptions<T>): Promise<T> {
+export function fetchJson<T>(url: string, options: FetchJsonOptions<T>): Promise<T> {
+  return fetchWithPolicy(
+    url,
+    { ...options, headers: { Accept: 'application/json', ...options.headers } },
+    async (response) => {
+      let data: unknown;
+      try {
+        data = await response.json();
+      } catch (error: unknown) {
+        throw new NetworkError(
+          'parse',
+          url,
+          error instanceof Error ? error.message : 'invalid JSON',
+        );
+      }
+      try {
+        return options.validate(data);
+      } catch (error: unknown) {
+        throw new NetworkError(
+          'parse',
+          url,
+          error instanceof Error ? error.message : 'unexpected shape',
+        );
+      }
+    },
+  );
+}
+
+export function fetchBlob(url: string, options: FetchPolicy = {}): Promise<Blob> {
+  return fetchWithPolicy(url, options, async (response) => {
+    try {
+      return await response.blob();
+    } catch (error: unknown) {
+      throw new NetworkError(
+        'network',
+        url,
+        error instanceof Error ? error.message : 'body read failed',
+      );
+    }
+  });
+}
+
+async function fetchWithPolicy<T>(
+  url: string,
+  options: FetchPolicy,
+  read: (response: Response) => Promise<T>,
+): Promise<T> {
   const retries = options.retries ?? DEFAULT_RETRIES;
   let lastError: NetworkError | null = null;
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
-      return await attemptOnce(url, options);
+      return await attemptOnce(url, options, read);
     } catch (error: unknown) {
       if (!(error instanceof NetworkError)) throw error;
       lastError = error;
@@ -60,7 +110,11 @@ export async function fetchJson<T>(url: string, options: FetchJsonOptions<T>): P
   throw lastError ?? new NetworkError('network', url, 'no attempts made');
 }
 
-async function attemptOnce<T>(url: string, options: FetchJsonOptions<T>): Promise<T> {
+async function attemptOnce<T>(
+  url: string,
+  options: FetchPolicy,
+  read: (response: Response) => Promise<T>,
+): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => {
     controller.abort();
@@ -74,7 +128,7 @@ async function attemptOnce<T>(url: string, options: FetchJsonOptions<T>): Promis
     let response: Response;
     try {
       response = await fetch(url, {
-        headers: { Accept: 'application/json', ...options.headers },
+        ...(options.headers === undefined ? {} : { headers: options.headers }),
         signal: controller.signal,
       });
     } catch (error: unknown) {
@@ -91,22 +145,7 @@ async function attemptOnce<T>(url: string, options: FetchJsonOptions<T>): Promis
       throw new NetworkError('http', url, response.statusText, response.status);
     }
 
-    let data: unknown;
-    try {
-      data = await response.json();
-    } catch (error: unknown) {
-      throw new NetworkError('parse', url, error instanceof Error ? error.message : 'invalid JSON');
-    }
-
-    try {
-      return options.validate(data);
-    } catch (error: unknown) {
-      throw new NetworkError(
-        'parse',
-        url,
-        error instanceof Error ? error.message : 'unexpected shape',
-      );
-    }
+    return await read(response);
   } finally {
     clearTimeout(timer);
     options.signal?.removeEventListener('abort', onOuterAbort);

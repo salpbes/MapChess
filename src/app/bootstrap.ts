@@ -14,11 +14,19 @@ import { ChessEngine } from '@domain/chess/ChessEngine';
 import type { GameEvents } from '@game/GameEvents';
 import { GameLoop } from '@game/GameLoop';
 import type { Players } from '@game/GameLoop';
+import { IndexedDbTileCache } from '@mapdata/cache/TileCache';
+import { ElevationLoader } from '@mapdata/elevation/ElevationLoader';
+import { fixtureEntries } from '@mapdata/elevation/fixtureAreas';
+import { FixtureElevationProvider } from '@mapdata/elevation/FixtureElevationProvider';
+import { TerrariumElevationProvider } from '@mapdata/elevation/TerrariumElevationProvider';
 import { NominatimGeocoder } from '@mapdata/geocode/NominatimGeocoder';
+import type { HeightField } from '@mapdata/model/HeightField';
 import type { SelectedArea } from '@mapdata/model/SelectedArea';
+import { browserBase64 } from '@shared/encoding/base64';
 import { EventBus } from '@shared/events/EventBus';
 import { AreaBar } from '@ui/AreaBar';
 import { FpsMeter } from '@ui/FpsMeter';
+import { HeightmapDebugPanel } from '@ui/HeightmapDebugPanel';
 import { OpponentPanel } from '@ui/OpponentPanel';
 import type { NewGameRequest } from '@ui/OpponentPanel';
 import { PromotionPrompt } from '@ui/PromotionPrompt';
@@ -40,6 +48,8 @@ export interface AppHandle {
   readonly stage: WorldStage;
   /** The area the player has picked; the flat board ignores it until Phase 8. */
   selectedArea(): SelectedArea;
+  /** Ground heights for the selected area, once loaded. */
+  heightField(): HeightField | null;
   dispose(): void;
 }
 
@@ -102,12 +112,23 @@ export function bootstrap(
           fps.tick(dt);
         });
 
-  // --- map area (Phase 5: selected and logged; consumed by the board from Phase 8) ---
+  // --- map area + elevation (Phase 5/6: selected, fetched and shown; consumed by the board from Phase 8) ---
+  // Fixtures first (offline), then IndexedDB-cached Terrarium tiles (D-022).
+  const elevationProvider = new FixtureElevationProvider(
+    fixtureEntries(),
+    new TerrariumElevationProvider(new IndexedDbTileCache()),
+    browserBase64,
+  );
+  const heightmapPanel = new HeightmapDebugPanel(uiContainer);
+  const elevation = new ElevationLoader(elevationProvider, heightmapPanel);
   const areaBar = new AreaBar(uiContainer, config.defaultArea, {
     geocoder: new NominatimGeocoder(),
     styleUrl: config.mapStyleUrl,
-    onAreaChanged: () => undefined,
+    onAreaChanged: (area) => {
+      void elevation.load(area);
+    },
   });
+  void elevation.load(config.defaultArea);
 
   // --- input ---
   const picker = new BoardPicker(stage.camera, layout, cells, pieces);
@@ -124,8 +145,11 @@ export function bootstrap(
     layout,
     stage,
     selectedArea: () => areaBar.current,
+    heightField: () => elevation.heightField,
     dispose: () => {
       input.dispose();
+      elevation.dispose();
+      heightmapPanel.dispose();
       areaBar.dispose();
       stopFps();
       fps?.dispose();

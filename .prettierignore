@@ -4,3 +4,4 @@ coverage/
 package-lock.json
 docs/*.html
 public/engine/
+src/mapdata/elevation/fixtures/
