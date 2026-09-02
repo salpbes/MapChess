@@ -448,3 +448,60 @@ Phase 8 — the warped lattice. It now has everything: `HeightField` with `sampl
 - **`name:gd` as "historic name" is a judgement call.** It reads well in the Highlands; in a bilingual town it may be wrong. Confined to one line in `namesOf()`.
 - **Multipolygon inner rings are dropped.** A lake inside a wood renders as wood in Phase 9 unless the lake is also present as its own feature (it usually is).
 - **Coastline direction** (land on the left) is preserved but not yet used; Phase 8/9 will need it to know which side is sea.
+
+---
+
+## Phase 8 — The warped lattice
+
+**Date:** 2026-09-02
+**Project completion: 74%**
+
+### In plain English
+
+The chessboard now takes the shape of the land. Choose Rievaulx and the River Rye runs down the seam between the c- and d-files; Ashberry Hill gets a bigger cell to itself; every cell is a level terrace stepped to the height of its ground, so Glen Coe rises steeply from White's side to Black's while Holy Island stays almost flat. It is still exactly chess — every square has the same neighbours it always had — and you can play the computer on it right now. A debug view shows the 64 labelled cells with the rivers and hilltops drawn over them.
+
+### What I built
+
+- `src/domain/board/TerrainInputs.ts` — what the lattice needs, in domain words: line attractors, point attractors, a height sampler.
+- `src/domain/board/geometry.ts` — nearest point on a polyline, convexity, segment crossing.
+- `src/domain/board/latticeWarp.ts` — the 9×9 warp: snap-to-line pull weighted by axis alignment, point attractors that slide and enlarge their cell, Laplacian relax, cap + boundary pin, repair loop (D-026). Pure and deterministic.
+- `src/domain/board/terrace.ts` — mean-or-minimum platform rule and vertical exaggeration with a flat-area cap (D-027).
+- `src/domain/board/WarpedBoardLayout.ts` — `IBoardLayout` #2: warp → scale → 64 cells in ALL_SQUARES order → terrace.
+- `src/mapdata/board/buildTerrainInputs.ts` — `HeightField` + `MapFeature[]` → `TerrainInputs`: river/coast weights, peak > town > village > … priorities, clipping to board + margin.
+- `src/app/BoardComposer.ts` — flat board immediately, warped when heights and features have both arrived; stale-area protection; flat/warped toggle (D-028).
+- `src/world/builders/BoardScene.ts` — applies a layout to the live scene: cells, pieces, highlights, picker, overlay, camera/controls/lights reframe.
+- `src/world/builders/DebugOverlayBuilder.ts` — file/rank sprites, river polylines, peak/place markers.
+- `src/world/scene/WorldStage.reframe()`, `setLayout()` on `PieceLayer`, `HighlightLayer`, `BoardPicker`.
+- `src/ui/BoardDebugPanel.ts` (`?debug`) and an **Example areas** dropdown in `AreaBar` for the three fixtures.
+- `tests/domain/board/geometry.test.ts` (10) and `WarpedBoardLayout.test.ts` (18) — the five plan invariants on all three fixture areas, plus flat-board equivalence, meander attraction, diagonal non-interference, point-attractor enlargement, hostile input, parameter override, and the adapter. 185 total.
+
+### Why it was done this way
+
+- **Three attempts, as the plan predicted.** Attempt 1 (spring pull, radius 0.9) barely moved vertices and let the repair loop undo the rest. Attempt 2 (snap within cap, radius 0.5) traced meanders beautifully and turned diagonal rivers into staircases. Attempt 3 weights the pull by axis alignment: on-axis rivers snap, diagonals are left alone. Measured on synthetic rivers, then confirmed by eye on Rievaulx.
+- **Repair by blending back, not by rejecting.** The plan says "reject any move that makes a quad non-convex"; blending the four corners of a bad quad halfway to the grid, repeatedly, is that rejection made continuous — it keeps most of the warp and always converges because the grid is valid.
+- **Inradius floor = plinth radius.** "Piece size stays constant" is enforced geometrically: a cell that could not hold a plinth is repaired, and the plinth was shrunk to 0.30 cells to match.
+- **Flat-area cap on exaggeration (D-027).** 17 % of width for real relief; at most 5 % for coasts. Otherwise Lindisfarne's 2 m of mud would be a mountain.
+- **Layout swap as a composer + scene service (D-028).** The plan's promise was "no change outside app/"; the honest result is one app-level composer, one world-level scene service, and `setLayout()` on three classes that previously took the layout in their constructors.
+- **Rejected:** Voronoi/watershed cells (not chess); scaling pieces to cells; the prototype's single-pass pull; clipping rivers inside `domain/` (the adapter clips, the lattice stays pure).
+
+### How to check it yourself
+
+1. `npm run dev` and open `/?debug`. Holy Island loads as a warped board almost immediately: gently irregular cells, very little relief, ditches drawn in blue, places as yellow dots.
+2. Top-left **Example areas… → Rievaulx**. The River Rye runs along the c/d seam from rank 3 to 6; Ashberry Hill (orange dot) sits inside an enlarged b4; the valley floor cells are lower than the wooded slopes.
+3. **Example areas… → Glencoe**: steep terraces rising toward Black; peaks inside cells on the h-file; the glen's streams snapping to edges where they run north–south.
+4. Untick **warped board**: the same terrain on a flat grid. Tick it again.
+5. Play a move — click e2, then e4. The pawn hops onto its terrace; Stockfish replies. Picking, highlights and animation all work on irregular cells.
+6. Drag to orbit: the camera reframed itself to the new relief; 60 fps.
+7. `npm run test` → 15 files, 185 tests; the invariant suite runs on all three fixtures.
+
+### What's left
+
+Phase 9 — render the world: a terrain mesh from the `HeightField`, visible terrace edges, water along the warped edges, wood/scrub materials, place-name labels. `WarpedBoardLayout` exposes the lattice and the terrace scale for exactly that.
+
+### Risks / things I'm unsure about
+
+- **Weights are tuned on three areas.** A wide river (two edges' worth) or a dense stream network will behave differently. Everything is in `DEFAULT_LATTICE_PARAMS`; the tests pin the invariants, not the look.
+- **Diagonal rivers are deliberately not traced.** They cut through cells as they would on a flat board. The alternative (staircases) looked worse; a future refinement could rotate the whole area to align the main river, which the picker already allows by hand.
+- **Terraces are stepped, not sloped.** A steep hillside becomes a stair of 64 flats. That is the plan's intent (readability wins), but Glen Coe's 340 m of relief is dramatic; Phase 9's edge treatment must make the risers read as ground, not walls.
+- **`setLayout()` mid-game.** Switching area during a game re-places the pieces from the engine position, which is right, but the animator is not flushed first. Harmless now (area changes are a dev action); Phase 11 should start a new game on area change.
+- **The debug overlay walks 64 polygons per feature point** to find heights — fine for a few hundred points, quadratic if a dense area returns thousands. Debug-only.

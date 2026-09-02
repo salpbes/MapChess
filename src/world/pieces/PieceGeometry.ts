@@ -17,12 +17,12 @@ import type { PieceType } from '@domain/chess/types';
 /** Few segments on purpose: the facets are the style. */
 const LATHE_SEGMENTS = 12;
 
-/** Shared plinth: [radius, height] pairs from the centre of the base outward and up. */
+/** Shared plinth: [radius, height] pairs from the centre of the base outward and up. Radius must stay ≤ latticeWarp minInradius. */
 const PLINTH: readonly [number, number][] = [
   [0, 0],
-  [0.36, 0],
-  [0.36, 0.04],
-  [0.3, 0.06],
+  [0.3, 0],
+  [0.3, 0.04],
+  [0.26, 0.06],
 ];
 
 /** Body profiles continue from the plinth. Last point must be on the axis (radius 0). */

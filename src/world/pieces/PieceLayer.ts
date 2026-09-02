@@ -19,12 +19,20 @@ import type { IPieceMeshFactory } from './IPieceMeshFactory';
 export class PieceLayer {
   public readonly group = new Group();
   private readonly bySquare = new Map<Square, Object3D>();
+  private layout: IBoardLayout;
 
   public constructor(
-    private readonly layout: IBoardLayout,
+    layout: IBoardLayout,
     private readonly factory: IPieceMeshFactory,
   ) {
+    this.layout = layout;
     this.group.name = 'pieces';
+  }
+
+  /** Points every piece at its square's new position; call `sync` afterwards to be safe. */
+  public setLayout(layout: IBoardLayout): void {
+    this.layout = layout;
+    for (const [square, object] of this.bySquare) object.position.copy(this.positionFor(square));
   }
 
   /** Discards every piece and rebuilds from the given position. */

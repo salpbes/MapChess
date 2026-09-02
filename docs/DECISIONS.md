@@ -229,3 +229,34 @@ MapLibre 6 finds its worker with `new URL('./maplibre-gl-worker.mjs', import.met
 **Decision:** `src/mapdata/features/fixtures/*.json` hold the actual Overpass response for each fixture area with `nodes` and `bounds` stripped (50–130 KB; 11–26 KB gzipped, code-split). `FixtureFeatureProvider` parses and normalises them with the production functions at load time. The three areas are the same `FIXTURE_AREAS` list as elevation, now in `mapdata/model/fixtureAreas.ts`.
 
 **Why:** raw fixtures make the tests exercise the normaliser on real tagging, not on my idea of it. Keeping the raw files inside `features/` honours "raw Overpass JSON never leaves this folder". Sharing the area list guarantees heights and features describe the same ground.
+
+## D-026 — Lattice warp: snap to axis-aligned lines only, repair by blending back
+
+**Date:** 2026-09-02 · **Phase:** 8
+
+**Decision:** `warpLattice` runs three rounds of attract → relax → cap/pin, then a repair loop. Two rules came out of tuning ("expect two or three attempts" — this was attempt three):
+
+1. **Line pull is a snap, not a spring, and only within half a cell.** A vertex within the 0.35-cell cap of a river moves fully onto it; between 0.35 and 0.5 the pull fades; beyond 0.5 nothing. The first version (pull ∝ 1 − d/R with R = 0.9) moved vertices only ~15 % of the way and squeezed cells from both sides. Half a cell means only the nearer lattice line ever reaches a feature.
+2. **Pull strength is weighted by the segment's axis alignment** (1 on-axis, 0 at 45°). A quad grid can only trace a river along its edges when the river runs roughly with a lattice axis; a diagonal river pulled onto vertices becomes a staircase that is worse than leaving it. Measured on synthetic rivers: a N–S meander went from 44 m mean distance-to-edge (flat) to 8 m; a 45° river is untouched.
+
+Point attractors slide their cell toward the feature (50 %) and push its corners out (0.18 cells), so a village near an edge ends inside the cell rather than still on the edge.
+
+**Repair:** any quad that is flipped, non-convex, under 0.5 cell² or with inradius under 0.30 cells has its four corners blended 50 % toward their grid positions, repeatedly (max 40 passes), then hard-reset if still bad. The grid is valid, so this always converges. The inradius floor equals the piece plinth radius (also lowered to 0.30 in `PieceGeometry`), so every cell can hold a full-size piece by construction — BUILD_PLAN §2's "piece size stays constant".
+
+**Rejected:** the prototype's single-pass spring pull (too weak); scaling pieces to cells (forbidden by the plan); a Voronoi/watershed board (not chess).
+
+## D-027 — Vertical exaggeration: 17 % of width, but flat areas stay gentle
+
+**Date:** 2026-09-02 · **Phase:** 8
+
+**Decision:** Platform height per cell = mean of the cell's heights, or the minimum if max − min > 12 m (one piece-base height). Total relief across the board is scaled to 17 % of board width — unless the real relief is under 25 m, in which case it is scaled to at most 5 % × (relief / 25 m). Glen Coe (830 m real) becomes 340 m of platform relief; Lindisfarne (≈20 m) becomes ≈30 m.
+
+**Why:** BUILD_PLAN §2's 15–20 % clamp, plus §8's warning that flat areas "look like nothing" — but stretching 2 m of tidal flat to 340 m would look like a mistake. The flat cap keeps Lindisfarne honest; Phase 10 leans on water and names there instead.
+
+## D-028 — Runtime layout swap lives in `BoardComposer` (app) + `BoardScene` (world)
+
+**Date:** 2026-09-02 · **Phase:** 8
+
+**Decision:** `app/BoardComposer` holds the latest heights and features for the current area and emits a `FlatBoardLayout` immediately, then a `WarpedBoardLayout` when both have arrived (a generation counter drops stale results). `world/builders/BoardScene` applies a layout to the running scene: rebuilds cells, repoints `PieceLayer`/`HighlightLayer`/`BoardPicker`, rebuilds the debug overlay, reframes camera/controls/lights.
+
+**Verified:** nothing in `game/`, `domain/chess/`, `ai/` or `world/pieces/` changed for the swap beyond adding `setLayout()` to three classes. `?debug` toggles flat/warped on the same terrain.

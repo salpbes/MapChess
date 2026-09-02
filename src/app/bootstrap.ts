@@ -1,11 +1,12 @@
 // WHAT: The composition root — builds every service and wires them together.
-// HOW:  Picks the IBoardLayout implementation, creates the stage from its
-//       bounds, builds the board and piece views, spins up the Stockfish
-//       worker, and connects pointer clicks → BoardPicker → GameLoop. Returns
-//       a handle so main.ts can tear it all down on hot reload.
+// HOW:  Creates the stage from the flat board's bounds, builds the piece and
+//       highlight layers, spins up the Stockfish worker, connects pointer
+//       clicks → BoardPicker → GameLoop, and routes the selected area's
+//       heights and features into BoardComposer, whose layout BoardScene
+//       shows. Returns a handle so main.ts can tear it all down on hot reload.
 // WHY:  This is the one place where "which layout", "which piece factory",
-//       "which engine" and "which opponent" are decided. Phase 8 swaps
-//       FlatBoardLayout for WarpedBoardLayout on the line marked below.
+//       "which engine" and "which opponent" are decided. Phase 8's layout
+//       swap lives in BoardComposer; nothing in world/ or game/ changed for it.
 
 import { StockfishAI } from '@ai/StockfishAI';
 import { FlatBoardLayout } from '@domain/board/FlatBoardLayout';
@@ -31,11 +32,13 @@ import {
 import type { CachedFeatures } from '@mapdata/features/OverpassFeatureProvider';
 import { NominatimGeocoder } from '@mapdata/geocode/NominatimGeocoder';
 import type { HeightField } from '@mapdata/model/HeightField';
+import { FIXTURE_AREAS } from '@mapdata/model/fixtureAreas';
 import type { MapFeature } from '@mapdata/model/MapFeature';
 import type { SelectedArea } from '@mapdata/model/SelectedArea';
 import { browserBase64 } from '@shared/encoding/base64';
 import { EventBus } from '@shared/events/EventBus';
 import { AreaBar } from '@ui/AreaBar';
+import { BoardDebugPanel } from '@ui/BoardDebugPanel';
 import { FeaturesDebugPanel } from '@ui/FeaturesDebugPanel';
 import { FpsMeter } from '@ui/FpsMeter';
 import { HeightmapDebugPanel } from '@ui/HeightmapDebugPanel';
@@ -43,7 +46,7 @@ import { OpponentPanel } from '@ui/OpponentPanel';
 import type { NewGameRequest } from '@ui/OpponentPanel';
 import { PromotionPrompt } from '@ui/PromotionPrompt';
 import { StatusBar } from '@ui/StatusBar';
-import { CellBuilder } from '@world/builders/CellBuilder';
+import { BoardScene } from '@world/builders/BoardScene';
 import { BoardView } from '@world/pieces/BoardView';
 import { HighlightLayer } from '@world/pieces/HighlightLayer';
 import { MoveAnimator } from '@world/pieces/MoveAnimator';
@@ -53,16 +56,15 @@ import { BoardPicker } from '@world/scene/BoardPicker';
 import { PointerInput } from '@world/scene/PointerInput';
 import { WorldStage } from '@world/scene/WorldStage';
 
+import { BoardComposer } from './BoardComposer';
 import type { AppConfig } from './config';
 
 export interface AppHandle {
-  readonly layout: IBoardLayout;
+  /** The board currently shown — flat until the area's terrain has loaded, then warped. */
+  layout(): IBoardLayout;
   readonly stage: WorldStage;
-  /** The area the player has picked; the flat board ignores it until Phase 8. */
   selectedArea(): SelectedArea;
-  /** Ground heights for the selected area, once loaded. */
   heightField(): HeightField | null;
-  /** Rivers, woods, peaks, places… for the selected area, once loaded. */
   features(): readonly MapFeature[] | null;
   dispose(): void;
 }
@@ -72,19 +74,19 @@ export function bootstrap(
   worldContainer: HTMLElement,
   uiContainer: HTMLElement,
 ): AppHandle {
-  // Phase 8: replace with WarpedBoardLayout. This is the only line that changes.
-  const layout: IBoardLayout = new FlatBoardLayout({ boardSizeMeters: config.boardSizeMeters });
-  const boardWidth = layout.bounds.maxX - layout.bounds.minX;
+  // The flat board is the starting point; BoardComposer replaces it once terrain arrives.
+  const initialLayout: IBoardLayout = new FlatBoardLayout({
+    boardSizeMeters: config.boardSizeMeters,
+  });
+  const boardWidth = config.boardSizeMeters;
   const cellUnit = boardWidth / config.filesAndRanks;
 
   // --- world ---
-  const stage = new WorldStage(worldContainer, layout.bounds);
-  const cells = new CellBuilder({ skirtDepthMeters: boardWidth * 0.02 }).build(layout);
-  stage.add(cells);
+  const stage = new WorldStage(worldContainer, initialLayout.bounds);
 
   const pieceFactory = new ProceduralPieceFactory(cellUnit);
-  const pieces = new PieceLayer(layout, pieceFactory);
-  const highlights = new HighlightLayer(layout);
+  const pieces = new PieceLayer(initialLayout, pieceFactory);
+  const highlights = new HighlightLayer(initialLayout);
   const animator = new MoveAnimator({ unit: cellUnit });
   const view = new BoardView(pieces, highlights, animator);
   stage.add(...view.objects);
@@ -151,33 +153,68 @@ export function bootstrap(
   const areaBar = new AreaBar(uiContainer, config.defaultArea, {
     geocoder: new NominatimGeocoder(),
     styleUrl: config.mapStyleUrl,
+    presets: FIXTURE_AREAS,
     onAreaChanged: (area) => {
-      void elevation.load(area);
-      void features.load(area);
+      loadArea(area);
     },
   });
-  void elevation.load(config.defaultArea);
-  void features.load(config.defaultArea);
 
   // --- input ---
-  const picker = new BoardPicker(stage.camera, layout, cells, pieces);
+  const picker = new BoardPicker(stage.camera, initialLayout, null, pieces);
   const input = new PointerInput(stage.renderer.domElement);
   input.onClick((ndc) => {
     const square = picker.pick(ndc);
     if (square !== null) void game.handleSquareClick(square);
   });
 
+  // --- board: flat until terrain arrives, then warped (Phase 8) ---
+  const boardScene = new BoardScene({ stage, pieces, highlights, picker });
+  const composer = new BoardComposer(config.boardSizeMeters, ({ layout, terrain, mode }) => {
+    boardScene.show(layout, terrain);
+    // Positions changed under the pieces; re-place them from the engine's position.
+    view.showPosition(engine.pieces());
+    console.info(
+      `Board: ${mode}${terrain === null ? '' : ` (${String(terrain.lines.length)} lines, ${String(terrain.points.length)} points)`}`,
+    );
+  });
+
+  function loadArea(area: SelectedArea): void {
+    const generation = composer.beginArea();
+    void elevation.load(area).then((result) => {
+      if (result !== null) composer.setHeights(generation, result.field);
+    });
+    void features.load(area).then((result) => {
+      if (result !== null) composer.setFeatures(generation, result.features);
+    });
+  }
+
+  const debug = new URLSearchParams(window.location.search).has('debug');
+  const boardDebug = debug
+    ? new BoardDebugPanel(
+        uiContainer,
+        { mode: 'warped', labels: true, features: true },
+        (state) => {
+          composer.setMode(state.mode);
+          boardScene.setOverlay({ labels: state.labels, features: state.features });
+        },
+      )
+    : null;
+  if (debug) boardScene.setOverlay({ labels: true, features: true });
+
+  loadArea(config.defaultArea);
   game.start(toPlayers(initialSeating.humanColor));
   stage.start();
 
   return {
-    layout,
+    layout: () => boardScene.layout ?? initialLayout,
     stage,
     selectedArea: () => areaBar.current,
     heightField: () => elevation.heightField,
     features: () => features.features,
     dispose: () => {
       input.dispose();
+      boardDebug?.dispose();
+      boardScene.dispose();
       features.dispose();
       featuresPanel.dispose();
       elevation.dispose();

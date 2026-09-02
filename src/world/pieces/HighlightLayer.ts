@@ -33,18 +33,25 @@ const STYLE: Readonly<Record<HighlightRole, { color: number; opacity: number }>>
 export class HighlightLayer {
   public readonly group = new Group();
   private readonly materials: Readonly<Record<HighlightRole, MeshBasicMaterial>>;
-  private readonly lift: number;
+  private layout: IBoardLayout;
+  private lift: number;
 
-  public constructor(private readonly layout: IBoardLayout) {
+  public constructor(layout: IBoardLayout) {
+    this.layout = layout;
     this.group.name = 'highlights';
-    const width = layout.bounds.maxX - layout.bounds.minX;
-    this.lift = width * 0.0015;
+    this.lift = liftFor(layout);
     this.materials = {
       selected: makeMaterial('selected'),
       move: makeMaterial('move'),
       capture: makeMaterial('capture'),
       check: makeMaterial('check'),
     };
+  }
+
+  public setLayout(layout: IBoardLayout): void {
+    this.layout = layout;
+    this.lift = liftFor(layout);
+    this.clear();
   }
 
   public show(set: HighlightSet): void {
@@ -75,6 +82,10 @@ export class HighlightLayer {
     mesh.name = `highlight-${role}-${square}`;
     this.group.add(mesh);
   }
+}
+
+function liftFor(layout: IBoardLayout): number {
+  return (layout.bounds.maxX - layout.bounds.minX) * 0.0015;
 }
 
 function makeMaterial(role: HighlightRole): MeshBasicMaterial {

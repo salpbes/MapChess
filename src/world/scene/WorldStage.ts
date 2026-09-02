@@ -31,7 +31,7 @@ export class WorldStage {
   public readonly loop: RenderLoop;
 
   private readonly resize: ResizeHandler;
-  private readonly lights: Object3D;
+  private lights: Object3D;
   private readonly unsubscribeControls: () => void;
 
   public constructor(container: HTMLElement, bounds: BoardBounds) {
@@ -51,6 +51,27 @@ export class WorldStage {
     this.unsubscribeControls = this.loop.onTick(() => {
       this.controls.update();
     });
+  }
+
+  /** Re-aims camera, orbit limits and the shadow rig at a board with different bounds. */
+  public reframe(bounds: BoardBounds): void {
+    const fresh = createCamera(bounds, this.camera.aspect);
+    this.camera.position.copy(fresh.position);
+    this.camera.near = fresh.near;
+    this.camera.far = fresh.far;
+    this.camera.updateProjectionMatrix();
+
+    const limits = createControls(fresh, this.renderer.domElement, bounds);
+    this.controls.target.copy(limits.target);
+    this.controls.minDistance = limits.minDistance;
+    this.controls.maxDistance = limits.maxDistance;
+    this.controls.maxPolarAngle = limits.maxPolarAngle;
+    limits.dispose();
+    this.controls.update();
+
+    this.scene.remove(this.lights);
+    this.lights = createLights(bounds);
+    this.scene.add(this.lights);
   }
 
   public add(...objects: Object3D[]): void {

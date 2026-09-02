@@ -20,19 +20,31 @@ import type { NdcPoint } from './PointerInput';
 export class BoardPicker {
   private readonly raycaster = new Raycaster();
   private readonly ndc = new Vector2();
+  private layout: IBoardLayout;
+  private cells: Object3D | null;
 
   public constructor(
     private readonly camera: Camera,
-    private readonly layout: IBoardLayout,
-    private readonly cells: Object3D,
+    layout: IBoardLayout,
+    cells: Object3D | null,
     private readonly pieces: PieceLayer,
-  ) {}
+  ) {
+    this.layout = layout;
+    this.cells = cells;
+  }
+
+  public setLayout(layout: IBoardLayout, cells: Object3D): void {
+    this.layout = layout;
+    this.cells = cells;
+  }
 
   public pick(point: NdcPoint): Square | null {
     this.ndc.set(point.x, point.y);
     this.raycaster.setFromCamera(this.ndc, this.camera);
 
-    const hits = this.raycaster.intersectObjects([this.pieces.group, this.cells], true);
+    const targets: Object3D[] = [this.pieces.group];
+    if (this.cells !== null) targets.push(this.cells);
+    const hits = this.raycaster.intersectObjects(targets, true);
     const hit = hits[0];
     if (hit === undefined) return null;
 

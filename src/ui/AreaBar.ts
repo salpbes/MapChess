@@ -10,6 +10,7 @@
 import type { IGeocoder } from '@mapdata/geocode/NominatimGeocoder';
 import { describeArea } from '@mapdata/model/MapArea';
 import type { MapArea } from '@mapdata/model/MapArea';
+import type { FixtureAreaDef } from '@mapdata/model/fixtureAreas';
 import type { SelectedArea } from '@mapdata/model/SelectedArea';
 
 import { AreaPicker } from './AreaPicker';
@@ -18,6 +19,8 @@ export interface AreaBarDeps {
   readonly geocoder: IGeocoder;
   readonly styleUrl: string;
   readonly onAreaChanged: (area: SelectedArea) => void;
+  /** Offline areas offered in a dropdown for instant switching. */
+  readonly presets?: readonly FixtureAreaDef[];
 }
 
 export class AreaBar {
@@ -39,7 +42,11 @@ export class AreaBar {
     button.addEventListener('click', () => {
       this.open();
     });
-    this.el.append(this.summary, button);
+    this.el.append(this.summary);
+    if (deps.presets !== undefined && deps.presets.length > 0) {
+      this.el.appendChild(this.presetSelect(deps.presets));
+    }
+    this.el.appendChild(button);
     container.appendChild(this.el);
     this.render();
   }
@@ -80,6 +87,31 @@ export class AreaBar {
   private close(): void {
     this.picker?.dispose();
     this.picker = null;
+  }
+
+  private presetSelect(presets: readonly FixtureAreaDef[]): HTMLSelectElement {
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', 'Offline example areas');
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Example areas…';
+    select.appendChild(placeholder);
+    for (const p of presets) {
+      const opt = document.createElement('option');
+      opt.value = p.name;
+      opt.textContent = p.name.charAt(0).toUpperCase() + p.name.slice(1);
+      opt.title = p.description;
+      select.appendChild(opt);
+    }
+    select.addEventListener('change', () => {
+      const chosen = presets.find((p) => p.name === select.value);
+      select.value = '';
+      if (chosen === undefined) return;
+      this.area = chosen.area;
+      this.render();
+      this.deps.onAreaChanged(chosen.area);
+    });
+    return select;
   }
 
   private render(): void {
