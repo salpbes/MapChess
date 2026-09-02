@@ -14,7 +14,10 @@ import { ChessEngine } from '@domain/chess/ChessEngine';
 import type { GameEvents } from '@game/GameEvents';
 import { GameLoop } from '@game/GameLoop';
 import type { Players } from '@game/GameLoop';
+import { NominatimGeocoder } from '@mapdata/geocode/NominatimGeocoder';
+import type { SelectedArea } from '@mapdata/model/SelectedArea';
 import { EventBus } from '@shared/events/EventBus';
+import { AreaBar } from '@ui/AreaBar';
 import { FpsMeter } from '@ui/FpsMeter';
 import { OpponentPanel } from '@ui/OpponentPanel';
 import type { NewGameRequest } from '@ui/OpponentPanel';
@@ -35,6 +38,8 @@ import type { AppConfig } from './config';
 export interface AppHandle {
   readonly layout: IBoardLayout;
   readonly stage: WorldStage;
+  /** The area the player has picked; the flat board ignores it until Phase 8. */
+  selectedArea(): SelectedArea;
   dispose(): void;
 }
 
@@ -97,6 +102,13 @@ export function bootstrap(
           fps.tick(dt);
         });
 
+  // --- map area (Phase 5: selected and logged; consumed by the board from Phase 8) ---
+  const areaBar = new AreaBar(uiContainer, config.defaultArea, {
+    geocoder: new NominatimGeocoder(),
+    styleUrl: config.mapStyleUrl,
+    onAreaChanged: () => undefined,
+  });
+
   // --- input ---
   const picker = new BoardPicker(stage.camera, layout, cells, pieces);
   const input = new PointerInput(stage.renderer.domElement);
@@ -111,8 +123,10 @@ export function bootstrap(
   return {
     layout,
     stage,
+    selectedArea: () => areaBar.current,
     dispose: () => {
       input.dispose();
+      areaBar.dispose();
       stopFps();
       fps?.dispose();
       panel.dispose();

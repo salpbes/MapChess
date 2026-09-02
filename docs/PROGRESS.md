@@ -282,3 +282,58 @@ Phase 5 — area selection: a MapLibre 2D picker with search, a draggable rotata
 - **7 MB engine on first load.** ~1–2 s on broadband, cached afterwards. Phase 11's loading states should show progress; the engine emits download progress if asked.
 - **Untested in Safari/Firefox.** Classic-worker WASM should be fine everywhere, but I only verified in the embedded Chromium.
 - **`newGame()` while the engine thinks** drops the stale reply (tested) but does not send `stop`, so the worker finishes its search in the background first. Harmless; a few hundred ms of wasted CPU.
+
+---
+
+## Phase 5 — Area selection
+
+**Date:** 2026-09-02
+**Project completion: 43%**
+
+### In plain English
+
+You can now choose _where_ your chessboard will be. Press **Choose area…**, search for a place, drag the 2 km square over the exact patch of land you want, turn it so the side you'll sit on faces the way you like, and confirm. The game remembers the choice and prints the exact coordinates of the four board corners. The 3D board is still the plain grey one — the terrain arrives in the next phases — but every later step reads this selection.
+
+### What I built
+
+- `src/mapdata/model/SelectedArea.ts` — the four numbers that define a board's place on Earth, plus validation.
+- `src/mapdata/model/AreaProjection.ts` — lat/lon ↔ local metres ↔ board frame with rotation. The single place the axis convention (D-007) is applied.
+- `src/mapdata/model/MapArea.ts` — `describeArea()` → corners named by board role (a1/h1/h8/a8), bounding box, GeoJSON ring.
+- `src/mapdata/net/fetchJson.ts` — the one network call helper: timeout, retries, typed `NetworkError`.
+- `src/mapdata/cache/RateLimiter.ts` — minimum-interval gate for shared services.
+- `src/mapdata/geocode/NominatimGeocoder.ts` — `IGeocoder` + Nominatim (D-020), with an exported parser.
+- `src/ui/AreaPicker.ts` — MapLibre overlay: search, draggable + rotatable square, White's edge marked, readout, confirm/cancel (D-019, D-021).
+- `src/ui/AreaBar.ts` — current-area summary, opens the picker, logs the full corner report.
+- `src/app/config.ts` — basemap URL, default area (Holy Island of Lindisfarne).
+- `tests/mapdata/MapArea.test.ts` (17) and `tests/mapdata/geocode.test.ts` (6) — projection round-trips, rotation cases, orientation rule, parser fixture, rate limiter with a fake clock. 122 tests total.
+
+### Why it was done this way
+
+- **One projection, applied once.** Elevation samples (Phase 6), OSM features (Phase 7) and cell polygons (Phase 8) all pass through `AreaProjection.toBoard()` and come out in the same Y-up metre frame. No other layer ever sees latitude.
+- **Corners named by board role, not compass.** After rotation the "south-west" corner may point anywhere; `corners.sw` always means a1. This is D-007 as code, and it is what the picker draws.
+- **The picker draws `describeArea()` (D-021).** One geometry; the map and the board cannot disagree.
+- **Free services, guarded (D-019, D-020).** OpenFreeMap and Nominatim need no keys. Both go through `fetchJson` timeouts; Nominatim through a 1 req/s limiter, search-on-submit only.
+- **MapLibre worker registered explicitly (D-019).** Under Vite, MapLibre 6's own worker lookup fails silently — a blank map, no error. Diagnosed via the engine's internal actor state; fixed with `?worker&url` + `setWorkerUrl()`; verified in dev and production preview.
+- **Rejected:** a fixed square with the map panning underneath (works, but the plan says "draggable square" and dragging the shape is more direct); autocomplete search (forbidden by Nominatim policy); embedding a second copy of the corner maths in the picker.
+
+### How to check it yourself
+
+1. `npm run dev`. Top-left shows _Area 55.6785, −1.7937 · 2 km · 0°_. Click **Choose area…**.
+2. Holy Island appears with a yellow 2 km square; its bottom edge is bright white — that is White's back rank.
+3. Type _Rievaulx Abbey_ and press Enter; click the result. The map flies there and the square follows.
+4. Drag the slider to 35°: the square turns, the white edge turns with it. Drag inside the square to move it; drag outside to pan.
+5. Click **Use this area**. The overlay closes, the top-left summary updates, and the console prints a block with centre, rotation and the four corners (a1 marked _White's left_).
+6. Press Escape or **Cancel** in the picker: nothing changes.
+7. `npm run test` → 11 files, 122 tests. `npm run build` → `dist/assets/maplibre-gl-worker-*.js` is emitted.
+
+### What's left
+
+Phase 6 — elevation: the throwaway Terrarium tile spike first, then `HeightField`, sampling, IndexedDB cache, and three offline fixture areas. The selected area from this phase is its input.
+
+### Risks / things I'm unsure about
+
+- **Two more free community services.** OpenFreeMap has no stated limits but no SLA; Nominatim will block abusers. Both fail visibly (map error in the panel, search message), but a game with no picker is a flat-board game. Phase 6's fixtures matter for the same reason.
+- **`mapdata/net/` and `mapdata/geocode/` are new subfolders** not in the plan's tree. Small and single-purpose; READMEs updated.
+- **Picker is desktop-only.** Mouse events for the square drag; touch comes with D-003's Phase 12 pass.
+- **The selection is not yet used by the board** — deliberately. Phase 8 consumes it; until then the flat board ignores it.
+- **Bundle is 1.6 MB (425 kB gzipped)** now that three.js, chess.js and MapLibre are all in one chunk. Fine for now; Phase 12 should split the picker into its own chunk.

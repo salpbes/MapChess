@@ -2,12 +2,14 @@
 
 **Belongs here:** everything that talks to the outside world for map data and turns the response into clean, typed structures.
 
-| Subfolder    | Responsibility                                                                         |
-| ------------ | -------------------------------------------------------------------------------------- |
-| `elevation/` | `IElevationProvider`: terrain tile fetch, RGB → metres decode, `HeightField` sampling. |
-| `features/`  | `IFeatureProvider`: Overpass queries, normalisation into `MapFeature[]`.               |
-| `cache/`     | IndexedDB persistence and rate-limit guard for both providers.                         |
-| `model/`     | Plain types shared by the above: `MapArea`, `MapFeature`, `HeightField`.               |
+| Subfolder    | Responsibility                                                                                            |
+| ------------ | --------------------------------------------------------------------------------------------------------- |
+| `model/`     | Plain types and the projection: `SelectedArea`, `MapArea`, `AreaProjection`, `MapFeature`, `HeightField`. |
+| `net/`       | `fetchJson` — the only way out to the network: timeout, retries, typed `NetworkError`.                    |
+| `cache/`     | `RateLimiter` now; IndexedDB persistence for tiles and features from Phase 6.                             |
+| `geocode/`   | `IGeocoder` + Nominatim place search (Phase 5).                                                           |
+| `elevation/` | `IElevationProvider`: terrain tile fetch, RGB → metres decode, `HeightField` sampling.                    |
+| `features/`  | `IFeatureProvider`: Overpass queries, normalisation into `MapFeature[]`.                                  |
 
 **Rules:**
 

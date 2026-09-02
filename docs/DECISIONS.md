@@ -163,3 +163,29 @@ Coordinate mapping (three.js is Y-up): longitude → +X (east), latitude → −
 **Decision:** `GameLoop` checks every engine reply with `IChessEngine.isLegal` before playing it. On an illegal reply, a timeout, a crash or a stale reply after `newGame()`, it emits `ai-error` and plays a fallback (first capture, else first legal move). Every engine wait in `StockfishAI` has a timeout (think time + 4 s grace; 30 s for the handshake).
 
 **Why:** BUILD_PLAN Phase 4 — "it always plays a legal move" and §5 — every external call has a timeout and a user-visible failure state. The guard costs one legal-move lookup per AI move and means a broken engine download produces a weak opponent, not a frozen game.
+
+## D-019 — Picker basemap: OpenFreeMap; MapLibre worker registered explicitly
+
+**Date:** 2026-09-02 · **Phase:** 5
+
+**Decision:** The 2D picker uses MapLibre GL JS 6 with the OpenFreeMap "liberty" vector style (`https://tiles.openfreemap.org/styles/liberty`): free, no API key, OSM data, attribution rendered by the map itself.
+
+MapLibre 6 finds its worker with `new URL('./maplibre-gl-worker.mjs', import.meta.url)`. Under Vite that resolves to the wrong place both in dev (dependency pre-bundling) and in production (bundling), so the map silently never loads tiles — no error, just a blank map. Fix: import the worker through Vite (`maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url`) and call `setWorkerUrl()` once. Verified in dev and with `vite preview`.
+
+**Rejected:** MapLibre demo tiles (country outlines only, useless at 2 km); raw OSM tile server (tile usage policy discourages app use); Mapbox/MapTiler (keys).
+
+## D-020 — Place search: Nominatim behind `IGeocoder`, rate-limited
+
+**Date:** 2026-09-02 · **Phase:** 5
+
+**Decision:** Search uses the public OSM Nominatim API (`jsonv2`, max 6 results) via `fetchJson` (8 s timeout, 1 retry) behind a `RateLimiter` at 1.1 s between requests, search-on-submit only (no autocomplete), as its usage policy requires. Raw responses are parsed in one exported function with a captured fixture test.
+
+**Why:** free and OSM-native. The seam means Photon or a self-hosted instance is a one-file swap. The rate limiter is a class in `mapdata/cache/` because Overpass (Phase 7) needs the same guard.
+
+## D-021 — The picker draws the board footprint from `describeArea()`
+
+**Date:** 2026-09-02 · **Phase:** 5
+
+**Decision:** The square on the map is a GeoJSON polygon rebuilt from `describeArea()` on every change, with the a1→h1 edge (White's back rank) drawn as a separate heavy white line. Dragging inside the square moves it; dragging elsewhere pans; a slider sets `rotationDeg`.
+
+**Why:** one geometry, not two. What the player sees is exactly the footprint Phases 6–8 will fill, so the picker and the board cannot disagree about where the board is or which side is White.

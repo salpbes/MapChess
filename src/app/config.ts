@@ -23,6 +23,17 @@ export const APP_CONFIG = Object.freeze({
   /** Default seating until Phase 11's menu exists. */
   defaultHumanColor: 'white' as const,
   defaultDifficulty: 'club' as const,
+
+  /** Free vector basemap for the 2D picker, no API key (D-019). */
+  mapStyleUrl: 'https://tiles.openfreemap.org/styles/liberty',
+
+  /** Where the picker opens before the player chooses: Holy Island of Lindisfarne. */
+  defaultArea: {
+    centerLat: 55.6785,
+    centerLon: -1.7937,
+    sizeMeters: 2000,
+    rotationDeg: 0,
+  },
 });
 
 export type AppConfig = typeof APP_CONFIG;
