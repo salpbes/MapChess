@@ -130,39 +130,75 @@ body {
 
 /* ---- Phase 7: features ---- */
 
-.identity-card {
+/* Piece identity: a ⓘ toggle and, next to it, a one-line pill that expands on click. */
+.identity {
   position: absolute;
   top: 12px;
   right: 12px;
-  width: 220px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: rgba(20, 22, 26, 0.82);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-  text-align: left;
-  line-height: 1.35;
-  /* Display only: clicks pass through to the board beneath. */
-  pointer-events: none;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 60vw;
 }
 
-.identity-card__piece {
-  font-size: 17px;
+.identity__toggle {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #555a63;
+  border-radius: 50%;
+  background: rgba(20, 22, 26, 0.75);
+  color: #ffd447;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.identity__toggle--off {
+  color: #7d8189;
+}
+
+.identity__card {
+  max-width: 260px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 13px;
+  background: rgba(20, 22, 26, 0.78);
+  color: #e6e6e6;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.identity__card--full {
+  white-space: normal;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.identity__line {
   font-weight: 600;
   color: #ffd447;
 }
 
-.identity-card__reason {
-  font-size: 12px;
+.identity__reason {
+  margin-top: 4px;
   color: #e6e6e6;
-  margin-bottom: 6px;
 }
 
-.identity-card__cell {
-  font-size: 13px;
+.identity__cell {
+  margin-top: 4px;
   color: #c9cdd4;
 }
 
-.identity-card__ground {
+.identity__ground {
   font-size: 11px;
   color: #8fb8ff;
   font-variant-numeric: tabular-nums;
