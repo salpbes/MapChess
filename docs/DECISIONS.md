@@ -61,3 +61,31 @@ The rule "`domain/` never imports three.js and never touches the DOM" is enforce
 Coordinate mapping (three.js is Y-up): longitude → +X (east), latitude → −Z (north), elevation → +Y. Converted once in `mapdata/model/`; every layer above it works in local metres, Y-up.
 
 **Why:** piece placement, default camera, and move-animation direction all read this one rule. Stating it before any of them exist prevents three slightly different interpretations.
+
+## D-008 — One three.js unit is one metre
+
+**Date:** 2026-09-02 · **Phase:** 1
+
+**Decision:** World coordinates are board-local metres. The 2 km board is 2000 units wide; a cell is 250 units. Camera near/far, orbit limits, light positions and skirt depth are all derived from `BoardBounds`, never written as literals.
+
+**Why:** elevation arrives in metres (Phase 6). Any other unit means a scale factor that has to be applied in exactly the right places, and forgotten in one of them. Deriving camera constants from bounds means the warped board, whatever its height range, frames itself.
+
+**Rejected:** normalising the board to 8 units (one per cell). Convenient for a flat board, wrong the moment real heights arrive.
+
+## D-009 — Polygon winding: counter-clockwise viewed from above, north up
+
+**Date:** 2026-09-02 · **Phase:** 1
+
+**Decision:** `Cell.polygon` is wound counter-clockwise when viewed from +Y looking down with −Z (north) at the top of the screen. `signedArea()` returns a positive number for this winding. Flat cells list corners SW → SE → NE → NW.
+
+**Why:** three.js treats counter-clockwise as front-facing. Matching that convention in the domain means `CellBuilder` can emit the polygon's vertices straight into a triangle fan with no reordering, and Phase 8's convexity check is simply "every consecutive cross product has the same sign".
+
+## D-010 — Cells are merged into one mesh per shade
+
+**Date:** 2026-09-02 · **Phase:** 1
+
+**Decision:** `CellBuilder` builds a prism per cell (flat top + skirt), then merges all light cells into one geometry and all dark cells into another. The board is two draw calls.
+
+**Consequence:** individual cells are not separate `Object3D`s. Phase 3's raycast picking will map a hit triangle index back to a square, or use a separate invisible pick layer. Recorded so this is not a surprise then.
+
+**Why:** BUILD_PLAN §6 Phase 9 — "merge geometry by material, no thousands of draw calls". Starting merged means the warped board (up to ~64 × 3 × (n+2n) triangles, still trivial) never gets a chance to become 64+ draw calls.

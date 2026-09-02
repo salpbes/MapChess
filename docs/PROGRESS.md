@@ -53,3 +53,62 @@ Phase 1 — Scene skeleton and flat board: renderer, camera, orbit controls, lig
 - **Vitest 4 / Vite 8 / ESLint 10** are likewise all current-major. Nothing broke today, but I have not exercised them beyond a smoke test.
 - **`docs/warped-lattice-prototype.html`** exists in the repo from before Phase 0. I have not read it or built on it. It may be useful reference for Phase 8; it is excluded from lint and formatting so it does not affect the toolchain.
 - **No `.nvmrc`/engines field.** Developed on Node 24. If you switch machines, add one.
+
+---
+
+## Phase 1 — Scene skeleton and flat board
+
+**Date:** 2026-09-02
+**Project completion: 10%**
+
+### In plain English
+
+There is now something to look at: a grey 3D chessboard you can orbit around, tilt, and zoom with the mouse, seen from White's side. More importantly, the board is drawn from a description of "64 shapes and where they are" rather than "an 8×8 grid" — so when real terrain replaces it later, the drawing code does not change.
+
+### What I built
+
+- `src/domain/board/Square.ts` — square names `a1`…`h8` as types, index helpers, `ALL_SQUARES`.
+- `src/domain/board/types.ts` — `BoardPoint`, `Cell` (polygon, centroid, platform height, shade), `BoardBounds`.
+- `src/domain/board/IBoardLayout.ts` — the seam: 64 cells, bounds, `cell(square)`.
+- `src/domain/board/polygon.ts` — signed area and area-weighted centroid, with the winding convention fixed (D-009).
+- `src/domain/board/FlatBoardLayout.ts` — first `IBoardLayout`: 64 equal squares, a1 south-west and dark, all platforms at Y = 0.
+- `src/world/scene/createRenderer.ts` — WebGL renderer, DPR capped at 2.
+- `src/world/scene/createCamera.ts` — perspective camera framed from `BoardBounds`, south of the board.
+- `src/world/scene/createLights.ts` — hemisphere fill + one directional key light.
+- `src/world/scene/createControls.ts` — orbit controls; distance and polar limits derived from board width, cannot go under the board.
+- `src/world/scene/ResizeHandler.ts` — `ResizeObserver` on the container keeps renderer and camera aspect in step.
+- `src/world/scene/RenderLoop.ts` — one animation loop with tick subscribers and a clamped delta.
+- `src/world/scene/WorldStage.ts` — composes the above; `add()`, `start()`, `dispose()`.
+- `src/world/builders/CellBuilder.ts` — any convex polygon → prism (flat top + skirt); merged into one mesh per shade. No 8×8 maths.
+- `src/app/bootstrap.ts` — composition root; the one line that picks `FlatBoardLayout`.
+- `src/app/main.ts` — now calls `bootstrap()`; disposes the scene on Vite hot reload.
+- `tests/domain/board/*.test.ts` — 21 tests: square helpers, polygon maths, layout contract and orientation.
+
+### Why it was done this way
+
+- **Domain speaks metres, Y-up, `{x, z}` points (D-008).** No conversion layer between domain and three.js, and no chance of someone tilting a piece to the terrain because the domain simply has no tilt to offer.
+- **Winding fixed now (D-009).** CCW-from-above matches three.js front faces, so `CellBuilder` emits polygon vertices directly into triangles. Phase 8's convexity invariant becomes a one-line sign check.
+- **Merged geometry from day one (D-010).** Two draw calls for the board. The cost is that cells are not individual objects; Phase 3 picking will map triangle → square. Recorded so it is not a surprise.
+- **Every camera/light/control constant is a fraction of board width.** The warped board will have a different height range; it must frame itself without anyone touching `world/scene/`.
+- **Rejected:** `THREE.Clock` (deprecated in r185, lint caught it) in favour of `THREE.Timer`; `ExtrudeGeometry` for cells (extrudes along Z, would need a rotation and produces indexed geometry that fights flat shading); per-cell meshes (64 draw calls before pieces even exist).
+
+### How to check it yourself
+
+1. Run `npm run dev` and open the URL.
+2. You should see a grey chessboard from White's side, dark square at bottom-left (that is a1).
+3. Left-drag to orbit — try to go under the board; the camera stops just above the horizon and you see the board's edge thickness.
+4. Scroll to zoom; it stops at sensible min/max distances.
+5. Resize the window; the board stays undistorted.
+6. Console shows one line: `MapChess 0.0.1 — 64 cells, board 2000 m.` and no errors.
+7. `npm run test` → 4 files, 23 tests pass. `npm run lint` / `npm run typecheck` → silent.
+
+### What's left
+
+Phase 2 — chess rules core. `IChessEngine` wrapping chess.js, fully tested, playable from a terminal with no renderer. Unlocks Phase 3 (pieces on this board) and is the foundation everything else stands on.
+
+### Risks / things I'm unsure about
+
+- **Cell picking (Phase 3) has to work against merged meshes.** Plan: keep a triangle-index → square table when merging, or add an invisible per-cell pick layer. Either is small, but it is deferred work created by D-010.
+- **Default camera angle is a taste call.** Currently ~40° elevation. Once pieces exist it may want to be steeper; the constants are two numbers in `createCamera.ts`.
+- **No shadows yet.** Deliberately off until pieces exist. Enabling them will need a shadow-camera frustum sized from `BoardBounds` — one more thing in `createLights.ts`.
+- **Board thickness is 2% of width** (40 m on a 2 km board). Looks right on the flat board; on terraced terrain the skirt depth will be dictated by the height range instead. `CellBuilder` already takes it as an option.
