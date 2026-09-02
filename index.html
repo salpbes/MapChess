@@ -1,0 +1,21 @@
+<!doctype html>
+<!--
+  WHAT: The single HTML page MapChess runs in.
+  HOW:  Vite injects the bundled `src/app/main.ts`. The page has one full-screen
+        container for the three.js canvas and one for the DOM UI overlay.
+  WHY:  Keeping the canvas and the overlay as siblings (not nested) lets the UI
+        layer own its DOM without ever reaching into the renderer's element.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MapChess</title>
+    <link rel="stylesheet" href="/src/app/styles.css" />
+  </head>
+  <body>
+    <div id="world"></div>
+    <div id="ui"></div>
+    <script type="module" src="/src/app/main.ts"></script>
+  </body>
+</html>

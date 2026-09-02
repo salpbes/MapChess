@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MapChess — warped lattice prototype</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; height: 100vh; overflow: hidden;
+    background: #14171a; color: #e8e4dc;
+    font: 400 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  canvas { display: block; }
+  #panel {
+    position: absolute; top: 16px; left: 16px; width: 250px;
+    background: rgba(20, 23, 26, 0.88); border: 1px solid #2e3438;
+    padding: 14px 16px 16px;
+  }
+  #panel h1 { margin: 0 0 2px; font-size: 15px; font-weight: 500; }
+  #panel p.sub { margin: 0 0 14px; font-size: 12px; color: #8a938f; }
+  .row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .row label { flex: 0 0 62px; font-size: 12px; color: #a8b0ab; }
+  .row input[type=range] { flex: 1; accent-color: #7ba05b; min-width: 0; }
+  .row output { flex: 0 0 34px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .buttons { display: flex; gap: 8px; margin-top: 12px; }
+  button {
+    flex: 1; padding: 7px 6px; font: inherit; font-size: 12px;
+    color: #e8e4dc; background: transparent;
+    border: 1px solid #3c4348; cursor: pointer;
+  }
+  button:hover { background: #1e2327; border-color: #55605f; }
+  button:focus-visible { outline: 2px solid #7ba05b; outline-offset: 1px; }
+  #check { margin-top: 14px; padding-top: 12px; border-top: 1px solid #2e3438;
+           font-size: 12px; color: #8a938f; }
+  #check b { font-weight: 500; color: #e8e4dc; }
+  .ok { color: #8fbf6a; } .bad { color: #d97a6c; }
+  #hint { position: absolute; bottom: 14px; left: 16px; font-size: 12px; color: #6b736f; }
+</style>
+</head>
+<body>
+
+<div id="panel">
+  <h1>Warped lattice</h1>
+  <p class="sub">Drag to orbit, scroll to zoom</p>
+
+  <div class="row">
+    <label for="warp">Warp</label>
+    <input type="range" id="warp" min="0" max="100" value="70" step="1">
+    <output id="warpOut">70%</output>
+  </div>
+  <div class="row">
+    <label for="relief">Relief</label>
+    <input type="range" id="relief" min="0" max="100" value="55" step="1">
+    <output id="reliefOut">55%</output>
+  </div>
+
+  <div class="buttons">
+    <button id="regen">New terrain</button>
+    <button id="pieces">Hide pieces</button>
+  </div>
+
+  <div id="check">Checking…</div>
+</div>
+
+<p id="hint">Open the console for the full invariant report.</p>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ------------------------------------------------------------------
+   WHAT   Prototype of MapChess Phase 8: an 8x8 lattice whose corner
+          vertices are pulled toward terrain features, terraced to
+          elevation, with upright pieces standing on the platforms.
+   HOW    Everything above the "RENDERING" divider is pure geometry with
+          no three.js in it — that is the code destined for
+          src/domain/board/. Below the divider is throwaway rendering.
+   WHY    To prove the lattice can warp without breaking chess adjacency,
+          and to give the real implementation a starting point.
+   ------------------------------------------------------------------ */
+
+const N = 8;                  // cells per side
+const MAX_MOVE = 0.35;        // vertex displacement cap, in cell widths
+const RIVER_PULL_RADIUS = 1.15;
+const PEAK_PUSH = 0.30;
+const SMOOTH_PASSES = 2;
+const MIN_CELL_AREA = 0.35;   // in cell-width squared; a full square is 1.0
+
+/* ---------- deterministic random, so a board is reproducible ---------- */
+
+function makeRandom(seed) {
+  let s = seed >>> 0;
+  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+}
+
+/* ---------- terrain source ----------
+   STAND-IN ONLY. In the real project this is replaced by the HeightField
+   from mapdata/elevation (Terrarium tiles) and MapFeature[] from
+   mapdata/features (Overpass). Nothing else in this file changes. */
+
+function makeTerrain(seed) {
+  const rnd = makeRandom(seed);
+
+  const river = [];
+  const y0 = 1.5 + rnd() * 5.0;
+  const amp = 1.0 + rnd() * 1.5;
+  const phase = rnd() * Math.PI * 2;
+  for (let i = 0; i <= 24; i++) {
+    const t = i / 24;
+    river.push({ x: t * N, y: y0 + Math.sin(phase + t * 3.1) * amp * (0.4 + t * 0.6) });
+  }
+
+  const peaks = [];
+  const count = 2 + Math.floor(rnd() * 2);
+  for (let k = 0; k < count; k++) {
+    peaks.push({ x: 0.9 + rnd() * (N - 1.8), y: 0.9 + rnd() * (N - 1.8), strength: 0.7 + rnd() * 0.8 });
+  }
+
+  return { river, peaks };
+}
+
+/* Nearest point on the river polyline. Used both as an attractor for the
+   lattice and as the trench in the height function. */
+function nearestOnRiver(river, px, py) {
+  let best = Infinity, bx = 0, by = 0;
+  for (let i = 0; i < river.length - 1; i++) {
+    const a = river[i], b = river[i + 1];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = dx * dx + dy * dy;
+    let t = len ? ((px - a.x) * dx + (py - a.y) * dy) / len : 0;
+    t = Math.max(0, Math.min(1, t));
+    const qx = a.x + dx * t, qy = a.y + dy * t;
+    const d = (px - qx) ** 2 + (py - qy) ** 2;
+    if (d < best) { best = d; bx = qx; by = qy; }
+  }
+  return { distance: Math.sqrt(best), x: bx, y: by };
+}
+
+function sampleHeight(terrain, px, py) {
+  let h = 0;
+  for (const p of terrain.peaks) {
+    const d2 = (px - p.x) ** 2 + (py - p.y) ** 2;
+    h += p.strength * Math.exp(-d2 / 2.6);
+  }
+  const r = nearestOnRiver(terrain.river, px, py);
+  h -= 0.55 * Math.exp(-(r.distance ** 2) / 0.9);
+  return h;
+}
+
+/* ---------- the warped lattice ----------
+   Move the 81 CORNER VERTICES, never the cells. Neighbouring cells share
+   corners, so the tiling stays perfect and every cell keeps the same
+   four neighbours it had on a plain board. That is what preserves ranks,
+   files and diagonals, and therefore chess. */
+
+function buildLattice(terrain, warp) {
+  const V = [];
+  for (let r = 0; r <= N; r++) {
+    V[r] = [];
+    for (let c = 0; c <= N; c++) V[r][c] = { x: c, y: r, ox: c, oy: r };
+  }
+
+  // Attractor 1: rivers pull vertices onto themselves, so water ends up
+  // running ALONG cell edges instead of slicing through a cell.
+  for (let r = 0; r <= N; r++) {
+    for (let c = 0; c <= N; c++) {
+      const v = V[r][c];
+      const n = nearestOnRiver(terrain.river, v.x, v.y);
+      if (n.distance < RIVER_PULL_RADIUS && n.distance > 1e-3) {
+        const f = warp * (1 - n.distance / RIVER_PULL_RADIUS);
+        v.x += (n.x - v.x) * f;
+        v.y += (n.y - v.y) * f;
+      }
+    }
+  }
+
+  // Attractor 2: peaks push their own cell's four corners outward, so the
+  // feature sits comfortably inside one cell with room for a piece.
+  for (const p of terrain.peaks) {
+    const cc = Math.min(N - 1, Math.max(0, Math.floor(p.x)));
+    const rr = Math.min(N - 1, Math.max(0, Math.floor(p.y)));
+    for (const [r, c] of [[rr, cc], [rr, cc + 1], [rr + 1, cc], [rr + 1, cc + 1]]) {
+      const v = V[r][c];
+      const dx = v.x - p.x, dy = v.y - p.y;
+      const len = Math.hypot(dx, dy) || 1;
+      v.x += (dx / len) * PEAK_PUSH * warp;
+      v.y += (dy / len) * PEAK_PUSH * warp;
+    }
+  }
+
+  // Relaxation: pull each interior vertex back toward the average of its
+  // neighbours. Without this the attractors leave visible kinks.
+  for (let pass = 0; pass < SMOOTH_PASSES; pass++) {
+    for (let r = 1; r < N; r++) {
+      for (let c = 1; c < N; c++) {
+        const v = V[r][c];
+        v.x = v.x * 0.7 + 0.075 * (V[r - 1][c].x + V[r + 1][c].x + V[r][c - 1].x + V[r][c + 1].x);
+        v.y = v.y * 0.7 + 0.075 * (V[r - 1][c].y + V[r + 1][c].y + V[r][c - 1].y + V[r][c + 1].y);
+      }
+    }
+  }
+
+  // Constraint: cap displacement, and pin the outer ring so the board
+  // stays a rectangle from above and the camera framing stays stable.
+  for (let r = 0; r <= N; r++) {
+    for (let c = 0; c <= N; c++) {
+      const v = V[r][c];
+      const dx = v.x - v.ox, dy = v.y - v.oy;
+      const d = Math.hypot(dx, dy);
+      if (d > MAX_MOVE) { v.x = v.ox + (dx / d) * MAX_MOVE; v.y = v.oy + (dy / d) * MAX_MOVE; }
+      if (r === 0) v.y = 0;
+      if (r === N) v.y = N;
+      if (c === 0) v.x = 0;
+      if (c === N) v.x = N;
+    }
+  }
+
+  return V;
+}
+
+/* ---------- terracing ----------
+   Each cell becomes a level platform. Mean height where the cell is flat,
+   minimum where the spread is large — a platform slightly below the
+   surrounding ground reads as a cut terrace, one above it reads as a
+   piece floating in mid-air. */
+
+const PIECE_BASE_HEIGHT = 0.14;
+
+function buildCells(V, terrain) {
+  const cells = [];
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const corners = [V[r][c], V[r][c + 1], V[r + 1][c + 1], V[r + 1][c]];
+      const cx = (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4;
+      const cy = (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4;
+
+      const samples = corners.map(v => sampleHeight(terrain, v.x, v.y));
+      samples.push(sampleHeight(terrain, cx, cy));
+      const min = Math.min(...samples);
+      const max = Math.max(...samples);
+      const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
+      const spread = max - min;
+
+      cells.push({
+        file: c, rank: N - 1 - r, row: r, col: c,
+        corners: corners.map(v => ({ x: v.x, y: v.y })),
+        centroid: { x: cx, y: cy },
+        rawHeight: spread > PIECE_BASE_HEIGHT ? min : mean,
+        area: polygonArea(corners),
+        light: (r + c) % 2 === 0
+      });
+    }
+  }
+  return cells;
+}
+
+function polygonArea(p) {
+  let a = 0;
+  for (let i = 0; i < p.length; i++) {
+    const j = (i + 1) % p.length;
+    a += p[i].x * p[j].y - p[j].x * p[i].y;
+  }
+  return Math.abs(a) / 2;
+}
+
+function isConvex(p) {
+  let sign = 0;
+  for (let i = 0; i < p.length; i++) {
+    const a = p[i], b = p[(i + 1) % p.length], c = p[(i + 2) % p.length];
+    const cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+    if (Math.abs(cross) < 1e-9) continue;
+    const s = Math.sign(cross);
+    if (sign === 0) sign = s;
+    else if (s !== sign) return false;
+  }
+  return true;
+}
+
+/* ---------- invariants ----------
+   These are the Phase 8 acceptance tests. In the real project they live
+   in Vitest and run against all three fixture areas. */
+
+function checkInvariants(cells) {
+  const failures = [];
+  const nonConvex = cells.filter(c => !isConvex(c.corners));
+  if (nonConvex.length) failures.push(`${nonConvex.length} non-convex cells`);
+
+  const tooSmall = cells.filter(c => c.area < MIN_CELL_AREA);
+  if (tooSmall.length) failures.push(`${tooSmall.length} cells below minimum area`);
+
+  const total = cells.reduce((s, c) => s + c.area, 0);
+  if (Math.abs(total - N * N) > 0.01) failures.push(`total area drifted to ${total.toFixed(2)}`);
+
+  if (cells.length !== 64) failures.push(`${cells.length} cells, expected 64`);
+
+  const areas = cells.map(c => c.area);
+  return {
+    ok: failures.length === 0,
+    failures,
+    smallest: Math.min(...areas),
+    largest: Math.max(...areas)
+  };
+}
+
+/* ================== RENDERING — throwaway, not the real project ========== */
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x14171a);
+scene.fog = new THREE.Fog(0x14171a, 16, 30);
+
+const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 100);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xbcd0d8, 0x30281e, 1.5));
+const sun = new THREE.DirectionalLight(0xfff2dd, 1.7);
+sun.position.set(5, 9, 4);
+scene.add(sun);
+
+/* Minimal orbit control — the real project uses OrbitControls. */
+const orbit = { theta: -0.7, phi: 0.95, radius: 15, target: new THREE.Vector3(0, 0.4, 0) };
+let dragging = false, lastX = 0, lastY = 0;
+
+renderer.domElement.addEventListener('pointerdown', e => {
+  dragging = true; lastX = e.clientX; lastY = e.clientY;
+  renderer.domElement.setPointerCapture(e.pointerId);
+});
+renderer.domElement.addEventListener('pointerup', e => {
+  dragging = false; renderer.domElement.releasePointerCapture(e.pointerId);
+});
+renderer.domElement.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  orbit.theta -= (e.clientX - lastX) * 0.006;
+  orbit.phi = Math.max(0.18, Math.min(1.45, orbit.phi - (e.clientY - lastY) * 0.005));
+  lastX = e.clientX; lastY = e.clientY;
+});
+renderer.domElement.addEventListener('wheel', e => {
+  e.preventDefault();
+  orbit.radius = Math.max(7, Math.min(28, orbit.radius + e.deltaY * 0.012));
+}, { passive: false });
+
+function updateCamera() {
+  camera.position.set(
+    orbit.target.x + orbit.radius * Math.sin(orbit.phi) * Math.sin(orbit.theta),
+    orbit.target.y + orbit.radius * Math.cos(orbit.phi),
+    orbit.target.z + orbit.radius * Math.sin(orbit.phi) * Math.cos(orbit.theta)
+  );
+  camera.lookAt(orbit.target);
+}
+
+/* Board units run 0..8; world space is centred on the origin. */
+const toWorldX = u => u - N / 2;
+const toWorldZ = v => v - N / 2;
+const BASE_Y = -0.7;
+
+function buildBoardMesh(cells, heightScale) {
+  const pos = [], col = [];
+  const light = new THREE.Color(0x9aab6f);
+  const dark = new THREE.Color(0x6c7d4e);
+  const wall = new THREE.Color(0x4a4034);
+  const hilltop = new THREE.Color(0xc2b184);
+
+  const heights = cells.map(c => c.rawHeight);
+  const lo = Math.min(...heights), hi = Math.max(...heights);
+  const span = (hi - lo) || 1;
+
+  const pushTri = (a, b, c, colour) => {
+    for (const v of [a, b, c]) { pos.push(v[0], v[1], v[2]); col.push(colour.r, colour.g, colour.b); }
+  };
+
+  for (const cell of cells) {
+    const t = (cell.rawHeight - lo) / span;
+    cell.platformY = t * heightScale;
+
+    const p = cell.corners.map(v => [toWorldX(v.x), cell.platformY, toWorldZ(v.y)]);
+    const top = (cell.light ? light : dark).clone().lerp(hilltop, t * 0.55);
+
+    pushTri(p[0], p[2], p[1], top);
+    pushTri(p[0], p[3], p[2], top);
+
+    for (let i = 0; i < 4; i++) {
+      const a = p[i], b = p[(i + 1) % 4];
+      const a0 = [a[0], BASE_Y, a[2]], b0 = [b[0], BASE_Y, b[2]];
+      const shade = wall.clone().multiplyScalar(0.75 + (i % 2) * 0.35);
+      pushTri(a, b0, b, shade);
+      pushTri(a, a0, b0, shade);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.computeVertexNormals();
+  return new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+    vertexColors: true, flatShading: true, roughness: 0.95, metalness: 0
+  }));
+}
+
+function buildRiverMesh(terrain, cells, heightScale) {
+  const heights = cells.map(c => c.rawHeight);
+  const lo = Math.min(...heights), hi = Math.max(...heights);
+  const span = (hi - lo) || 1;
+
+  const points = terrain.river
+    .filter(p => p.x >= 0 && p.x <= N && p.y >= 0 && p.y <= N)
+    .map(p => {
+      const cell = cells.find(c => c.col === Math.min(N - 1, Math.floor(p.x)) &&
+                                   c.row === Math.min(N - 1, Math.floor(p.y)));
+      const y = cell ? ((cell.rawHeight - lo) / span) * heightScale : 0;
+      return new THREE.Vector3(toWorldX(p.x), y + 0.03, toWorldZ(p.y));
+    });
+
+  if (points.length < 2) return null;
+  const curve = new THREE.CatmullRomCurve3(points);
+  const geo = new THREE.TubeGeometry(curve, 120, 0.09, 6, false);
+  return new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+    color: 0x3f83c4, roughness: 0.25, metalness: 0.1
+  }));
+}
+
+/* ---------- pieces ----------
+   Always upright. Position is set on all three axes; rotation is only
+   ever applied around Y. Nothing here reads the ground's normal. */
+
+const IVORY = new THREE.MeshStandardMaterial({ color: 0xe6dfcd, roughness: 0.6 });
+const EBONY = new THREE.MeshStandardMaterial({ color: 0x2b2926, roughness: 0.6 });
+
+function makePiece(kind, material) {
+  const g = new THREE.Group();
+  const add = (geo, y, rotY = 0) => {
+    const m = new THREE.Mesh(geo, material);
+    m.position.y = y;
+    m.rotation.y = rotY;
+    g.add(m);
+  };
+
+  // Base disc, slightly wider than the body. It hides any residual gap
+  // where an upright piece meets a platform edge.
+  add(new THREE.CylinderGeometry(0.20, 0.23, PIECE_BASE_HEIGHT, 16), PIECE_BASE_HEIGHT / 2);
+
+  switch (kind) {
+    case 'pawn':
+      add(new THREE.CylinderGeometry(0.09, 0.15, 0.20, 12), 0.24);
+      add(new THREE.SphereGeometry(0.11, 14, 10), 0.42);
+      break;
+    case 'rook':
+      add(new THREE.CylinderGeometry(0.15, 0.18, 0.34, 12), 0.31);
+      add(new THREE.BoxGeometry(0.34, 0.13, 0.34), 0.54);
+      break;
+    case 'knight':
+      add(new THREE.CylinderGeometry(0.13, 0.18, 0.26, 12), 0.27);
+      add(new THREE.BoxGeometry(0.16, 0.30, 0.22), 0.53, 0.5);
+      add(new THREE.BoxGeometry(0.14, 0.13, 0.26), 0.62, 0.5);
+      break;
+    case 'bishop':
+      add(new THREE.ConeGeometry(0.17, 0.46, 14), 0.37);
+      add(new THREE.SphereGeometry(0.07, 12, 8), 0.63);
+      break;
+    case 'queen':
+      add(new THREE.ConeGeometry(0.19, 0.52, 16), 0.40);
+      add(new THREE.SphereGeometry(0.09, 14, 10), 0.70);
+      break;
+    case 'king':
+      add(new THREE.CylinderGeometry(0.14, 0.19, 0.44, 14), 0.36);
+      add(new THREE.BoxGeometry(0.08, 0.20, 0.08), 0.68);
+      add(new THREE.BoxGeometry(0.20, 0.07, 0.08), 0.70);
+      break;
+  }
+  return g;
+}
+
+const BACK_RANK = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'];
+
+function buildPieces(cells) {
+  const group = new THREE.Group();
+  for (const cell of cells) {
+    let kind = null, white = false;
+    if (cell.row === 0) { kind = BACK_RANK[cell.col]; white = false; }
+    else if (cell.row === 1) { kind = 'pawn'; white = false; }
+    else if (cell.row === N - 2) { kind = 'pawn'; white = true; }
+    else if (cell.row === N - 1) { kind = BACK_RANK[cell.col]; white = true; }
+    if (!kind) continue;
+
+    const piece = makePiece(kind, white ? IVORY : EBONY);
+    piece.position.set(toWorldX(cell.centroid.x), cell.platformY, toWorldZ(cell.centroid.y));
+    // Knights face the opponent. Yaw only — x and z rotation stay at zero.
+    if (kind === 'knight') piece.rotation.y = white ? 0 : Math.PI;
+    group.add(piece);
+  }
+  return group;
+}
+
+/* ---------- assembly ---------- */
+
+let seed = 20260902;
+let terrain = makeTerrain(seed);
+let showPieces = true;
+let boardGroup = null;
+
+function disposeGroup(group) {
+  group.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
+  scene.remove(group);
+}
+
+function rebuild() {
+  const warp = Number(document.getElementById('warp').value) / 100;
+  const relief = Number(document.getElementById('relief').value) / 100;
+  const heightScale = relief * 1.6;
+
+  const V = buildLattice(terrain, warp);
+  const cells = buildCells(V, terrain);
+
+  if (boardGroup) disposeGroup(boardGroup);
+  boardGroup = new THREE.Group();
+  boardGroup.add(buildBoardMesh(cells, heightScale));
+  const river = buildRiverMesh(terrain, cells, heightScale);
+  if (river) boardGroup.add(river);
+  if (showPieces) boardGroup.add(buildPieces(cells));
+  scene.add(boardGroup);
+
+  const result = checkInvariants(cells);
+  const el = document.getElementById('check');
+  el.innerHTML = result.ok
+    ? `<b class="ok">All invariants pass</b><br>smallest cell ${result.smallest.toFixed(2)}, largest ${result.largest.toFixed(2)}`
+    : `<b class="bad">${result.failures.length} invariant failed</b><br>${result.failures.join('<br>')}`;
+  console.log('lattice invariants', result);
+}
+
+for (const id of ['warp', 'relief']) {
+  document.getElementById(id).addEventListener('input', e => {
+    document.getElementById(id + 'Out').textContent = Math.round(e.target.value) + '%';
+    rebuild();
+  });
+}
+document.getElementById('regen').addEventListener('click', () => {
+  seed = (seed * 7919 + 331) >>> 0;
+  terrain = makeTerrain(seed);
+  rebuild();
+});
+document.getElementById('pieces').addEventListener('click', e => {
+  showPieces = !showPieces;
+  e.target.textContent = showPieces ? 'Hide pieces' : 'Show pieces';
+  rebuild();
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+rebuild();
+(function loop() {
+  requestAnimationFrame(loop);
+  updateCamera();
+  renderer.render(scene, camera);
+})();
+</script>
+</body>
+</html>
