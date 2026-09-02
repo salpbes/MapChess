@@ -1,18 +1,23 @@
 // WHAT: The composition root — builds every service and wires them together.
 // HOW:  Picks the IBoardLayout implementation, creates the stage from its
-//       bounds, builds the board and piece views, and connects pointer clicks
-//       → BoardPicker → GameLoop. Returns a handle so main.ts can tear it all
-//       down on hot reload.
-// WHY:  This is the one place where "which layout", "which piece factory" and
-//       "which engine" are decided. Phase 8 swaps FlatBoardLayout for
-//       WarpedBoardLayout on the line marked below, and nothing else changes.
+//       bounds, builds the board and piece views, spins up the Stockfish
+//       worker, and connects pointer clicks → BoardPicker → GameLoop. Returns
+//       a handle so main.ts can tear it all down on hot reload.
+// WHY:  This is the one place where "which layout", "which piece factory",
+//       "which engine" and "which opponent" are decided. Phase 8 swaps
+//       FlatBoardLayout for WarpedBoardLayout on the line marked below.
 
+import { StockfishAI } from '@ai/StockfishAI';
 import { FlatBoardLayout } from '@domain/board/FlatBoardLayout';
 import type { IBoardLayout } from '@domain/board/IBoardLayout';
 import { ChessEngine } from '@domain/chess/ChessEngine';
 import type { GameEvents } from '@game/GameEvents';
 import { GameLoop } from '@game/GameLoop';
+import type { Players } from '@game/GameLoop';
 import { EventBus } from '@shared/events/EventBus';
+import { FpsMeter } from '@ui/FpsMeter';
+import { OpponentPanel } from '@ui/OpponentPanel';
+import type { NewGameRequest } from '@ui/OpponentPanel';
 import { PromotionPrompt } from '@ui/PromotionPrompt';
 import { StatusBar } from '@ui/StatusBar';
 import { CellBuilder } from '@world/builders/CellBuilder';
@@ -62,10 +67,35 @@ export function bootstrap(
   const bus = new EventBus<GameEvents>();
   const engine = new ChessEngine();
   const promotion = new PromotionPrompt(uiContainer);
-  const game = new GameLoop({ engine, view, promotion, bus });
+  const ai = new StockfishAI({ workerUrl: config.engineUrl, difficulty: config.defaultDifficulty });
+  ai.ready().catch((error: unknown) => {
+    // GameLoop falls back to a legal move on every failed request; this just tells the player why.
+    console.error(
+      'Chess engine failed to start; the computer will play weak fallback moves.',
+      error,
+    );
+  });
+  const game = new GameLoop({ engine, view, promotion, bus, ai });
 
   // --- ui ---
   const statusBar = new StatusBar(uiContainer, bus);
+  const initialSeating: NewGameRequest = {
+    humanColor: config.defaultHumanColor,
+    difficulty: config.defaultDifficulty,
+  };
+  const panel = new OpponentPanel(uiContainer, initialSeating, (request) => {
+    ai.setDifficulty(request.difficulty);
+    game.newGame(toPlayers(request.humanColor));
+  });
+  const fps = new URLSearchParams(window.location.search).has('debug')
+    ? new FpsMeter(uiContainer)
+    : null;
+  const stopFps =
+    fps === null
+      ? () => undefined
+      : stage.loop.onTick((dt) => {
+          fps.tick(dt);
+        });
 
   // --- input ---
   const picker = new BoardPicker(stage.camera, layout, cells, pieces);
@@ -75,7 +105,7 @@ export function bootstrap(
     if (square !== null) void game.handleSquareClick(square);
   });
 
-  game.start();
+  game.start(toPlayers(initialSeating.humanColor));
   stage.start();
 
   return {
@@ -83,7 +113,11 @@ export function bootstrap(
     stage,
     dispose: () => {
       input.dispose();
+      stopFps();
+      fps?.dispose();
+      panel.dispose();
       statusBar.dispose();
+      ai.dispose();
       stopAnimator();
       highlights.dispose();
       pieceFactory.dispose();
@@ -91,4 +125,17 @@ export function bootstrap(
       stage.dispose();
     },
   };
+}
+
+function toPlayers(humanColor: NewGameRequest['humanColor']): Players {
+  switch (humanColor) {
+    case 'white':
+      return { white: 'human', black: 'ai' };
+    case 'black':
+      return { white: 'ai', black: 'human' };
+    case 'both':
+      return { white: 'human', black: 'human' };
+    case 'none':
+      return { white: 'ai', black: 'ai' };
+  }
 }

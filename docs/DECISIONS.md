@@ -141,3 +141,25 @@ Coordinate mapping (three.js is Y-up): longitude → +X (east), latitude → −
 **Decision:** One directional shadow-casting light with an orthographic shadow camera sized from `BoardBounds` (2048² map). Cells receive, pieces cast and receive.
 
 **Why:** upright pieces on a flat-shaded board float visually without a contact shadow. Sizing the frustum from bounds means the warped board needs no retuning. Frame-rate cost is measured in Phase 9 alongside the terrain; if it bites, the map size is one constant.
+
+## D-017 — Engine: `stockfish` npm package, lite single-threaded build, copied to `public/engine/`
+
+**Date:** 2026-09-02 · **Phase:** 4
+
+**Decision:** Use `stockfish-18-lite-single.js/.wasm` from the `stockfish` npm package (nmrugg, Stockfish 18, ≈7 MB). `scripts/copy-engine.mjs` copies the glue, the wasm and the licence into `public/engine/` on `postinstall`, `predev` and `prebuild`. The folder is git-ignored.
+
+**Verified before building on it:** the BUILD_PLAN names `stockfish.wasm` (niklasf). Its README requires WebAssembly threads and `SharedArrayBuffer`, i.e. COOP/COEP headers — exactly what §3 says to avoid. The nmrugg package ships explicit single-threaded builds and its README recommends the lite single build for browser use. Probed under Node: responds to `uci`, exposes `Skill Level 0–20`, `UCI_LimitStrength`, `UCI_Elo 1320–3190`, `Threads max 1`.
+
+**Why copy rather than import:** the Emscripten glue resolves its `.wasm` as a sibling of its own URL. Letting Vite bundle and hash the JS would break that lookup; a 7 MB binary also does not belong in git.
+
+**Licence:** Stockfish is GPL-3.0. It runs as a separate worker binary communicating over UCI, the licence file ships beside it, and Phase 12 must add a visible credit and source link. If MapChess is ever to be distributed under a non-GPL licence, this is the decision to revisit.
+
+**Rejected:** `stockfish.wasm` (needs SAB); the full 40+ MB single build (slow first load for no benefit against a human); asm.js fallback (slow and weak).
+
+## D-018 — The engine is trusted but verified; failures degrade to a legal fallback
+
+**Date:** 2026-09-02 · **Phase:** 4
+
+**Decision:** `GameLoop` checks every engine reply with `IChessEngine.isLegal` before playing it. On an illegal reply, a timeout, a crash or a stale reply after `newGame()`, it emits `ai-error` and plays a fallback (first capture, else first legal move). Every engine wait in `StockfishAI` has a timeout (think time + 4 s grace; 30 s for the handshake).
+
+**Why:** BUILD_PLAN Phase 4 — "it always plays a legal move" and §5 — every external call has a timeout and a user-visible failure state. The guard costs one legal-move lookup per AI move and means a broken engine download produces a weak opponent, not a frozen game.

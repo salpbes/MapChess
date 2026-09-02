@@ -16,6 +16,13 @@ export const APP_CONFIG = Object.freeze({
 
   /** Visual direction: stylised low-poly. Decision D-002. */
   artStyle: 'low-poly' as const,
+
+  /** Single-threaded Stockfish glue; its .wasm sits beside it. Copied by scripts/copy-engine.mjs (D-017). */
+  engineUrl: `${import.meta.env.BASE_URL}engine/stockfish-18-lite-single.js`,
+
+  /** Default seating until Phase 11's menu exists. */
+  defaultHumanColor: 'white' as const,
+  defaultDifficulty: 'club' as const,
 });
 
 export type AppConfig = typeof APP_CONFIG;

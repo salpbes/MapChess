@@ -224,3 +224,61 @@ Phase 4 — the computer opponent: single-threaded Stockfish WASM in a Web Worke
 - **Shadow map is one 2048² cascade.** Fine on a 2 km flat board; when the warped board adds vertical relief the sun's `near`/`far` may need widening — both derive from `BoardBounds` height so it should follow automatically, but measure in Phase 9.
 - **Occlusion and picking.** Pieces in front can still occlude a cell behind at low camera angles. Clicking the piece resolves to its own square, so a mis-pick just selects/deselects; never an unintended move.
 - **No undo in the UI yet** (deliberately — Phase 11). During hot-seat testing that is mildly annoying.
+
+---
+
+## Phase 4 — The computer opponent
+
+**Date:** 2026-09-02
+**Project completion: 36%**
+
+> **Milestone reached: a complete, working chess game.** Everything from here on makes it MapChess.
+
+### In plain English
+
+You can now play against the computer. Pick your colour and one of three strengths — Beginner, Club, Strong — and press New game. The engine is Stockfish, the strongest chess program in the world, running inside the browser in a background thread, so the board keeps moving smoothly while it thinks. It is verified never to play an illegal move, and if the engine ever fails to load, the game carries on with a weak fallback rather than freezing.
+
+### What I built
+
+- `scripts/copy-engine.mjs` + npm `postinstall`/`predev`/`prebuild` — copies the single-threaded Stockfish build and its licence into `public/engine/` (git-ignored) (D-017).
+- `src/ai/IChessAI.ts` — the seam: `ready`, `setDifficulty`, `chooseMove(fen)`, `dispose`.
+- `src/ai/difficulty.ts` — Beginner / Club / Strong → Skill Level 1 / 8 / 20, think time 0.3 / 0.8 / 1.5 s.
+- `src/ai/uci.ts` — `bestmove` / `uciok` / `readyok` parsers (+ 6 tests).
+- `src/ai/errors.ts` — `EngineError` with reason.
+- `src/ai/StockfishAI.ts` — Web Worker plumbing: UCI handshake, options, one request at a time, every wait timed out.
+- `src/game/GameLoop.ts` — `Players` seating, `newGame()`, AI turn handling, legality guard, fallback, stale-reply protection (D-018). 9 new tests with a scripted AI.
+- `src/game/GameEvents.ts` — `ai-thinking`, `ai-error`.
+- `src/ui/OpponentPanel.ts` — colour, strength, New game; includes Hot-seat and Watch (AI vs AI).
+- `src/ui/FpsMeter.ts` — frame-rate readout, shown with `?debug`.
+- `src/ui/StatusBar.ts` — "… is thinking", engine-problem flash.
+- `src/app/config.ts`, `bootstrap.ts` — engine URL, seating defaults, wiring.
+
+### Why it was done this way
+
+- **Plan assumption checked before building (D-017).** The plan names `stockfish.wasm`; its README requires `SharedArrayBuffer`, the very thing §3 rules out. The `stockfish` (nmrugg) package ships real single-threaded builds; probed under Node before any browser code was written.
+- **Copied static files, not a bundled import.** The Emscripten glue finds its `.wasm` next to its own URL; Vite's hashing would break that. 7 MB stays out of git.
+- **Trusted but verified (D-018).** One `isLegal` check per AI move buys the "always legal" guarantee regardless of engine behaviour. Timeouts on every wait mean a broken download yields a weak opponent, not a hang.
+- **Difficulty by Skill Level, not Elo.** Skill Level deliberately picks sub-optimal moves with randomness, which feels more human at low levels than a capped Elo search. Numbers live in one table for tuning.
+- **Rejected:** `stockfish.wasm` (SAB); full 40 MB build (slow load, no benefit vs. a human); running search on the main thread (would stall rendering — the whole point of the worker).
+
+### How to check it yourself
+
+1. `npm run dev` and open the URL. Panel bottom-left: **Play White · Club · New game**.
+2. Play e4 (click e2, then e4). Status reads _Black is thinking…_, then Black replies within about a second.
+3. Add `?debug` to the URL: the bottom-right frame counter should read 60 fps the whole time the engine thinks.
+4. Choose **Play Black · Strong · New game** — White (engine) opens immediately.
+5. Choose **Watch (AI vs AI) · Beginner · New game** — a whole game plays out to a result with no _Engine problem_ flash. My run: checkmate in 55 s, 60 fps throughout, no console errors.
+6. Try to beat Strong. I could not.
+7. `npm run test` → 9 files, 99 tests. `npm run build` → `dist/engine/` contains the 7 MB engine.
+
+### What's left
+
+Phase 5 — area selection: a MapLibre 2D picker with search, a draggable rotatable square, and the projection helpers (lat/lon ↔ local metres, board-orientation rule D-007). First step toward the map.
+
+### Risks / things I'm unsure about
+
+- **Stockfish is GPL-3.0.** It runs as a separate worker binary and its licence ships alongside, but if you ever want MapChess under a non-GPL licence, this is the dependency to revisit. Phase 12 must add the visible credit.
+- **Difficulty tuning is a first guess.** Beginner (Skill 1) blunders plenty; Club (Skill 8) is a decent club player; Strong is full-strength Stockfish and will beat anyone. If Club feels too strong or Beginner too random, `difficulty.ts` is one table.
+- **7 MB engine on first load.** ~1–2 s on broadband, cached afterwards. Phase 11's loading states should show progress; the engine emits download progress if asked.
+- **Untested in Safari/Firefox.** Classic-worker WASM should be fine everywhere, but I only verified in the embedded Chromium.
+- **`newGame()` while the engine thinks** drops the stale reply (tested) but does not send `stop`, so the worker finishes its search in the background first. Harmless; a few hundred ms of wasted CPU.

@@ -57,6 +57,47 @@ body {
   user-select: none;
 }
 
+/* ---- Phase 4: opponent controls ---- */
+
+.opponent-panel {
+  position: absolute;
+  bottom: 10px;
+  left: 12px;
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 6px;
+  background: rgba(20, 22, 26, 0.75);
+}
+
+.opponent-panel select,
+.opponent-panel button {
+  padding: 5px 8px;
+  border: 1px solid #555a63;
+  border-radius: 4px;
+  background: #3a3e46;
+  color: #e6e6e6;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.opponent-panel button:hover {
+  background: #4a4f59;
+}
+
+.fps-meter {
+  position: absolute;
+  bottom: 10px;
+  right: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(20, 22, 26, 0.6);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #9fd89f;
+}
+
 .promotion-backdrop {
   position: absolute;
   inset: 0;

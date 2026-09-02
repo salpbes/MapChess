@@ -12,7 +12,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist/', 'node_modules/', 'coverage/', 'docs/**/*.html'] },
+  { ignores: ['dist/', 'node_modules/', 'coverage/', 'docs/**/*.html', 'public/engine/'] },
 
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
@@ -71,11 +71,11 @@ export default tseslint.config(
   // Config files run under Node, not the browser. The ESLint config itself is
   // plain JS outside tsconfig, so type-aware rules cannot apply to it.
   {
-    files: ['vite.config.ts', 'eslint.config.js', 'scripts/**/*.ts'],
+    files: ['vite.config.ts', 'eslint.config.js', 'scripts/**/*.ts', 'scripts/**/*.mjs'],
     languageOptions: { globals: globals.node },
   },
   {
-    files: ['eslint.config.js'],
+    files: ['eslint.config.js', 'scripts/**/*.mjs'],
     ...tseslint.configs.disableTypeChecked,
   },
 

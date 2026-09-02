@@ -29,6 +29,14 @@ export class StatusBar {
       bus.on('move-refused', (error) => {
         this.flash(`Illegal move: ${error.reason.replace(/-/g, ' ')}`);
       }),
+      bus.on('ai-thinking', ({ color }) => {
+        this.render(`${color === 'white' ? 'White' : 'Black'} is thinking…`);
+      }),
+      bus.on('ai-error', ({ error }) => {
+        const detail = error instanceof Error ? error.message : String(error);
+        console.error('AI error, played fallback move:', error);
+        this.flash(`Engine problem — played a fallback move (${detail})`);
+      }),
     );
   }
 

@@ -6,7 +6,7 @@
 
 import type { Square } from '@domain/board/Square';
 import type { IllegalMoveError } from '@domain/chess/errors';
-import type { Color, GameStatus, Move } from '@domain/chess/types';
+import type { Color, GameStatus, Move, MoveRequest } from '@domain/chess/types';
 import type { EventBus } from '@shared/events/EventBus';
 
 export interface GameEvents extends Record<string, unknown> {
@@ -14,6 +14,9 @@ export interface GameEvents extends Record<string, unknown> {
   'move-played': Move;
   'move-refused': IllegalMoveError;
   'selection-changed': { readonly square: Square | null; readonly targets: readonly Square[] };
+  'ai-thinking': { readonly color: Color };
+  /** The engine failed or misbehaved; the game continued with `fallback`. */
+  'ai-error': { readonly error: unknown; readonly fallback: MoveRequest };
 }
 
 export type GameBus = EventBus<GameEvents>;
