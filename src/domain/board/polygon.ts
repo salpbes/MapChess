@@ -55,3 +55,24 @@ export function centroid(polygon: readonly BoardPoint[]): BoardPoint {
   const rawArea = -area;
   return { x: cx / (6 * rawArea), z: cz / (6 * rawArea) };
 }
+
+/**
+ * True if the point lies inside or on the edge of a convex polygon.
+ * Works for either winding by requiring every edge cross product to share a sign.
+ */
+export function containsPoint(polygon: readonly BoardPoint[], point: BoardPoint): boolean {
+  const n = polygon.length;
+  if (n < 3) return false;
+  let positive = false;
+  let negative = false;
+  for (let i = 0; i < n; i += 1) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % n];
+    if (a === undefined || b === undefined) continue;
+    const cross = (b.x - a.x) * (point.z - a.z) - (b.z - a.z) * (point.x - a.x);
+    if (cross > 1e-9) positive = true;
+    else if (cross < -1e-9) negative = true;
+    if (positive && negative) return false;
+  }
+  return true;
+}

@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { centroid, signedArea } from '@domain/board/polygon';
+import { centroid, containsPoint, signedArea } from '@domain/board/polygon';
 import type { BoardPoint } from '@domain/board/types';
 
 // Unit square, CCW viewed from above with north (−Z) up: SW, SE, NE, NW.
@@ -74,5 +74,44 @@ describe('centroid', () => {
 
   it('throws on empty input', () => {
     expect(() => centroid([])).toThrow(RangeError);
+  });
+});
+
+describe('containsPoint', () => {
+  it('accepts interior points and rejects exterior ones, either winding', () => {
+    for (const poly of [ccwSquare, cwSquare]) {
+      expect(containsPoint(poly, { x: 0.5, z: 0.5 })).toBe(true);
+      expect(containsPoint(poly, { x: 0.01, z: 0.99 })).toBe(true);
+      expect(containsPoint(poly, { x: 1.5, z: 0.5 })).toBe(false);
+      expect(containsPoint(poly, { x: 0.5, z: -0.1 })).toBe(false);
+    }
+  });
+
+  it('treats edge and corner points as inside', () => {
+    expect(containsPoint(ccwSquare, { x: 0, z: 0.5 })).toBe(true);
+    expect(containsPoint(ccwSquare, { x: 1, z: 1 })).toBe(true);
+  });
+
+  it('works for a non-rectangular convex quad', () => {
+    const kite: BoardPoint[] = [
+      { x: 0, z: 2 },
+      { x: 3, z: 3 },
+      { x: 4, z: 0 },
+      { x: 1, z: -1 },
+    ];
+    expect(containsPoint(kite, { x: 2, z: 1 })).toBe(true);
+    expect(containsPoint(kite, { x: 0.2, z: 0 })).toBe(false);
+  });
+
+  it('rejects degenerate polygons', () => {
+    expect(
+      containsPoint(
+        [
+          { x: 0, z: 0 },
+          { x: 1, z: 1 },
+        ],
+        { x: 0.5, z: 0.5 },
+      ),
+    ).toBe(false);
   });
 });

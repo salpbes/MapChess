@@ -17,9 +17,9 @@ function requireElement(id: string): HTMLElement {
 }
 
 const worldContainer = requireElement('world');
-requireElement('ui');
+const uiContainer = requireElement('ui');
 
-const app = bootstrap(APP_CONFIG, worldContainer);
+const app = bootstrap(APP_CONFIG, worldContainer, uiContainer);
 
 console.info(
   `MapChess ${APP_CONFIG.version} — ${String(app.layout.cells.length)} cells, board ${String(APP_CONFIG.boardSizeMeters)} m.`,

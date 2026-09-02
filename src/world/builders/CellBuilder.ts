@@ -60,6 +60,7 @@ export class CellBuilder {
       });
       const mesh = new Mesh(merged, material);
       mesh.name = `cells-${shade}`;
+      mesh.receiveShadow = true;
       group.add(mesh);
     }
 

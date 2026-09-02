@@ -107,3 +107,37 @@ Coordinate mapping (three.js is Y-up): longitude → +X (east), latitude → −
 **Decision:** `IChessEngine.move()` throws `IllegalMoveError` with a `reason` union (`'promotion-required'`, `'not-your-turn'`, `'game-over'`, …). `isLegal()` exists for the boolean case. The engine validates against its own legal-move list _before_ calling chess.js, so chess.js's generic "Invalid move" never surfaces.
 
 **Why:** BUILD_PLAN §5 forbids silent catches, and the UI needs to say _why_ — "choose a promotion piece" is a prompt, "not your turn" is a hint, "game over" is a state. A `false` cannot carry that.
+
+## D-013 — Procedural low-poly pieces instead of GLB models
+
+**Date:** 2026-09-02 · **Phase:** 3
+
+**Decision:** Pieces are generated in code (`PieceGeometry.ts`): lathe profiles for all six types, an extruded silhouette head for the knight, a cross for the king, a shared plinth disc wider than the body. Behind `IPieceMeshFactory`, so a GLB loader can replace them without touching `PieceLayer` or the game.
+
+**Why:** No licence to verify, no download, fits the low-poly style (D-002), and the origin is at the feet by construction so the bounding-box offset the plan warns about is not needed. Profiles are data — the look is tuned by editing numbers.
+
+**Rejected:** sourcing third-party GLBs (licence provenance cannot be verified from inside this workflow); crude cylinder placeholders (would need redoing).
+
+## D-014 — `game/` talks to the world through `IBoardView`
+
+**Date:** 2026-09-02 · **Phase:** 3
+
+**Decision:** `GameLoop` depends on `IBoardView` (show position, play move, highlights) and `IPromotionChooser`, not on `PieceLayer`/`HighlightLayer`/`MoveAnimator` directly. `world/pieces/BoardView.ts` implements it.
+
+**Why:** keeps three.js out of `game/`, which makes the whole click → move → animate state machine unit-testable with a fake view (`tests/game/GameLoop.test.ts`). It also means Phase 4's AI player and Phase 11's undo are changes to `GameLoop` only.
+
+## D-015 — Cell picking by point-in-polygon, not per-cell objects
+
+**Date:** 2026-09-02 · **Phase:** 3
+
+**Decision:** `BoardPicker` raycasts the merged cell meshes, takes the hit point's (x, z), and finds the `Cell` whose polygon contains it (`domain/board/polygon.containsPoint`). Piece hits resolve through `PieceLayer.squareOf`.
+
+**Why:** resolves the D-010 consequence without un-merging the board or maintaining a triangle → square table. Exact because cells tile without overlap, and layout-agnostic — the warped board is picked correctly with no changes.
+
+## D-016 — Shadows on from Phase 3
+
+**Date:** 2026-09-02 · **Phase:** 3
+
+**Decision:** One directional shadow-casting light with an orthographic shadow camera sized from `BoardBounds` (2048² map). Cells receive, pieces cast and receive.
+
+**Why:** upright pieces on a flat-shaded board float visually without a contact shadow. Sizing the frustum from bounds means the warped board needs no retuning. Frame-rate cost is measured in Phase 9 alongside the terrain; if it bites, the map size is one constant.

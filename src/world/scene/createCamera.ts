@@ -13,9 +13,9 @@ import type { BoardBounds } from '@domain/board/types';
 
 const FOV_DEGREES = 45;
 /** Camera distance behind White's back rank, as a fraction of board width. */
-const PULL_BACK = 0.9;
+const PULL_BACK = 0.55;
 /** Camera height above the board's top surface, as a fraction of board width. */
-const RISE = 0.75;
+const RISE = 0.95;
 
 export function createCamera(bounds: BoardBounds, aspect: number): PerspectiveCamera {
   const width = bounds.maxX - bounds.minX;

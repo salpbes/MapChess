@@ -12,6 +12,7 @@ const MAX_PIXEL_RATIO = 2;
 export function createRenderer(container: HTMLElement): WebGLRenderer {
   const renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.outputColorSpace = SRGBColorSpace;
+  renderer.shadowMap.enabled = true;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
   resizeRenderer(renderer, container);
   container.appendChild(renderer.domElement);

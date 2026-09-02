@@ -41,3 +41,54 @@ body {
 #ui > * {
   pointer-events: auto;
 }
+
+/* ---- Phase 3: minimal HUD ---- */
+
+.status-bar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 6px;
+  background: rgba(20, 22, 26, 0.75);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
+.promotion-backdrop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.promotion-panel {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #2a2d33;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+
+.promotion-panel button {
+  min-width: 84px;
+  padding: 10px 12px;
+  border: 1px solid #555a63;
+  border-radius: 6px;
+  background: #3a3e46;
+  color: #e6e6e6;
+  font: inherit;
+  cursor: pointer;
+}
+
+.promotion-panel button:hover,
+.promotion-panel button:focus-visible {
+  background: #4a4f59;
+  outline: 2px solid #ffd447;
+  outline-offset: 1px;
+}
