@@ -128,6 +128,59 @@ body {
   line-height: 1.35;
 }
 
+/* ---- Phase 7: features ---- */
+
+.features-panel {
+  position: absolute;
+  top: 52px;
+  right: 12px;
+  width: 300px;
+  max-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(20, 22, 26, 0.8);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.features-panel__caption {
+  color: #e6e6e6;
+}
+
+.features-panel__counts {
+  color: #a9adb5;
+  line-height: 1.4;
+}
+
+.features-panel__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  border-top: 1px solid #2f333a;
+}
+
+.features-panel__item {
+  display: flex;
+  gap: 6px;
+  padding: 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.features-panel__kind {
+  flex: 0 0 auto;
+  color: #8fb8ff;
+}
+
+.features-panel__old {
+  color: #ffd447;
+}
+
 .area-bar {
   position: absolute;
   top: 12px;

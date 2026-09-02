@@ -394,3 +394,57 @@ Phase 7 — the feature layer: one Overpass query per area for water, coast, for
 - **`ElevationLoader` lives in `mapdata/`** but is glue rather than data access. It defines `IElevationView` so it never imports `ui/`; if it grows it should move to `game/` or a new `app/services/`.
 - **Vertical exaggeration is not applied here** — heights are true metres. Phase 8 owns the clamp-to-15–20%-of-width rule; the flat Lindisfarne fixture (21 m of relief on a 2 km board) is exactly the case that rule exists for.
 - **Fixture JSON adds ~465 KB to `dist/`** (but only ~42–100 KB gzipped per area, and only fetched when that area is chosen).
+
+---
+
+## Phase 7 — Feature layer
+
+**Date:** 2026-09-02
+**Project completion: 60%**
+
+### In plain English
+
+The game can now read the map itself: for a chosen area it fetches every river, stream, lake, stretch of coast, wood, moor, hilltop, ridge, ford, settlement, ruin and church that OpenStreetMap knows about, along with every name — including old names where someone has recorded them. A panel lists what it found; the console prints the full report. Picking Malham Cove tonight surfaced "Cawden — old name Cowden" and "Langscar — old name Lanscar" straight away. Three areas ship inside the game so none of this needs the network.
+
+### What I built
+
+- `src/mapdata/model/MapFeature.ts` — twelve `FeatureKind`s, point/line/polygon geometry in board metres, every name variant. No raw tags.
+- `src/mapdata/features/overpassQuery.ts` — the one query per area (D-024).
+- `src/mapdata/features/normalizeOverpass.ts` — raw Overpass → `MapFeature[]`; classification, area-vs-line rules, multipolygon outer rings, name collection. The only file that reads raw JSON.
+- `src/mapdata/features/IFeatureProvider.ts`, `OverpassFeatureProvider.ts` — the seam and the network path: IndexedDB cache → 2 s rate limiter → primary/fallback endpoint → normalise → cache.
+- `src/mapdata/features/FixtureFeatureProvider.ts` + `fixtures/*.json` — three raw fixtures, normalised on load (D-025); `scripts/make-feature-fixtures.ts` regenerates them with 429/504 back-off.
+- `src/mapdata/features/summarizeFeatures.ts` — counts by kind, deduplicated named list, old/historic flags, text report.
+- `src/mapdata/features/FeatureLoader.ts` — glue with cancellation; defines `IFeaturesView`.
+- `src/ui/FeaturesDebugPanel.ts` — counts + scrollable name list, old names in yellow.
+- `src/mapdata/cache/KeyValueStore.ts` — replaces `TileCache`: one IndexedDB, typed store per data kind, runtime guard on read.
+- `src/mapdata/model/fixtureAreas.ts` — the fixture area list, now shared by elevation and features. `paddedBounds()` moved to `MapArea.ts` for the same reason.
+- `tests/mapdata/features.test.ts` — 14 tests: query shape, response validation, every classification/geometry rule with synthetic elements, the three real fixtures' counts and names (incl. Gaelic `Abhainn Chomhann` for River Coe), summary dedup, cache keys, fixture routing. 157 total.
+
+### Why it was done this way
+
+- **Probe first, again.** The query was run against all three areas from the terminal before any code, which is how I learned the public instance rejects generic user agents (406) and throttles hard (429/504). Both are handled: browsers are fine, the generator identifies itself and backs off, the provider fails over.
+- **Raw fixtures inside `features/` (D-025).** Tests exercise the real normaliser on real tagging; the "raw never leaves the folder" rule holds because the fixtures live in it.
+- **Twelve kinds, no raw tags.** Phase 8 needs "where are the waterways and peaks"; Phase 10 needs "what is this called and what sort of thing is it". A closed union with a `subtype` string serves both without leaking OSM's vocabulary.
+- **Generic `KeyValueStore`.** One IndexedDB with two typed stores rather than two cache classes; the runtime guard on read means a corrupt or old-format entry is a miss, not a crash.
+- **Rejected:** clipping to the board here (Phase 8 wants margin); bridges via highway×waterway intersection (expensive, building-adjacent); caching raw JSON (would leak); a separate area list for features (heights and rivers must describe the same ground).
+
+### How to check it yourself
+
+1. `npm run dev`. Top-right panel: _Features: 93 · 27 named · 0 old/historic · fixture · ~20 ms_, counts by kind, and the names — Lindisfarne Priory, The Heugh, Beblowe Crag…
+2. The console has the same as a text report: counts by type, then every name, old names flagged `OLD NAME:`.
+3. **Choose area…** → _Malham Cove_ → **Use this area**. After Overpass answers (2–12 s depending on its mood): _275 · 37 named · 3 old/historic · network_. Yellow: _Cawden — old: Cowden_, _Langscar — old: Lanscar_.
+4. Confirm the same area again: _cache · ~10 ms_. Reload and repeat: still cache.
+5. Pick Glen Coe (a fixture): the River Coe lists with its Gaelic name as historic.
+6. `npm run test` → 13 files, 157 tests. `npm run make-fixtures` regenerates both fixture sets.
+
+### What's left
+
+Phase 8 — the warped lattice. It now has everything: `HeightField` with `sampleStats`, `MapFeature[]` with waterways/peaks/places in board metres, three fixture areas to run the invariants across, and `IBoardLayout` to slot into. This is the phase the plan calls "the project".
+
+### Risks / things I'm unsure about
+
+- **Overpass reliability is the worst of the three services.** Tonight: 406, 429, three 504s, and an 11.7 s success. Fixtures + cache + failover make development fine; a first-time player picking a new area may wait 10 s or see an error. Phase 11's loading states must make that honest.
+- **`historic` can swamp an area** — Malham returned 166 historic features (field barns, lynchets). Phase 10's scoring must weigh subtype, not count.
+- **`name:gd` as "historic name" is a judgement call.** It reads well in the Highlands; in a bilingual town it may be wrong. Confined to one line in `namesOf()`.
+- **Multipolygon inner rings are dropped.** A lake inside a wood renders as wood in Phase 9 unless the lake is also present as its own feature (it usually is).
+- **Coastline direction** (land on the left) is preserved but not yet used; Phase 8/9 will need it to know which side is sea.

@@ -69,6 +69,23 @@ export function describeArea(selection: SelectedArea): MapArea {
   return { selection, projection, corners, bounds };
 }
 
+/** Lat/lon box around the board grown by `marginMeters` on every side, so edge cells have context. */
+export function paddedBounds(area: MapArea, marginMeters: number): GeoBounds {
+  const half = area.selection.sizeMeters / 2 + marginMeters;
+  const corners = [
+    area.projection.fromBoard({ x: -half, z: half }),
+    area.projection.fromBoard({ x: half, z: half }),
+    area.projection.fromBoard({ x: half, z: -half }),
+    area.projection.fromBoard({ x: -half, z: -half }),
+  ];
+  return {
+    minLat: Math.min(...corners.map((c) => c.lat)),
+    maxLat: Math.max(...corners.map((c) => c.lat)),
+    minLon: Math.min(...corners.map((c) => c.lon)),
+    maxLon: Math.max(...corners.map((c) => c.lon)),
+  };
+}
+
 /** Corner ring in GeoJSON order (closed), starting at a1. */
 export function cornerRing(corners: BoardCorners): [number, number][] {
   const first: [number, number] = [corners.sw.lon, corners.sw.lat];

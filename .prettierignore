@@ -5,3 +5,4 @@ package-lock.json
 docs/*.html
 public/engine/
 src/mapdata/elevation/fixtures/
+src/mapdata/features/fixtures/

@@ -209,3 +209,23 @@ MapLibre 6 finds its worker with `new URL('./maplibre-gl-worker.mjs', import.met
 **Decision:** `npm run make-fixtures` (`scripts/make-fixtures.ts`) fetches real tiles under Node, decodes with `pngjs`, and runs the _same_ `assembleHeightField` the browser uses. Output: `src/mapdata/elevation/fixtures/{lindisfarne,rievaulx,glencoe}.json`, Int16 decimetres base64 (155 KB each, 42–100 KB gzipped), code-split so they download only when their area is selected. `FixtureElevationProvider` serves them for a matching `SelectedArea` and delegates everything else.
 
 **Why:** a fixture produced by a different path proves nothing. Only the PNG decoder differs between Node and browser, and the Terrarium formula is unit-tested against hand-built pixels. The three areas are BUILD_PLAN's flat coastal / river valley / hilly, and are the input to Phase 8's invariant tests.
+
+## D-024 — Features: one Overpass query, `out geom`, normalised to a closed kind list
+
+**Date:** 2026-09-02 · **Phase:** 7
+
+**Decision:** One Overpass QL union per area (bbox = board + 200 m) for waterways, water bodies, coastline, wood/forest, scrub/heath/moor/wetland, peaks, saddles, ridges/cliffs, fords, `place=*`, `historic=*` and places of worship, with `out geom` so way and relation geometry arrives inline. Normalised into twelve `FeatureKind`s; closed ways are polygons only for area kinds; historic/worship/ford/peak/place areas collapse to a centre point; multipolygon relations contribute one polygon per outer ring, inner rings dropped.
+
+**Probe results (before code):** Rievaulx 265 KB / 1.7 s / 107 elements; Lindisfarne 100 KB / 92; Glen Coe 220 KB / 98. Names found: all three have `name`; Glen Coe has Gaelic `name:gd`; `old_name` appeared on the first non-fixture area tried (Malham: Cawden/Cowden, Langscar/Lanscar). Coverage is patchy exactly as BUILD_PLAN §1 warns.
+
+**Operational facts learned:** overpass-api.de returns **406** to generic User-Agents (Node's default) — browsers are fine, scripts must identify themselves; it returns **429/504** when its per-IP slots are busy, which happened three times in a row while generating fixtures. Hence: 2 s rate limiter, 30 s timeout, IndexedDB cache keyed by rounded area, endpoint failover (overpass-api.de → overpass.private.coffee), and a fixture-first provider.
+
+**Rejected:** clipping geometry to the board here (Phase 8 needs a margin and will clip itself); a bridge/crossing kind derived from highway×waterway intersections (buildings-adjacent and expensive; `ford` covers Phase 10's "crossing" for now); caching raw JSON (would let it leak beyond `features/`).
+
+## D-025 — Feature fixtures are raw Overpass responses, slimmed
+
+**Date:** 2026-09-02 · **Phase:** 7
+
+**Decision:** `src/mapdata/features/fixtures/*.json` hold the actual Overpass response for each fixture area with `nodes` and `bounds` stripped (50–130 KB; 11–26 KB gzipped, code-split). `FixtureFeatureProvider` parses and normalises them with the production functions at load time. The three areas are the same `FIXTURE_AREAS` list as elevation, now in `mapdata/model/fixtureAreas.ts`.
+
+**Why:** raw fixtures make the tests exercise the normaliser on real tagging, not on my idea of it. Keeping the raw files inside `features/` honours "raw Overpass JSON never leaves this folder". Sharing the area list guarantees heights and features describe the same ground.

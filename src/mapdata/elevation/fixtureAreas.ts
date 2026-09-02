@@ -1,39 +1,17 @@
-// WHAT: The three offline fixture areas and how to load their data.
-// HOW:  Area definitions live here (they are also the input to
-//       scripts/make-fixtures.ts); the JSON payloads are imported lazily so
-//       they are code-split and only downloaded when an area matches.
+// WHAT: Lazy loaders for the elevation fixture payloads.
+// HOW:  The area list itself lives in mapdata/model/fixtureAreas.ts (shared
+//       with features). The JSON payloads are imported dynamically so they are
+//       code-split and only downloaded when an area matches.
 // WHY:  One list, used by the generator, the provider and Phase 8's tests, so
 //       the areas cannot drift apart between them.
 
-import type { SelectedArea } from '@mapdata/model/SelectedArea';
+import { FIXTURE_AREAS } from '@mapdata/model/fixtureAreas';
 
 import type { FixtureEntry } from './FixtureElevationProvider';
 import type { HeightFieldFixture } from './heightFieldFixture';
 
-export interface FixtureAreaDef {
-  readonly name: string;
-  readonly description: string;
-  readonly area: SelectedArea;
-}
-
-/** Flat coastal · river valley · hilly — BUILD_PLAN Phase 6. All 2 km, rotation 0. */
-export const FIXTURE_AREAS: readonly FixtureAreaDef[] = [
-  {
-    name: 'lindisfarne',
-    description: 'Holy Island of Lindisfarne — flat coastal, tidal flats, very little relief',
-    area: { centerLat: 55.6785, centerLon: -1.7937, sizeMeters: 2000, rotationDeg: 0 },
-  },
-  {
-    name: 'rievaulx',
-    description: 'Rievaulx, North Yorkshire — the River Rye valley below the abbey',
-    area: { centerLat: 54.2573, centerLon: -1.1167, sizeMeters: 2000, rotationDeg: 0 },
-  },
-  {
-    name: 'glencoe',
-    description: 'Glen Coe, Highlands — steep hillsides either side of the glen',
-    area: { centerLat: 56.6667, centerLon: -5.0, sizeMeters: 2000, rotationDeg: 0 },
-  },
-];
+export { FIXTURE_AREAS } from '@mapdata/model/fixtureAreas';
+export type { FixtureAreaDef } from '@mapdata/model/fixtureAreas';
 
 const loaders: Readonly<Record<string, () => Promise<HeightFieldFixture>>> = {
   lindisfarne: async () =>

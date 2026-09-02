@@ -10,7 +10,8 @@
 //       The image decode is the only browser-bound step, so it is the only
 //       thing this file does that the fixture script does not.
 
-import type { ITileCache } from '@mapdata/cache/TileCache';
+import type { KeyValueStore } from '@mapdata/cache/KeyValueStore';
+import { paddedBounds } from '@mapdata/model/MapArea';
 import type { MapArea } from '@mapdata/model/MapArea';
 import { fetchBlob } from '@mapdata/net/fetchJson';
 
@@ -50,7 +51,7 @@ export class TerrariumElevationProvider implements IElevationProvider {
   private readonly maxConcurrent: number;
 
   public constructor(
-    private readonly cache: ITileCache,
+    private readonly cache: KeyValueStore<Float32Array>,
     options: TerrariumOptions = {},
   ) {
     this.urlTemplate = options.urlTemplate ?? DEFAULT_URL;
@@ -122,23 +123,6 @@ export class TerrariumElevationProvider implements IElevationProvider {
       return null;
     }
   }
-}
-
-/** The board plus margin, as a lat/lon box, so edge cells have ground beyond them. */
-function paddedBounds(area: MapArea, marginMeters: number): MapArea['bounds'] {
-  const half = area.selection.sizeMeters / 2 + marginMeters;
-  const corners = [
-    area.projection.fromBoard({ x: -half, z: half }),
-    area.projection.fromBoard({ x: half, z: half }),
-    area.projection.fromBoard({ x: half, z: -half }),
-    area.projection.fromBoard({ x: -half, z: -half }),
-  ];
-  return {
-    minLat: Math.min(...corners.map((c) => c.lat)),
-    maxLat: Math.max(...corners.map((c) => c.lat)),
-    minLon: Math.min(...corners.map((c) => c.lon)),
-    maxLon: Math.max(...corners.map((c) => c.lon)),
-  };
 }
 
 async function decodePng(blob: Blob): Promise<Float32Array> {

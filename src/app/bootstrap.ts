@@ -14,17 +14,29 @@ import { ChessEngine } from '@domain/chess/ChessEngine';
 import type { GameEvents } from '@game/GameEvents';
 import { GameLoop } from '@game/GameLoop';
 import type { Players } from '@game/GameLoop';
-import { IndexedDbTileCache } from '@mapdata/cache/TileCache';
+import { IndexedDbStore, STORES } from '@mapdata/cache/KeyValueStore';
 import { ElevationLoader } from '@mapdata/elevation/ElevationLoader';
 import { fixtureEntries } from '@mapdata/elevation/fixtureAreas';
 import { FixtureElevationProvider } from '@mapdata/elevation/FixtureElevationProvider';
 import { TerrariumElevationProvider } from '@mapdata/elevation/TerrariumElevationProvider';
+import { FeatureLoader } from '@mapdata/features/FeatureLoader';
+import {
+  featureFixtureEntries,
+  FixtureFeatureProvider,
+} from '@mapdata/features/FixtureFeatureProvider';
+import {
+  isCachedFeatures,
+  OverpassFeatureProvider,
+} from '@mapdata/features/OverpassFeatureProvider';
+import type { CachedFeatures } from '@mapdata/features/OverpassFeatureProvider';
 import { NominatimGeocoder } from '@mapdata/geocode/NominatimGeocoder';
 import type { HeightField } from '@mapdata/model/HeightField';
+import type { MapFeature } from '@mapdata/model/MapFeature';
 import type { SelectedArea } from '@mapdata/model/SelectedArea';
 import { browserBase64 } from '@shared/encoding/base64';
 import { EventBus } from '@shared/events/EventBus';
 import { AreaBar } from '@ui/AreaBar';
+import { FeaturesDebugPanel } from '@ui/FeaturesDebugPanel';
 import { FpsMeter } from '@ui/FpsMeter';
 import { HeightmapDebugPanel } from '@ui/HeightmapDebugPanel';
 import { OpponentPanel } from '@ui/OpponentPanel';
@@ -50,6 +62,8 @@ export interface AppHandle {
   selectedArea(): SelectedArea;
   /** Ground heights for the selected area, once loaded. */
   heightField(): HeightField | null;
+  /** Rivers, woods, peaks, places… for the selected area, once loaded. */
+  features(): readonly MapFeature[] | null;
   dispose(): void;
 }
 
@@ -116,19 +130,34 @@ export function bootstrap(
   // Fixtures first (offline), then IndexedDB-cached Terrarium tiles (D-022).
   const elevationProvider = new FixtureElevationProvider(
     fixtureEntries(),
-    new TerrariumElevationProvider(new IndexedDbTileCache()),
+    new TerrariumElevationProvider(
+      new IndexedDbStore<Float32Array>(STORES.elevationTiles, (v) => v instanceof Float32Array),
+    ),
     browserBase64,
   );
   const heightmapPanel = new HeightmapDebugPanel(uiContainer);
   const elevation = new ElevationLoader(elevationProvider, heightmapPanel);
+
+  // Features: fixtures first (offline), then IndexedDB-cached, rate-limited Overpass (D-024).
+  const featureProvider = new FixtureFeatureProvider(
+    featureFixtureEntries(),
+    new OverpassFeatureProvider(
+      new IndexedDbStore<CachedFeatures>(STORES.features, isCachedFeatures),
+    ),
+  );
+  const featuresPanel = new FeaturesDebugPanel(uiContainer);
+  const features = new FeatureLoader(featureProvider, featuresPanel);
+
   const areaBar = new AreaBar(uiContainer, config.defaultArea, {
     geocoder: new NominatimGeocoder(),
     styleUrl: config.mapStyleUrl,
     onAreaChanged: (area) => {
       void elevation.load(area);
+      void features.load(area);
     },
   });
   void elevation.load(config.defaultArea);
+  void features.load(config.defaultArea);
 
   // --- input ---
   const picker = new BoardPicker(stage.camera, layout, cells, pieces);
@@ -146,8 +175,11 @@ export function bootstrap(
     stage,
     selectedArea: () => areaBar.current,
     heightField: () => elevation.heightField,
+    features: () => features.features,
     dispose: () => {
       input.dispose();
+      features.dispose();
+      featuresPanel.dispose();
       elevation.dispose();
       heightmapPanel.dispose();
       areaBar.dispose();
