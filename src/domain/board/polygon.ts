@@ -76,3 +76,20 @@ export function containsPoint(polygon: readonly BoardPoint[], point: BoardPoint)
   }
   return true;
 }
+
+/** Even–odd ray cast: works for any simple polygon, convex or not. Edge points may go either way. */
+export function pointInPolygon(polygon: readonly BoardPoint[], point: BoardPoint): boolean {
+  const n = polygon.length;
+  if (n < 3) return false;
+  let inside = false;
+  for (let i = 0, j = n - 1; i < n; j = i, i += 1) {
+    const a = polygon[i];
+    const b = polygon[j];
+    if (a === undefined || b === undefined) continue;
+    const crosses = a.z > point.z !== b.z > point.z;
+    if (!crosses) continue;
+    const xAtZ = a.x + ((point.z - a.z) * (b.x - a.x)) / (b.z - a.z);
+    if (point.x < xAtZ) inside = !inside;
+  }
+  return inside;
+}

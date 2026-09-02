@@ -260,3 +260,21 @@ Point attractors slide their cell toward the feature (50 %) and push its corners
 **Decision:** `app/BoardComposer` holds the latest heights and features for the current area and emits a `FlatBoardLayout` immediately, then a `WarpedBoardLayout` when both have arrived (a generation counter drops stale results). `world/builders/BoardScene` applies a layout to the running scene: rebuilds cells, repoints `PieceLayer`/`HighlightLayer`/`BoardPicker`, rebuilds the debug overlay, reframes camera/controls/lights.
 
 **Verified:** nothing in `game/`, `domain/chess/`, `ai/` or `world/pieces/` changed for the swap beyond adding `setLayout()` to three classes. `?debug` toggles flat/warped on the same terrain.
+
+## D-029 — Inside the board the terraces are the ground; the terrain mesh is a margin
+
+**Date:** 2026-09-02 · **Phase:** 9
+
+**Decision:** `TerrainBuilder` draws the `HeightField` (every second sample, exaggerated with the layout's own scale) but drops every triangle whose centre lies inside the board footprint. Cell skirts extend down to below the lowest surrounding ground (`skirtDepthFor`), so the board's cut edge meets the landscape with no gap.
+
+**Why:** a continuous terrain under mean-height platforms pokes through them wherever the ground is above the platform, and z-fights where it is level. Removing it makes the terraces read unambiguously as the playing surface, and the surrounding true relief tells you what was flattened. Water ribbons use platform height inside the board and terrain height outside for the same reason.
+
+**Rejected:** rendering terrain everywhere with platforms slightly raised (floating pieces); terrain-only with no terraces (unreadable board — BUILD_PLAN §8, readability wins).
+
+## D-030 — Land-cover colouring keeps the checkerboard
+
+**Date:** 2026-09-02 · **Phase:** 9
+
+**Decision:** Each cell is classified as grass / wood / scrub / water / sand from the feature polygons (centroid counts 3, corners 1 each; majority wins) or, on coastal boards, from mean elevation < 1.5 m. Every cover has a light and a dark variant so the a1-dark checker pattern survives; risers are one earth colour; every platform edge gets a thin dark outline.
+
+**Why:** a cell must read both as "forest" and as "a dark square". Two shades per cover does both; the outline covers the case where neighbouring cells share a cover and a shade would otherwise be the only cue. Merged by (cover, shade) so the whole board is at most a dozen draw calls.

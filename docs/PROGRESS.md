@@ -505,3 +505,56 @@ Phase 9 — render the world: a terrain mesh from the `HeightField`, visible ter
 - **Terraces are stepped, not sloped.** A steep hillside becomes a stair of 64 flats. That is the plan's intent (readability wins), but Glen Coe's 340 m of relief is dramatic; Phase 9's edge treatment must make the risers read as ground, not walls.
 - **`setLayout()` mid-game.** Switching area during a game re-places the pieces from the engine position, which is right, but the animator is not flushed first. Harmless now (area changes are a dev action); Phase 11 should start a new game on area change.
 - **The debug overlay walks 64 polygons per feature point** to find heights — fine for a few hundred points, quadratic if a dense area returns thousands. Debug-only.
+
+---
+
+## Phase 9 — Render the world
+
+**Date:** 2026-09-02
+**Project completion: 84%**
+
+### In plain English
+
+The board now looks like the place. Rievaulx is a green valley: the River Rye runs blue along the cell seams, the wooded slopes are dark green, the farms are labelled, and the real hills continue past the edge of the board. Glen Coe is a stair of brown moorland climbing toward Black with streams threading down it. Holy Island sits in the sea with sand at the tideline. All three run at 60 frames per second.
+
+### What I built
+
+- `src/world/builders/WorldModel.ts` — the one bundle the renderer reads; `heightToY()` applies the layout's exaggeration.
+- `src/world/builders/palette.ts` — every colour in one file.
+- `src/mapdata/board/classifyCellCover.ts` — grass / wood / scrub / water / sand per cell (D-030). `domain/board/polygon.pointInPolygon` added for non-convex woods and lakes (+ tests).
+- `src/world/builders/CellBuilder.ts` — rewritten: tops merged by (cover, shade), one riser mesh, one outline `LineSegments`; still zero 8×8 maths.
+- `src/world/builders/TerrainBuilder.ts` — landscape margin from the `HeightField`, triangles under the board dropped, height-tinted vertex colours (D-029); `skirtDepthFor()` so cell sides reach the ground.
+- `src/world/builders/WaterBuilder.ts` — river/stream ribbons by width class lying on the terraces, lakes via `ShapeGeometry`, a sea plane on coastal boards clamped below the lowest platform.
+- `src/world/builders/LabelBuilder.ts` + `textSprite.ts` — up to 16 place names, one per cell, by priority; the debug overlay now shares the sprite code.
+- `src/world/builders/BoardScene.ts` — takes a `WorldModel`, builds and disposes everything.
+- `src/app/BoardComposer.ts` — emits the `WorldModel` (layout + heights + features + cover + exaggeration).
+- `src/ui/FpsMeter.ts` — now shows draw calls and triangles.
+
+### Why it was done this way
+
+- **Terraces are the ground inside the board (D-029).** Any continuous terrain under the platforms either pokes through or z-fights; dropping it makes the playing surface unambiguous, and the margin of true relief says what was cut. Water follows the same rule: platform height inside, terrain height outside.
+- **Two shades per land cover (D-030).** A cell must read as both "forest" and "a dark square". Outlines cover the same-cover-same-shade case.
+- **Merged by material, measured.** Board ≤ 12 calls, terrain 1, water ≤ 3, labels ≤ 16. Whole scene 78–87 calls including 32 pieces and their shadow passes; 28–30k triangles. 60 fps on all three fixtures with the meter visible.
+- **Every-second height sample for the margin.** 241² → 121² grid, ~29k triangles; the margin is context, not the subject.
+- **Rejected:** tree meshes (thousands of instances for a low-poly board that already reads as forest by colour); a river shader (a flat ribbon is the low-poly answer); terrain under the board with raised platforms (floating pieces); textures (D-002).
+
+### How to check it yourself
+
+1. `npm run dev` → `/?debug`. **Example areas… → Rievaulx.** Untick _cell labels_ and _rivers & peaks_ to see the plain render. The Rye is a blue ribbon down the c/d seam; Ashberry Wood and Abbot Hagg Wood are dark green; farms are labelled; the valley sides continue as terrain beyond the board.
+2. **→ Glencoe.** Brown moorland terraces climb toward Black; streams thread the cells; Aonach Eagach's slopes rise behind.
+3. **→ Lindisfarne.** Sea all round; sand-coloured cells at the tideline; the drainage ditches as a fine blue net.
+4. Bottom-right meter: **60 fps · 78–87 calls · 28–30k tris** on every area. Untick _warped board_: 68 calls / 19k for the grey board.
+5. Click a pawn and a square ahead of it — the move plays on the terraces and Stockfish answers. (Cells have moved; e2 is where the e2 pawn stands, not where it was on the flat board.)
+6. `npm run test` → 15 files, 187 tests.
+
+### What's left
+
+Phase 10 — terrain theming: score cells and features to give every piece an identity (rook = the peak, bishop = the abbey, knight = the ford…) and every cell a display name via the fallback chain, shown when a piece is selected. Everything it needs — `MapFeature[]`, `CellCover`, per-cell heights, names with old-name flags — is already in the `WorldModel`.
+
+### Risks / things I'm unsure about
+
+- **Diagonal streams cut across cells** (Phase 8's deliberate choice) and now they are visibly blue doing it. Glen Coe has a lot of them. It reads as "streams on a hillside" rather than "broken board", but it is the least tidy part of the picture.
+- **Drain/ditch networks can be noisy** — Lindisfarne's middle is a lattice of 2.5 m ribbons. A minimum-length or minimum-width filter is a one-line change in `WaterBuilder`.
+- **Labels overlap pieces** at the default camera angle; they sit at 2.2 label-heights above the platform. Phase 10 replaces them with per-cell identity shown on selection, so I have not tuned them further.
+- **Shadow acne on steep risers** is visible at some angles on Glen Coe. `normalBias` is already set; the map is one 2048² cascade. If it bites, a second cascade or a larger bias.
+- **No terrain under the flat board.** In flat mode the landscape is hidden entirely; a "flat board in its landscape" would be a cheap addition if wanted.

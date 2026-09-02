@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { centroid, containsPoint, signedArea } from '@domain/board/polygon';
+import { centroid, containsPoint, pointInPolygon, signedArea } from '@domain/board/polygon';
 import type { BoardPoint } from '@domain/board/types';
 
 // Unit square, CCW viewed from above with north (−Z) up: SW, SE, NE, NW.
@@ -113,5 +113,36 @@ describe('containsPoint', () => {
         { x: 0.5, z: 0.5 },
       ),
     ).toBe(false);
+  });
+});
+
+describe('pointInPolygon (non-convex)', () => {
+  // A "C" shape: the notch on the right is outside.
+  const cShape: BoardPoint[] = [
+    { x: 0, z: 0 },
+    { x: 3, z: 0 },
+    { x: 3, z: 1 },
+    { x: 1, z: 1 },
+    { x: 1, z: 2 },
+    { x: 3, z: 2 },
+    { x: 3, z: 3 },
+    { x: 0, z: 3 },
+  ];
+
+  it('handles concave shapes where the convex test cannot', () => {
+    expect(pointInPolygon(cShape, { x: 0.5, z: 1.5 })).toBe(true);
+    expect(pointInPolygon(cShape, { x: 2, z: 1.5 })).toBe(false);
+    expect(pointInPolygon(cShape, { x: 2, z: 0.5 })).toBe(true);
+    expect(pointInPolygon(cShape, { x: 5, z: 5 })).toBe(false);
+  });
+
+  it('agrees with containsPoint on convex input', () => {
+    for (const p of [
+      { x: 0.5, z: 0.5 },
+      { x: 1.5, z: 0.5 },
+      { x: -0.1, z: 0.5 },
+    ]) {
+      expect(pointInPolygon(ccwSquare, p)).toBe(containsPoint(ccwSquare, p));
+    }
   });
 });

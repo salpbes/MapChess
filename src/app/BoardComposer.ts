@@ -1,27 +1,26 @@
-// WHAT: Decides which IBoardLayout the game plays on and builds it when the
-//       terrain for the selected area is ready.
+// WHAT: Decides which IBoardLayout the game plays on and builds the WorldModel
+//       the renderer draws, once the terrain for the selected area is ready.
 // HOW:  Holds the latest HeightField and MapFeature[] for the current area.
-//       When both are present, builds TerrainInputs → WarpedBoardLayout and
-//       hands it to the callback; until then, or if the mode is 'flat', hands
-//       over a FlatBoardLayout. A generation counter drops results from an
-//       area the player has since moved away from.
+//       When both are present, builds TerrainInputs → WarpedBoardLayout →
+//       land cover → WorldModel and hands it to the callback; until then, or
+//       if the mode is 'flat', hands over a plain FlatBoardLayout model. A
+//       generation counter drops results from an area the player has left.
 // WHY:  BUILD_PLAN §5 — the layout choice is app-level wiring. This is the
 //       line that Phase 8 was always going to change, made explicit and
 //       toggleable so flat vs warped can be compared on the same terrain.
 
 import { FlatBoardLayout } from '@domain/board/FlatBoardLayout';
-import type { IBoardLayout } from '@domain/board/IBoardLayout';
-import type { TerrainInputs } from '@domain/board/TerrainInputs';
 import { WarpedBoardLayout } from '@domain/board/WarpedBoardLayout';
 import { buildTerrainInputs } from '@mapdata/board/buildTerrainInputs';
+import { classifyCellCover } from '@mapdata/board/classifyCellCover';
 import type { HeightField } from '@mapdata/model/HeightField';
 import type { MapFeature } from '@mapdata/model/MapFeature';
+import type { WorldModel } from '@world/builders/WorldModel';
 
 export type BoardMode = 'flat' | 'warped';
 
 export interface ComposedBoard {
-  readonly layout: IBoardLayout;
-  readonly terrain: TerrainInputs | null;
+  readonly model: WorldModel;
   readonly mode: BoardMode;
 }
 
@@ -72,14 +71,34 @@ export class BoardComposer {
     if (this.mode !== 'warped' || this.heights === null || this.features === null) return;
     const terrain = buildTerrainInputs(this.boardSizeMeters, this.heights, this.features);
     const layout = new WarpedBoardLayout(terrain);
-    this.onBoard({ layout, terrain, mode: 'warped' });
+    const cover = classifyCellCover(layout, this.features, this.heights);
+    this.onBoard({
+      mode: 'warped',
+      model: {
+        layout,
+        terrain,
+        heights: this.heights,
+        features: this.features,
+        cover,
+        exaggeration: {
+          scale: layout.terraceInfo.scale,
+          baseMeters: layout.terraceInfo.baseMeters,
+        },
+      },
+    });
   }
 
   private emitFlat(): void {
     this.onBoard({
-      layout: new FlatBoardLayout({ boardSizeMeters: this.boardSizeMeters }),
-      terrain: null,
       mode: 'flat',
+      model: {
+        layout: new FlatBoardLayout({ boardSizeMeters: this.boardSizeMeters }),
+        terrain: null,
+        heights: null,
+        features: null,
+        cover: null,
+        exaggeration: null,
+      },
     });
   }
 }

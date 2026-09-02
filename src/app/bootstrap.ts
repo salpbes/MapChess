@@ -119,7 +119,10 @@ export function bootstrap(
     game.newGame(toPlayers(request.humanColor));
   });
   const fps = new URLSearchParams(window.location.search).has('debug')
-    ? new FpsMeter(uiContainer)
+    ? new FpsMeter(uiContainer, () => ({
+        calls: stage.renderer.info.render.calls,
+        triangles: stage.renderer.info.render.triangles,
+      }))
     : null;
   const stopFps =
     fps === null
@@ -169,12 +172,13 @@ export function bootstrap(
 
   // --- board: flat until terrain arrives, then warped (Phase 8) ---
   const boardScene = new BoardScene({ stage, pieces, highlights, picker });
-  const composer = new BoardComposer(config.boardSizeMeters, ({ layout, terrain, mode }) => {
-    boardScene.show(layout, terrain);
+  const composer = new BoardComposer(config.boardSizeMeters, ({ model, mode }) => {
+    boardScene.show(model);
     // Positions changed under the pieces; re-place them from the engine's position.
     view.showPosition(engine.pieces());
+    const t = model.terrain;
     console.info(
-      `Board: ${mode}${terrain === null ? '' : ` (${String(terrain.lines.length)} lines, ${String(terrain.points.length)} points)`}`,
+      `Board: ${mode}${t === null ? '' : ` (${String(t.lines.length)} lines, ${String(t.points.length)} points)`}`,
     );
   });
 

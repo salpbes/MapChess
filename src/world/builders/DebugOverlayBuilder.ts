@@ -9,7 +9,6 @@
 
 import {
   BufferGeometry,
-  CanvasTexture,
   Color,
   Float32BufferAttribute,
   Group,
@@ -18,14 +17,14 @@ import {
   Mesh,
   MeshBasicMaterial,
   SphereGeometry,
-  Sprite,
-  SpriteMaterial,
 } from 'three';
 
 import type { IBoardLayout } from '@domain/board/IBoardLayout';
 import { containsPoint } from '@domain/board/polygon';
 import type { TerrainInputs } from '@domain/board/TerrainInputs';
 import type { BoardPoint } from '@domain/board/types';
+
+import { makeTextSprite } from './textSprite';
 
 export interface DebugOverlayOptions {
   readonly labels: boolean;
@@ -54,13 +53,10 @@ export class DebugOverlayBuilder {
   private labels(layout: IBoardLayout, width: number): Group {
     const g = new Group();
     g.name = 'labels';
-    const size = width * 0.04;
+    const size = width * 0.03;
     for (const cell of layout.cells) {
-      const sprite = new Sprite(
-        new SpriteMaterial({ map: textTexture(cell.square), depthTest: false, transparent: true }),
-      );
-      sprite.scale.set(size, size, 1);
-      sprite.position.set(cell.centroid.x, cell.platformY + size * 0.6, cell.centroid.z);
+      const sprite = makeTextSprite(cell.square, { heightMeters: size, depthTest: false });
+      sprite.position.set(cell.centroid.x, cell.platformY + size * 0.8, cell.centroid.z);
       g.add(sprite);
     }
     return g;
@@ -115,25 +111,4 @@ function heightLookup(layout: IBoardLayout): (p: BoardPoint) => number {
     }
     return layout.bounds.maxY;
   };
-}
-
-function textTexture(text: string): CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 128;
-  const ctx = canvas.getContext('2d');
-  if (ctx !== null) {
-    ctx.fillStyle = 'rgba(20,22,26,0.7)';
-    ctx.beginPath();
-    ctx.arc(64, 64, 52, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 60px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, 64, 68);
-  }
-  const texture = new CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
 }
