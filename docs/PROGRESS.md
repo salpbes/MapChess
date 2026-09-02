@@ -112,3 +112,52 @@ Phase 2 — chess rules core. `IChessEngine` wrapping chess.js, fully tested, pl
 - **Default camera angle is a taste call.** Currently ~40° elevation. Once pieces exist it may want to be steeper; the constants are two numbers in `createCamera.ts`.
 - **No shadows yet.** Deliberately off until pieces exist. Enabling them will need a shadow-camera frustum sized from `BoardBounds` — one more thing in `createLights.ts`.
 - **Board thickness is 2% of width** (40 m on a 2 km board). Looks right on the flat board; on terraced terrain the skirt depth will be dictated by the height range instead. `CellBuilder` already takes it as an option.
+
+---
+
+## Phase 2 — Chess rules core
+
+**Date:** 2026-09-02
+**Project completion: 18%**
+
+### In plain English
+
+The game now knows the rules of chess — every legal move, check, checkmate, all the draws, castling, en passant and pawn promotion — and refuses anything illegal with a reason. None of this touches the screen yet: you can play a complete game in the terminal with `npm run play`, which proves the rules stand on their own.
+
+### What I built
+
+- `src/domain/chess/types.ts` — `Color`, `PieceType`, `Piece`, `MoveRequest`, `Move` (with captured square and castle rook path), `GameStatus`.
+- `src/domain/chess/IChessEngine.ts` — the rules seam: read position, list legal moves, `move`/`undo`, `load`/`reset`.
+- `src/domain/chess/errors.ts` — `IllegalMoveError` (with a reason) and `InvalidPositionError`.
+- `src/domain/chess/chessJsAdapter.ts` — the only file that knows chess.js's letters; derives en passant victim square and castle rook path.
+- `src/domain/chess/ChessEngine.ts` — `IChessEngine` on chess.js; validates before delegating, keeps a domain-typed history.
+- `scripts/play.ts` + `npm run play` — terminal hot-seat game: SAN or coordinate input, `moves`, `undo`, `history`, `fen`, `reset`.
+- `tests/domain/chess/ChessEngine.test.ts` — 42 tests covering every listed rule, the awkward cases (pins, castling through check, en passant expiry, underpromotion, undoing a mate) and a full historical game (Morphy's Opera Game) played to checkmate.
+
+### Why it was done this way
+
+- **Human-readable vocabulary, chess.js in one file (D-011).** Phase 10 will assign terrain identities to "rooks" and "knights"; it should never see `'r'`.
+- **`Move` carries rendering facts.** `capturedSquare` and `castle.rookFrom/rookTo` mean Phase 3 animates en passant and castling with no rule knowledge.
+- **Typed errors with reasons (D-012).** The UI needs to distinguish "pick a promotion piece" from "not your turn". A boolean cannot.
+- **Own history array** instead of re-converting `chess.history({verbose:true})` on every read.
+- **Rejected:** exposing chess.js's `Move` directly (leaks the dependency into every layer); a `tryMove(): Move | null` API instead of throwing (loses the reason).
+
+### How to check it yourself
+
+1. `npm run play`
+2. Type `f3`, `e5`, `g4`, `Qh4#` — the board redraws each time; the last prints _Checkmate — black wins._
+3. Type `a3` — _Illegal: game over._ Type `undo` — the queen goes back.
+4. Type `e2e5` — _Illegal: not a legal destination._ Type `moves` to see what is legal.
+5. `quit`.
+6. `npm run test` → 5 files, 65 tests pass. `npm run lint` / `npm run typecheck` → silent.
+
+### What's left
+
+Phase 3 — pieces and interaction: piece meshes placed via `IBoardLayout`, raycast selection, legal-move highlighting, arced move animation, capture removal. It unlocks playing the game with the mouse on the 3D board.
+
+### Risks / things I'm unsure about
+
+- **Piece models.** Phase 3 needs six GLB meshes with a compatible licence. I have none yet; if sourcing stalls I will build placeholder primitives (cylinders/cones) so interaction work is not blocked, and swap the models later.
+- **Cell picking against merged meshes** (carried from Phase 1) becomes real work in Phase 3.
+- **Threefold repetition is detected by chess.js from the loaded position onward.** A game resumed from a FEN (Phase 11 save/load) would lose earlier repetitions unless the move list is replayed instead of the FEN loaded. Note for Phase 11: save the move list, not just the FEN.
+- **Draw claims are automatic.** The engine reports fifty-move and threefold as an immediate draw rather than a claimable one. Simpler and fine for a casual game; recorded in case it ever matters.

@@ -71,7 +71,7 @@ export default tseslint.config(
   // Config files run under Node, not the browser. The ESLint config itself is
   // plain JS outside tsconfig, so type-aware rules cannot apply to it.
   {
-    files: ['vite.config.ts', 'eslint.config.js'],
+    files: ['vite.config.ts', 'eslint.config.js', 'scripts/**/*.ts'],
     languageOptions: { globals: globals.node },
   },
   {

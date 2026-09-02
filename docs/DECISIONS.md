@@ -89,3 +89,21 @@ Coordinate mapping (three.js is Y-up): longitude → +X (east), latitude → −
 **Consequence:** individual cells are not separate `Object3D`s. Phase 3's raycast picking will map a hit triangle index back to a square, or use a separate invisible pick layer. Recorded so this is not a surprise then.
 
 **Why:** BUILD_PLAN §6 Phase 9 — "merge geometry by material, no thousands of draw calls". Starting merged means the warped board (up to ~64 × 3 × (n+2n) triangles, still trivial) never gets a chance to become 64+ draw calls.
+
+## D-011 — Domain chess vocabulary is human-readable, chess.js stays inside one file
+
+**Date:** 2026-09-02 · **Phase:** 2
+
+**Decision:** The domain speaks `'white' | 'black'` and `'pawn' | … | 'king'`, not chess.js's `'w'`/`'p'`. Translation happens only in `src/domain/chess/chessJsAdapter.ts`. No other file imports `chess.js`.
+
+`Move` carries derived facts a renderer needs — `capturedSquare` (differs from `to` for en passant) and `castle.rookFrom/rookTo` — so Phase 3 animates without knowing any rules.
+
+**Why:** Phase 10 reads "rook" and "bishop" to assign identities; a `'r'` there would be a bug magnet. And confining chess.js to one adapter keeps the swap cost, if ever needed, to one file.
+
+## D-012 — Illegal moves are typed errors with a reason, not booleans
+
+**Date:** 2026-09-02 · **Phase:** 2
+
+**Decision:** `IChessEngine.move()` throws `IllegalMoveError` with a `reason` union (`'promotion-required'`, `'not-your-turn'`, `'game-over'`, …). `isLegal()` exists for the boolean case. The engine validates against its own legal-move list _before_ calling chess.js, so chess.js's generic "Invalid move" never surfaces.
+
+**Why:** BUILD_PLAN §5 forbids silent catches, and the UI needs to say _why_ — "choose a promotion piece" is a prompt, "not your turn" is a hint, "game over" is a state. A `false` cannot carry that.
