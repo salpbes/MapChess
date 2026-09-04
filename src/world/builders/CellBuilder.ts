@@ -61,6 +61,7 @@ export class CellBuilder {
       skirts.push(buildSkirt(cell, baseY));
       pushOutline(edges, cell);
     }
+    pushVerticalEdges(edges, layout.cells, baseY);
 
     for (const [key, { color, parts }] of tops) {
       const mesh = new Mesh(merge(parts), topMaterial(color));
@@ -81,7 +82,7 @@ export class CellBuilder {
     edgeGeometry.setAttribute('position', new BufferAttribute(new Float32Array(edges), 3));
     const lines = new LineSegments(
       edgeGeometry,
-      new LineBasicMaterial({ color: CELL_EDGE, transparent: true, opacity: 0.55 }),
+      new LineBasicMaterial({ color: CELL_EDGE, transparent: true, opacity: 0.75 }),
     );
     lines.name = 'cells-edges';
     group.add(lines);
@@ -162,12 +163,40 @@ function buildSkirt(cell: Cell, baseY: number): BufferGeometry {
 function pushOutline(out: number[], cell: Cell): void {
   const { polygon, platformY } = cell;
   // A hair above the top so the line is not z-fought by the face it outlines.
-  const y = platformY + 0.3;
+  const y = platformY + EDGE_LIFT;
   const n = polygon.length;
   for (let i = 0; i < n; i += 1) {
     const a = polygon[i];
     const b = polygon[(i + 1) % n];
     if (a === undefined || b === undefined) continue;
     out.push(a.x, y, a.z, b.x, y, b.z);
+  }
+}
+
+const EDGE_LIFT = 0.3;
+/** Corners shared by fewer cells than this lie on the board rim. */
+const INTERIOR_SHARE = 4;
+
+/**
+ * Vertical lines at every corner where platforms differ in height, so a
+ * terrace reads as a box, not a floating plate. Interior corners run from the
+ * highest platform meeting there down to the lowest; rim corners run down to
+ * the base of the skirt.
+ */
+function pushVerticalEdges(out: number[], cells: readonly Cell[], baseY: number): void {
+  const corners = new Map<string, { x: number; z: number; ys: number[] }>();
+  for (const cell of cells) {
+    for (const p of cell.polygon) {
+      const key = `${p.x.toFixed(3)}|${p.z.toFixed(3)}`;
+      const entry = corners.get(key);
+      if (entry === undefined) corners.set(key, { x: p.x, z: p.z, ys: [cell.platformY] });
+      else entry.ys.push(cell.platformY);
+    }
+  }
+  for (const { x, z, ys } of corners.values()) {
+    const top = Math.max(...ys) + EDGE_LIFT;
+    const bottom = ys.length < INTERIOR_SHARE ? baseY : Math.min(...ys) + EDGE_LIFT;
+    if (top - bottom < 0.5) continue;
+    out.push(x, top, z, x, bottom, z);
   }
 }
