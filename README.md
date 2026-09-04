@@ -6,7 +6,7 @@ There are no buildings. The landscape is the board.
 
 ## Status
 
-Phase 0 of 12 — scaffolding. See [docs/PROGRESS.md](docs/PROGRESS.md).
+Phase 11 of 12 — playable end to end: pick a place, play the computer on its terrain, take back, resign, resume. Only Phase 12 (polish, attribution, deploy) is left. See [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ## Run
 

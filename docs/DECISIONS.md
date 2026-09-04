@@ -296,3 +296,185 @@ Point attractors slide their cell toward the feature (50 %) and push its corners
 **Decision:** After the fallback chain, a uniqueness pass keeps one cell per duplicate name (the one holding the named point feature, else the first) and re-names the others with height-relative or positional words ("Upper Abbot Hagg Wood", "Abbot Hagg Wood Edge"; "Above River Rye", "Beside River Rye"). Reason strings append "at X" / "of X" only for real names; borrowed and generated names would read as nonsense there.
 
 **Why:** a wood spanning six cells and a river along eight gave eight pawns the same name and produced "the ridge at Near Nessend". Unique names make the reveal legible and give Phase 11's move list something to say.
+
+## D-033 — Resignation lives in `game/`, not in the rules
+
+**Date:** 2026-09-03 · **Phase:** 11
+
+**Decision:** `GameStatus` stays exactly what chess.js can derive from a position — playing, checkmate, draw. Giving up is a decision by a player, so it is held as `resignedBy: Color | null` inside `GameLoop` and folded together with the position by `outcomeOf(status, resignedBy)` into a `GameOutcome` that the UI renders. Resignation outranks the position, because the position after a resignation still looks perfectly playable.
+
+**Why:** adding a `resigned` kind to `GameStatus` would mean `domain/chess/` — the layer whose whole purpose is "what do the rules say" — carrying a state the rules have no opinion about, and `ChessEngine` would need somewhere to remember it across `load()` and `undo()`. One derived value in the loop keeps the engine a pure function of the position.
+
+**Rejected:** modelling a resignation as a special move in the history (it would corrupt the FEN replay and the move list); ending the game by loading a mated position (a lie the move list would expose).
+
+## D-034 — One autosaved game in `localStorage`, stored as moves plus the area
+
+**Date:** 2026-09-03 · **Phase:** 11
+
+**Decision:** A single save under `mapchess.savedGame`, written on every `history-changed` and `game-over` — there is no save button. The record is `{ version, savedAt, area, players, difficulty, moves, resignedBy }`, where `moves` are `MoveRequest`s (from, to, optional promotion) replayed through the engine on load, not a FEN. Every field is validated by `isSavedGame` on read; anything that fails — a save from another version, a truncated write, storage that throws — is discarded as "no save". `SelectedArea` is the only map data saved; the terrain, the 64 cells and all their names are rebuilt from those four numbers.
+
+**Why:** a FEN would resume the position but lose the move list, the repetition history and the ability to take back — the three things the rest of Phase 11 is made of. Replaying is also self-checking: a save that no longer applies stops at the bad move instead of producing a position nobody played. Saving the area rather than the derived board means a save can never disagree with the board it rebuilds, and stays a few hundred bytes.
+
+**Rejected:** saving the `WorldModel` or the `BoardTheme` (megabytes, and stale the moment the theming code changes); several save slots (a menu problem, not a game problem, and nobody asked); IndexedDB (already used for tiles and features, but a save this small does not need an async API in the shutdown path).
+
+## D-035 — Take-back rewinds to the human's turn; resignation is final
+
+**Date:** 2026-09-03 · **Phase:** 11
+
+**Decision:** `GameLoop.undo()` takes back plies until a human is to move — one in hot-seat, two against the computer — so the board always comes back to the player. It is refused while the loop is busy (including while the engine is thinking), and refused entirely after a resignation. It is _allowed_ after checkmate or a draw, which quietly re-opens play: the game-over screen hides on `move-undone`.
+
+**Why:** taking back one ply against the computer would hand the turn straight back to the computer, which is not what "take that back" means. Un-ending a mate is the single most common reason anyone reaches for undo. A resignation is not a mistake in a position, it is a decision, and a decision that can be un-decided is not one.
+
+**Rejected:** undo during the engine's turn by cancelling the search (Stockfish would have to be interrupted mid-`go`, and the generation counter already handles the race for `newGame`); an unlimited redo stack (no observed need, and it doubles the state the trackers must reverse).
+
+## D-036 — `history-changed` carries the whole history
+
+**Date:** 2026-09-03 · **Phase:** 11
+
+**Decision:** After any change to the move list — a move, a take-back, a new game, a restore — the loop emits `history-changed` with the complete `Move[]`. The move list, the captured-pieces display and the save system all rebuild from that payload rather than keeping their own copies. `move-undone` still carries each reversed move, for the one listener that needs to reverse something (`ThemeTracker`'s identity stack).
+
+**Why:** three listeners each maintaining an incremental copy of the same list is three chances to drift, and undo would need bespoke handling in every one of them. Rebuilding a hundred-row list costs nothing next to a frame of the 3D scene.
+
+## D-037 — Changing the area starts a new game
+
+**Date:** 2026-09-03 · **Phase:** 11
+
+**Decision:** Confirming a new area in the picker (or choosing an example area) begins a new game with the current seating.
+
+**Why:** Phase 10 left mid-game area changes keeping the old identities — a rook still called "Ashberry Hill" standing on a Glen Coe ridge. The alternatives were to re-theme mid-game (identities would change under the player's hand, and the move-list tooltips would retroactively lie) or to keep pretending. A new board is a new game; this removes the edge case rather than handling it.
+
+## D-038 — Castling is offered on the rook, and the labels have an off switch
+
+**Date:** 2026-09-03 · **Phase:** 11 (follow-up)
+
+**Decision:** With the king selected, clicking your own castling rook plays the castle, and the rook's square is highlighted as a destination alongside the king's. Clicking the king's own destination (g1/c1) still works. Separately, the place-name labels are smaller (2.2 % of board width, was 2.8 %), fewer (10, was 16) and slightly translucent, with an on/off button in the bottom-right corner remembered in `localStorage`.
+
+**Why:** nobody found castling. The king's destination is two files away across what looks like empty board, and the one piece a player reaches for — the rook — silently re-selected itself instead. Offering both is how every other chess program does it, and the highlight makes it discoverable without a tutorial. The labels are the best thing on the board from above and the worst thing between the camera and a piece from a low angle; that trade-off changes with every orbit, so it belongs on a button rather than in a tuned constant.
+
+**Rejected:** click-king-then-rook as the _only_ castling gesture (breaks the muscle memory of players who know the two-square move); drag-and-drop pieces (a much larger change to `PointerInput` for no rules benefit); hiding labels automatically at low camera angles (surprising, and the angle where it matters differs per board).
+
+## D-039 — A piece that cannot move says why
+
+**Date:** 2026-09-03 · **Phase:** 11 (follow-up)
+
+**Decision:** Selecting your own piece that has no legal move emits `selection-blocked` with one of three reasons, which the status bar flashes: `pinned` ("moving it would expose your king"), `in-check` ("your king is in check — that piece cannot help"), or `no-moves` ("it has nowhere to go"). The reason comes from a new seam method, `IChessEngine.isPinned(square)`, implemented by lifting the piece off a copy of the position and asking whether its king is then attacked — the definition of an absolute pin, asked directly.
+
+**Why:** a real game reached a position where a developed knight was pinned to the king by a bishop on b4. Clicking it highlighted the square and produced nothing else, and the reasonable conclusion was that the program was broken. The rules were right and the interface was silent, which is a worse failure than being wrong loudly. An empty legal-move list cannot tell a pin from a piece that is simply walled in, so the engine had to be asked a question it could not previously answer.
+
+**Rejected:** drawing the pinning line in 3D (pretty, and a lot of geometry for a message that reads in a second); greying out unmovable pieces before they are clicked (it would broadcast tactical information the player has not earned — spotting your own pins is part of the game).
+
+## D-040 — The bishop is not a solid of revolution
+
+**Date:** 2026-09-03 · **Phase:** 11 (follow-up)
+
+**Decision:** The bishop's mitre is an extruded 2D silhouette sitting on a lathed stem and brim, in the same way the knight's head sits on a lathed neck — with the diagonal slit cut into the outline. The pawn stays fully turned, and was simplified to a plain collar and ball at 0.52 cell units. `createPieceGeometry`'s `knightHead` became a general `upright(outline, thickness, unit)` used by both.
+
+**Why:** the pawn and the bishop were reported as indistinguishable in play. The first attempt kept both as lathes and pushed their profiles apart — slimmer stem, wide brim, tapered mitre, finial — and it was still not enough, because a lathe seen from any angle is the same rounded silhouette and low-poly shading gives every one of them the same soft vertical banding. The knight has never once been mistaken for another piece, and the reason is structural rather than stylistic: it is the only piece that is not rotationally symmetric, so it has flat faces that take the light differently and an orientation that changes as the board turns. Giving the bishop the same property is what makes it a different _kind_ of object rather than a differently proportioned blob — and the slit is the one feature of a bishop everybody already recognises, which a lathe cannot produce at all.
+
+**Note on testing:** this is the first tested file in `world/`. BUILD_PLAN §3 exempts the 3D scene, and rightly — but `LatheGeometry` and `ExtrudeGeometry` are pure arithmetic needing no WebGL, and the pieces are told apart by silhouette alone. The height order, the plinth footprint and which heads are round are now assertions rather than things noticed in a screenshot.
+
+**Rejected:** boolean subtraction for the slit (three.js has no CSG and one notch does not justify the dependency); making the bishop taller than the queen for separation (trades one confusion for another); colouring the bishop differently (the two sides are already the only colours on the board, and a third would read as a third player).
+
+## D-041 — Five levels, and the two easiest are limited by depth, not by Skill Level
+
+**Date:** 2026-09-03 · **Phase:** 11 (follow-up)
+
+**Decision:** `learner` / `beginner` / `casual` / `club` / `strong`. The two easiest cap the search at 1 and 3 plies with Skill Level 0; the middle two use `UCI_LimitStrength` with `UCI_Elo` 1320 and 1800; `strong` is the unrestricted engine. A weak level's reply is held back to a minimum of 450 ms so an instant answer does not look like a glitch. `StockfishAI` records the `option name …` lines the engine advertises during the handshake and sends only options that appear there. The default level is now `beginner` rather than `club`.
+
+**Why:** Phase 4 implemented BUILD_PLAN's "difficulty via skill level and think time" literally, and `beginner` was reported as still too hard. Two reasons, and neither is fixable by turning the old dials down: Skill Level mostly perturbs the choice _among_ moves the engine already likes, so a Skill Level 1 engine searching several plies still finds every tactic and simply plays a slightly worse good move; and 300 ms is a deep search on a modern machine. Depth is the only limit that makes the engine genuinely fail to see something — at depth 1 it will take a free piece and not notice that its own move gives one away, which is what a beginner opponent has to do. `UCI_Elo` cannot fill the gap either: its floor of 1320 is already a competent club player, so it can be the middle of the range but never the bottom.
+
+**Why check the advertised options:** UCI ignores an unknown `setoption` silently. A build without `UCI_LimitStrength` would leave every level playing at full strength with no error anywhere — the exact failure that is hardest to notice, because the game still works. Reading the handshake makes an unsupported option a skipped line rather than a silent full-strength opponent.
+
+**Rejected:** lowering `UCI_Elo` below 1320 (the engine clamps it); random move selection for the weakest level (genuinely easy, but it reads as a broken opponent rather than a bad one, and there is nothing to learn from it); `go nodes 1` (weaker than depth 1 but wildly inconsistent between positions).
+
+## D-042 — Hints are searched at full strength, whatever level is being played
+
+**Date:** 2026-09-03 · **Phase:** 11 (follow-up)
+
+**Decision:** A Hint button asks the engine what it would play in the current position and shows it — both squares highlighted in blue, and the move named in the status bar ("Try Nf3 — g1 to f3") — without playing it. `IChessAI.hint(fen)` is optional on the seam; `StockfishAI` implements it by applying `ADVICE_SETTINGS` (Skill Level 20, 600 ms), searching, and restoring the level's own options in a `finally`. The loop marks itself busy while the search runs, verifies the suggestion is legal before showing it, and clears the hint as soon as a move is played, taken back, or a new game starts. The button is available at every level, not just the easy ones.
+
+**Why:** the point of Learner is to lose less; the point of a hint is to learn what you should have seen. Those need opposite strengths, so the advice deliberately ignores the opponent's setting — a Learner opponent searching one ply would suggest exactly the blunder it would play. Restoring the level's options in a `finally` matters more than it looks: UCI options persist in the engine, so a hint that failed halfway would leave a Learner playing at full strength for the rest of the game, with nothing in the interface to show it. Marking the loop busy during the search is the cheap fix for the opposite race — a suggestion arriving for a position the player has already left.
+
+**Rejected:** restricting hints to the easy levels (it is the player's game, and a strong player wanting a second opinion is not cheating anyone); playing the suggested move on a second click (turns advice into autopilot, and the player learns nothing from a move their hand did not make); showing the engine's evaluation in centipawns (a number a learner cannot act on); a permanent "best move" arrow (advice you did not ask for stops being advice and becomes the game playing itself).
+
+## D-043 — A hint explains itself in words, stays put, and is the only thing on the board that moves
+
+**Date:** 2026-09-04 · **Phase:** 11 (follow-up)
+
+**Decision:** The hint is a card, not a flash. It shows the piece's glyph, a short headline ("Win the bishop!", "Get out of danger", "Checkmate!"), a sentence saying why, the move as an instruction in plain words ("Move your knight from g1 to f3."), the notation beside it as a chip, and the name of the map cell it lands on. It stays until the move is played, taken back, or dismissed. It lives in the left-hand column under the move record, which yields the bottom of the column to it while it is showing; it started bottom-centre and covered the player's own back rank — the pieces the advice is usually about. No overlay over a full-screen board can avoid covering something, so the fix is to keep every overlay in the two columns the board does not reach. The two board squares pulse between 0.28 and 0.75 opacity every 1.6 s — the only animated overlay in the scene. `explainMove(engine, move)` derives the words in `game/`, asking the position in priority order: mate, promotion, capture, check, is the moving piece currently attacked, castle, then a positional fallback. `IChessEngine.isAttacked(square, byColor)` was added for the danger questions.
+
+**Why:** the first version flashed "Try Nf3 — g1 to f3" in the status bar for five seconds. Everything about that is wrong for the reader it is for: algebraic notation is a barrier to exactly the person asking for help, "try this" gives no reason so nothing is learned, and five seconds is not long enough to look from the text to the board and find the squares. Naming the piece and the reason turns the hint from an answer into an explanation, and keeping the notation visible beside the words is how the notation stops being a mystery — the child reads "Move your knight from g1 to f3" and sees that this is what `Nf3` means.
+
+**Corrected after D-046:** the hint was blue, and once sea squares became blue a hint landing on one vanished — precisely the square a beginner most needs pointed out. It is now violet, which is the only hue nothing else claims: the rules speak in amber, green and red, and the land speaks in green, blue and sand. The card's border and headline moved with it, so the card and the squares still read as one thing.
+
+**Why the pulse:** a still translucent square has to compete with a landscape of rivers, woods and terraces. Motion is pre-attentive and nothing else in the scene moves, so a slow breathing highlight is found instantly without being loud. Promotion outranks capture and check in the headline because a move can be all three, and to a child the new queen is the news.
+
+**Rejected:** an arrow drawn between the squares (the most eye-catching option, and the one hardest to make look right on a warped board with 64 different cell shapes — worth revisiting); reading the advice aloud (a dependency and a permission prompt for something not everyone wants); showing the engine's evaluation (a number a learner cannot act on); progressive hints that first show only the piece (good teaching, but it makes the button ambiguous — one press should do one thing).
+
+## D-044 — Labels are haloed text with a marker per kind, and have a markers-only state
+
+**Date:** 2026-09-04 · **Phase:** 11 (follow-up)
+
+**Decision:** Place-name labels drop the filled dark pill and are drawn as text with a dark halo stroked behind the glyphs. Each place gets a marker glyph and a colour by kind — `▲` amber for peaks and saddles, `●` warm white for settlements, `◆` pale blue for historic and religious sites — so ten labels read as a legend rather than ten identical tags. Every place is built twice, as "▲ Ashberry Hill" and as a bare "▲" (smaller, lower), into two sibling groups; the bottom-right button now cycles **Names → Markers → Labels off** instead of on/off, remembered in `localStorage`.
+
+**Why:** a filled pill blanks out a rectangle of landscape per label, and ten rectangles is a lot of board to lose for ten short words — the halo costs almost no coverage and stays readable over grass, water and sand alike. The markers-only state is the one that turned out to matter: it keeps "there is something here, and roughly what" while giving the board back, which is exactly the compromise a player wants mid-game but could not previously ask for. Building both forms up front means switching costs nothing and no rebuild is needed.
+
+**Why geometric markers:** these boards span countries and faiths — the Trabzon test board's most prominent feature is a mosque — so a triangle, a dot and a diamond say what is needed without a pictogram that means something different somewhere else.
+
+**Superseded in part by D-045:** the labels were laid flat after all, once playtesting showed the floating billboards were the thing in the way.
+
+**Rejected:** fading labels by camera distance (automatic, and indistinguishable from a rendering glitch when it fires at the wrong moment); screen-space collision avoidance so labels never overlap (real improvement, real complexity, and the ten-label cap already keeps collisions rare).
+
+## D-045 — Labels lie on the cell, wrap, and reveal their name on hover
+
+**Date:** 2026-09-04 · **Phase:** 11 (follow-up)
+
+**Decision:** Labels are no longer camera-facing billboards floating above the board. Each is a plane lying flat on its cell's platform, turned face-up and squared to the board so the text runs along the ranks and reads from White's side, lifted 1.2 m to clear the platform's top face and its outline. Long names wrap onto further lines at two-thirds of a cell's width. In markers-only mode, pointing at a cell reveals that one place's full name; `PointerInput` gained a move channel (suppressed while a button is held, so orbiting does not stream hover events), and `BoardScene.setHoveredSquare` drives it.
+
+**Why:** I argued against flat labels when the marker scheme went in, on the grounds that they would be unreadable at low camera angles. Playtesting said the opposite mattered more — a billboard stands _between_ the camera and the pieces from every angle, while a flat label is part of the ground and only competes with the cell it names. The reading angle is a real cost, but it is one the player can fix by tilting the camera, and the hover reveal covers the case where they would rather not. Wrapping matters because these are real place names: "Yalıncak Merkez Camii" on one line is wider than the cell it belongs to, and a label wider than its cell no longer says which cell it means.
+
+**Why hover rather than a permanent state:** markers-only exists so the board is clear while you play. Making every name readable on demand means the clear state costs nothing — there is no longer a reason to switch back to full names except to survey the whole map at once.
+
+**Corrected after playtesting, twice:** the first version put the name and the marker at the same point _and_ left both visible, so a revealed name sat on its own marker and showed the glyph twice — the name text already begins with it. Hiding the marker fixed the duplicate. Moving the name aside — 0.36 cells towards White, clear of a piece standing on the centroid — fixed occlusion but broke something more important: the name no longer appeared where the marker was, so the eye had to jump across the cell to find what it had just pointed at.
+
+The name is now back on the feature point, expanding in place from the glyph, and occlusion is solved by drawing labels **over** the scene instead (`depthTest: false`, `renderOrder` above everything). A label lies on the ground at exactly the spot a piece stands on, so honest depth means the label you most want to read is the one hidden — and these are annotations on a map, not objects in the world. The cost is that a label on a far cell can show through a near hill; that is the standard bargain for map overlays, and it beats a label that cannot be read at all. Pointing at a piece yields that piece's square, so a marker under a piece can still be revealed.
+
+## D-046 — Sea squares are submerged, not beach
+
+**Date:** 2026-09-04 · **Phase:** 11 (follow-up)
+
+**Decision:** On a coastal board, a cell whose mean ground is at or below 0.25 m is classified `water`; between there and 1.5 m it stays `sand`. Water-covered cells keep their blue platform and gain a translucent sheet 3.5 units above it, so the square reads as submerged and a piece standing there stands in the shallows. The ground description says "open sea" at the coast and "open water" inland. All 64 squares stay playable, and the outer sea plane keeps its clamp below the lowest platform.
+
+**Why:** OpenStreetMap gives the coast as a _line_, not a polygon (D-024's normalisation keeps it as `coastline`), so open water off the shore matched no water polygon. It fell through to the tidal-sand rule and a bay in the corner of a board was drawn as a pale beach across the whole bay — a board inventing land that is not there, which looks deliberate rather than broken. Elevation is the only thing that knows: Terrarium reports sea as a flat 0 m, so the margin only has to absorb sampling noise at the waterline.
+
+**Why not flood the cells properly:** the sea plane is still clamped below the lowest platform, and the shallows are a per-cell sheet instead. Moving the global plane up to true sea level would have put it within a fraction of a metre of every near-shore platform, where the exaggeration scale decides whether a 0.5 m sand flat is wet or dry — a per-cell sheet is decided by the classifier, which is testable, rather than by a z-comparison that is not.
+
+**Rejected:** skerries or jetties under pieces on water (charming, and per-cell geometry that can go wrong in ways nobody would notice until a particular coastline produced it); warning in the area picker about how much of a square is sea (an all-sea board is a legitimate thing to want to look at, and the board itself makes it obvious).
+
+## D-047 — The game-over card writes an account of the ending
+
+**Date:** 2026-09-04 · **Phase:** 11 (follow-up)
+
+**Decision:** Under the result and its one-line explanation, the card carries two or three italic lines naming what actually happened, in place names: the move number counted as a player would write it, the piece that gave mate and the identity it carries, the ground it came to, and the square the losing king was cornered on — then a quiet tally of how many pieces fell. Resignations report who gave up, on which move, the material gap if there was one, and where the winner's king still stood. Draws place both kings. `chronicle()` is a pure function in `game/` over the outcome, the history and three lookups the caller supplies; `GameOverScreen` keeps the latest `history-changed` payload so the account is current when `game-over` arrives on the same move.
+
+**Why:** "Checkmate — White wins" is the sentence every chess program has printed since 1978. This one is played on a real square of the world where every piece and every cell already has a name, and the last move is the moment that investment is worth the most — "Move 27: Black's queen of Ashberry Hill took the rook at Nether Meadow. White's king had nowhere left to stand at Scawton Croft." Nothing else in the game produces a sentence like that, and it is the one a player would repeat to somebody.
+
+**Why a pure function with injected lookups:** every line is an assertion about the position — which piece, whose king, how many moves. Naming the winner's king instead of the loser's, or counting plies as moves, would be a lie told at the most memorable point in the game and one nobody would think to check. Taking `placeOf`, `pieceNameOf` and `kingSquareOf` as callbacks keeps it testable with stub names and keeps `ui/` free of the tracker's internals. It falls back to bare square names throughout, so a flat board with no map data still reads properly.
+
+**Rejected:** a full move-by-move narrative (the move list is already there, and nobody reads a paragraph on a results screen); adjectives tuned to how one-sided the game was ("a crushing victory") — the facts are dramatic enough and a program guessing at tone gets it wrong in exactly the games a player cares about.
+
+## D-048 — The menu names the place, and shows a map instead of a "Change" button
+
+**Date:** 2026-09-04 · **Phase:** 11 (follow-up)
+
+**Decision:** The menu's board row is now a panel: a drawn folded-map button on the left, and beside it "CURRENT WAR LOCATION" over the name of the place — "Rievaulx", "Holy Island", "Achtriochtan". The name comes from `primaryPlaceName(features)`, which ranks the named `place` features by settlement class and falls back to historic sites, churches and peaks; coordinates remain only as the fallback when the map named nothing. The two instruction lines under the menu buttons are gone. While terrain or features are downloading, the status pill carries a rotating chess tip.
+
+**Why the name and not the coordinates:** "40.9783, 39.8214" tells a player nothing about where they are fighting, and it is the one thing on the menu that should make somebody want to press New game. The features are already fetched for the terrain, so the answer costs no request and works offline against the fixtures — a reverse-geocode call would have added a network dependency to a screen that must open instantly.
+
+**Why the map replaces the button:** the board is the subject of the whole menu, so it earns the one picture on the screen. A labelled "Change…" button read as a form field next to two dropdowns.
+
+**Why tips while loading:** a cold area takes a few seconds of tile and Overpass traffic, and a progress count is a poor thing to look at. Whoever is waiting came here to play chess, so it is the one moment where explaining en passant is welcome rather than in the way. They stop on failure — an error is something to act on, not something to read a joke under.
+
+**Grown into a loading screen:** the pill became a full-screen veil that blurs the half-built board, with a card in the middle carrying the six piece types hopping one after another, the progress line and the tip. The veil takes `pointer-events: none` and only Retry takes a click, so the menu above it and the HUD below it both stay usable while tiles are in flight — a loading state that disables the interface is worse than one you can see past. It sits at `z-index: 15`, under the menu: at startup the menu is the thing to interact with, and on an area change mid-game the menu is closed and the card has the screen to itself. The hop respects `prefers-reduced-motion`.
+
+**Why the instruction lines went:** they were read once and then were furniture. The camera hint still sits in the bottom-right cluster where it is out of the way, and castling now announces itself by highlighting the rook (D-038), which is what the second line was compensating for.

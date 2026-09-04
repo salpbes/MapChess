@@ -432,3 +432,32 @@ describe('ChessEngine — a full game', () => {
     expect(e.history.map((m) => m.san)).toEqual(sans);
   });
 });
+
+describe('ChessEngine.isPinned', () => {
+  it('sees a knight pinned to its king by a bishop', () => {
+    const e = new ChessEngine('r1bqk1nr/pp3ppp/4p3/3pn3/Pb6/2N1P3/2P3PP/R2QKBNR w KQkq - 0 9');
+    expect(e.isPinned('c3')).toBe(true);
+    expect(e.legalMoves('c3')).toHaveLength(0);
+  });
+
+  it('does not call a piece pinned just because it cannot move', () => {
+    // The a1 rook is walled in by its own pawn and knight; nothing pins it.
+    const e = new ChessEngine('4k3/8/8/8/8/8/P7/RN2K3 w - - 0 1');
+    expect(e.legalMoves('a1')).toHaveLength(0);
+    expect(e.isPinned('a1')).toBe(false);
+  });
+
+  it('is false for a free piece, an empty square and a king', () => {
+    const e = new ChessEngine();
+    expect(e.isPinned('g1')).toBe(false);
+    expect(e.isPinned('e4')).toBe(false);
+    expect(e.isPinned('e1')).toBe(false);
+  });
+
+  it('sees a pin that only allows moves along the pinning line', () => {
+    // The rook on e2 is pinned by the rook on e8, but may still slide on the e-file.
+    const e = new ChessEngine('4r2k/8/8/8/8/8/4R3/4K3 w - - 0 1');
+    expect(e.isPinned('e2')).toBe(true);
+    expect(e.legalMoves('e2').map((m) => m.to)).toEqual(['e3', 'e4', 'e5', 'e6', 'e7', 'e8']);
+  });
+});

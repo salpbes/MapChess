@@ -614,3 +614,88 @@ Phase 11 — the game shell: menu, new game, side and difficulty, move list, cap
 - **Stem lists are English-first.** Gaelic/Welsh church and horse words (cill, llan, each, capall) are absent after I removed two fuzzy stems; a curated list per language is the proper fix.
 - **Reasons are templated English.** They read fine ("the summit of Ashberry Hill, 99 m") but a native speaker will spot the seams ("the isolated dwelling of").
 - **Mid-game area change keeps old identities** (deliberate). Phase 11 should start a new game on area change, which removes the edge case.
+
+---
+
+## Phase 11 — Game shell
+
+**Date:** 2026-09-03
+**Project completion: 97%**
+
+### In plain English
+
+You can now start, play, quit and resume without ever opening the console. Opening the page brings up a menu over the loading board: resume the game you left — it comes back on the same square of the world, with the same moves and the same names — or pick a side, an opponent strength and a place, and start a new one. While you play, the left column keeps the score: which pieces have been taken, who is ahead in material, and every move in notation, each one hovering to tell you where on the map it happened ("Nf3 — Hagg Wood Edge"). Three buttons sit under it: Menu, Take back, and Resign, which asks once before it believes you. When the game ends a card names the result and the winning king — _Rievaulx Abbey holds the field_. Everything is saved as you go; there is no save button to forget. And if the terrain or the map data fails to download, you are now told so, with a button to try again, instead of watching a board that never arrives.
+
+### What I built
+
+- `src/game/GameOutcome.ts` — checkmate / draw / resignation as one value; `outcomeOf(status, resignedBy)` (D-033).
+- `src/game/captures.ts` — `summariseCaptures(moves)`: both piles and the material balance, promotions included, folded from the history.
+- `src/game/GameLoop.ts` — `undo()` (rewinds to the human's turn), `resign(color)`, `restore(saved)` (replays a move list without animating), `canUndo()`, `outcome`; publishes `history-changed`, `move-undone` and `game-over`.
+- `src/game/GameEvents.ts` — the three new events.
+- `src/game/ThemeTracker.ts` — an undo stack of `{ move, captured }` so a take-back puts a captured piece's story back; `king(color)` for the result card.
+- `src/game/SavedGame.ts` — the save record and `isSavedGame`, which validates every field (D-034).
+- `src/game/SaveManager.ts` — autosave on `history-changed` / `game-over`, and `resume(loop)`.
+- `src/shared/storage/LocalJsonStore.ts` — one typed JSON value under one key, where every failure means "nothing saved"; `MemoryJsonStore` for tests.
+- `src/ui/MainMenu.ts` — resume, side, difficulty, area, Escape to dismiss. Replaces `OpponentPanel.ts`, now deleted.
+- `src/ui/GameControls.ts` — Menu / Take back / Resign, with a "Really resign?" confirmation on the button itself.
+- `src/ui/RecordPanel.ts` + `MoveList.ts` + `CapturedRow.ts` — the left column, all three fed by `history-changed`.
+- `src/ui/GameOverScreen.ts`, `src/ui/outcomeText.ts` — the result card and the English for a result, shared with the status bar.
+- `src/ui/DataStatus.ts` — loading and failure for elevation and Overpass, visible outside `?debug`, with Retry.
+- `src/ui/AreaBar.ts` — `label`, `setArea()` and a public `open()`, so the menu and a resumed save can drive it.
+- `src/app/bootstrap.ts`, `config.ts`, `styles.css` — the wiring, the save key, and the shell's styles.
+- `tests/game/GameLoop.shell.test.ts` (14), `tests/game/save.test.ts` (14), `tests/game/captures.test.ts` (6). 237 total, up from 203.
+
+### Why it was done this way
+
+- **Resignation is not a rule** (D-033). `GameStatus` stays what chess.js can derive from a position; the loop holds `resignedBy` and folds the two into a `GameOutcome`. The engine remains a pure function of the position.
+- **Saves are moves, not a FEN** (D-034). Replaying gives back the move list, the repetition history and the undo stack, and validates itself on the way in — a save that no longer applies stops at the bad move instead of inventing a position. The area is saved; the board, the terrain and all 64 names are rebuilt from those four numbers.
+- **One event carries the whole history** (D-036). The move list, the captured pieces and the save all rebuild from `history-changed`, so undo needed no special case in any of them.
+- **Undo hands the board back to the player** (D-035): one ply hot-seat, two against the computer. Mate can be taken back; a resignation cannot.
+- **A new area is a new game** (D-037), which closes the mid-game re-theming edge case Phase 10 left open.
+- **Rejected:** a `resigned` kind in `GameStatus`; several save slots; a blocking `confirm()` for resigning (it freezes the render loop — the button changes its mind instead); replacing the status bar, which turned out to still be the line players read most.
+
+### How to check it yourself
+
+1. `npm run dev` → the menu is over the board. **New game** → play a few moves. The left column fills; hover a move to see where it happened.
+2. Reload the page. The menu now offers **Resume game** with a move count and a timestamp — take it, and the position, the history and the board all come back.
+3. Take a piece, then **Take back**: the piece returns _and_ so does its name — click it and the identity card shows the story it had before it was captured.
+4. **Resign** → click twice → the result card names the winner's king. Take back is now refused; the menu starts a fresh game.
+5. Play into a checkmate (1. f3 e5 2. g4 Qh4#) → the card appears → **Take back** un-ends it and the card goes away.
+6. Change the area from the menu or the bar: a new game starts on the new ground.
+7. Offline (or with the network throttled to fail): the pill at the bottom says which of terrain or map features could not be loaded, with **Try again**.
+8. `npm run test` → 20 files, 237 tests. `npm run lint`, `npm run typecheck`, `npm run build` all clean.
+
+### What's left
+
+Phase 12 — polish and ship: a performance pass, the mobile check if wanted, **on-screen OSM and Terrarium attribution** (the ODbL requirement — it is currently only in the README, which does not satisfy it for the running app), README screenshots, and deployment to static hosting.
+
+### Follow-ups after playing it
+
+Four things surfaced the first time the game was actually played, all fixed on the same day:
+
+- **Two overlay bugs made the shell unusable at first.** `hidden` was being defeated by the author `display: flex` on the menu, game-over and data-status overlays — an author `display:` rule outranks the browser's `[hidden] { display: none }` whatever the specificity — so the game-over card sat permanently over the menu and swallowed its clicks. There was also no `z-index` anywhere, so paint order was DOM order and the HUD floated over the modals. Fixed with a global `[hidden] { display: none !important }` and four explicit stacking levels. Neither could have been caught by the suite: there is no DOM in it.
+- **Nobody could castle.** The king's destination is two files away across apparently empty board, and clicking the rook just re-selected it. The rook is now a castling destination in its own right, and is highlighted as one (D-038).
+- **Faces turned away from the sun read as black** once the camera came round to them. Added a dimmer, shadowless fill light opposite the key and lifted the hemisphere ground tone; the sun stays put so shadows do not swing while orbiting.
+- **Panning was there but invisible.** It is on right-drag and two fingers, as OrbitControls ships it, but nothing said so. The target is now clamped to within half a board of the edge so panning cannot lose the game, and both the menu and the new bottom-right cluster say how to move the camera.
+- **The labels got an off switch** (D-038), and are smaller and fewer. They were later redrawn as haloed text with a marker and colour per kind of place, and the switch became three-state — names, markers only, off (D-044). Then they came off the billboards entirely: each label now lies flat on its cell, squared to the board, wrapping long names onto two lines, with the name revealed on hover in markers mode (D-045).
+- **The pawn and the bishop were the same round blob**, and reshaping the profiles did not fix it — two lathed pieces are two turned blobs whatever the numbers say. The bishop stopped being a solid of revolution: its mitre is now an extruded silhouette like the knight's head, complete with the slit, so it has flat sides and a real facing (D-040). The pawn was simplified and shortened to 0.52 at the same time. `tests/world/PieceGeometry.test.ts` is the first test in `world/` — lathe and extrude are pure maths, so the height order, the footprint limit and "which heads are round" can all be asserted.
+- **A piece with no legal moves answered a click with silence.** Selecting a pinned knight highlighted its square and showed nothing else, which reads as a broken game rather than as the rules working. `IChessEngine.isPinned(square)` answers "why can this not move?" — it lifts the piece on a copy of the position and asks whether the king is then attacked — and the loop emits `selection-blocked`, which the status bar flashes: _"That knight is pinned — moving it would expose your king."_ Distinguishes pinned from in-check from simply boxed in.
+
+- **"Beginner" was not a beginner.** Skill Level 1 with a 300 ms search is a strong club player: Skill Level shuffles the order of moves that are all good, and it never stops the engine seeing a tactic. There are now five levels, and the two easiest are capped by search _depth_ (1 and 3 plies) rather than by Skill Level, because depth is the only knob that makes the engine actually miss things (D-041). The adapter also reads the options the engine advertises during the handshake and sends only those — an unrecognised `setoption` is ignored silently by UCI, which would mean a level that quietly never applied.
+
+- **Learner mode needed a way to learn.** A Hint button asks the engine what it would play and shows it, without playing it. The advice is always searched at full strength, whatever the opponent is set to, since a one-ply Learner would suggest the blunder it was about to make (D-042).
+- **The hint then had to be readable by the person asking for it.** It started as a five-second status-bar flash reading "Try Nf3", which is useless to anyone who cannot already read notation. It is now a card that names the piece, says why in a sentence, spells the move out in words with the notation beside it as a learning aid, names the map cell it lands on, and stays until the move is made. The two squares pulse — the only moving thing in the scene, so it is found without being loud (D-043). `explainMove` derives the words from the position and is covered by `tests/game/explainMove.test.ts`.
+
+- **A board with sea in one corner drew a beach there.** OSM gives the coast as a line rather than a polygon, so open water matched no water polygon and fell through to the tidal-sand rule. Submerged cells are now classified as water from their elevation and carry a translucent surface over the platform, so the square is plainly sea and the piece on it stands in the shallows — while staying one of the 64 playable squares (D-046). `tests/mapdata/cover.test.ts` covers the height thresholds.
+
+- **The game-over card now writes up the ending.** Under the result it names the move number, the piece that gave mate and the place it carries its name from, the ground it came to, and the square the losing king was cornered on — then how many pieces fell (D-047). `chronicle()` is pure and covered by `tests/game/chronicle.test.ts`.
+
+- **The menu says where you are, not what your coordinates are.** A drawn map button replaces "Change…", and beside it the board is named from its own features — Rievaulx, Holy Island, Achtriochtan — with coordinates only as the fallback. Loading became a proper screen — the board blurs behind a centred card with six chess pieces hopping in turn, the progress line and a rotating tip — and the two instruction lines under the menu are gone (D-048).
+
+### Risks / things I'm unsure about
+
+- **The shell is not covered by tests, because the UI never is here.** Vitest runs in `node` with no DOM (BUILD_PLAN §3), so every assertion in this phase is on `game/`: the loop, the save format, the trackers. The menu, the record panel and the result card were checked by hand, not by machine. That is the same bargain the project has made since Phase 1, but this phase is the most DOM there has ever been.
+- **The left column and `?debug` share space.** The heightmap panel moved right to clear the record panel, but the features panel still sits under the identity card. Debug-only, and it was already true, but it is untidy.
+- **Resigning in hot-seat resigns for whoever is to move.** Defensible, but there is no way to resign on behalf of the other side, and no undo for a mis-click beyond the four-second confirmation.
+- **A save survives a code change it should not.** The guard catches a changed _shape_, but not changed _meaning_ — if a future phase alters how a move request is interpreted, a version-1 save would replay into something subtly different. Bumping `SAVE_VERSION` is a manual discipline.
+- **`savedAt` is only shown, never trusted.** A clock change makes "3 min ago" wrong; nothing else depends on it.

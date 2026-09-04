@@ -237,7 +237,8 @@ export function describeGround(cell: CellFacts, lo: number, hi: number): string 
   if (has('peak')) return `summit, ${h}`;
   if (has('saddle')) return `pass, ${h}`;
   if (has('ford')) return `ford, ${h}`;
-  if (cell.cover === 'water') return `open water, ${h}`;
+  // Inland this is a lake or a reservoir; at the coast it is the sea itself.
+  if (cell.cover === 'water') return cell.coastal ? `open sea, ${h}` : `open water, ${h}`;
   if (cell.cover === 'sand') return `tidal sands, ${h}`;
   const band = heightBand(cell.heightMeters, lo, hi);
   const relief = band === 'high' ? 'high ground' : band === 'low' ? 'low ground' : 'slope';

@@ -1,9 +1,14 @@
 // WHAT: Decides what each cell is made of: grass, wood, scrub, water or sand.
 // HOW:  For every cell, tests its centroid and four corners against the wood,
 //       scrub and water polygons; a cover wins when it holds the centroid or a
-//       majority of corners. Cells near sea level on a coastal board that
-//       nothing else claims become sand. Everything else is grass.
+//       majority of corners. On a coastal board, cells nothing else claims are
+//       split by height: at or below sea level they are open sea, just above it
+//       tidal sand. Everything else is grass.
 // WHY:  Phase 9 colours the board by land cover so a valley reads as a valley.
+//       The sea rule exists because OSM gives the coast as a *line*, not a
+//       polygon, so open water off the shore matched no water polygon and fell
+//       through to sand — a board with a bay in one corner drew a pale beach
+//       across the whole bay. Elevation is the only thing that knows.
 //       Kept out of domain/ (it reads MapFeature) and out of world/ (it is a
 //       decision, not a mesh). Phase 10 may reuse it for identity scoring.
 
@@ -21,7 +26,13 @@ export const COVER_KINDS: readonly CoverKind[] = ['grass', 'wood', 'scrub', 'wat
 
 export type CellCover = ReadonlyMap<Square, CoverKind>;
 
-/** Cells whose ground averages below this (real metres) on a coastal board are tidal sand. */
+/**
+ * On a coastal board, mean ground at or under this (real metres) is open sea.
+ * Terrarium reports sea as a flat 0 m, so anything meaningfully above it is
+ * land; the margin only absorbs sampling noise at the waterline.
+ */
+const SEA_MAX_METERS = 0.25;
+/** Above the sea but still awash: tidal sand. */
 const SAND_MAX_METERS = 1.5;
 
 export function classifyCellCover(
@@ -55,12 +66,11 @@ export function classifyCellCover(
     if (w >= 3) cover = 'water';
     else if (f >= 3 && f >= s) cover = 'wood';
     else if (s >= 3) cover = 'scrub';
-    else if (
-      coastal &&
-      heights !== null &&
-      sampleStats(heights, cell.polygon).mean < SAND_MAX_METERS
-    )
-      cover = 'sand';
+    else if (coastal && heights !== null) {
+      const mean = sampleStats(heights, cell.polygon).mean;
+      if (mean <= SEA_MAX_METERS) cover = 'water';
+      else if (mean < SAND_MAX_METERS) cover = 'sand';
+    }
     out.set(cell.square, cover);
   }
   return out;

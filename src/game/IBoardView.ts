@@ -13,6 +13,8 @@ export interface BoardHighlights {
   readonly moves?: readonly Square[];
   readonly captures?: readonly Square[];
   readonly check?: Square;
+  /** The two squares of a suggested move: where it starts and where it lands. */
+  readonly hint?: readonly Square[];
 }
 
 export interface IBoardView {

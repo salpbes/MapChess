@@ -1,6 +1,6 @@
 # `src/shared/` — cross-cutting utilities
 
-**Belongs here:** things every layer may import and none owns: the typed event bus, the logger, small maths helpers (vectors in plain objects, lerp, clamp), and shared primitive types.
+**Belongs here:** things every layer may import and none owns: the typed event bus, the logger, small maths helpers (vectors in plain objects, lerp, clamp), base64 encoding, `storage/` (one typed JSON value under one key, on `localStorage`, where every failure means "nothing saved"), and shared primitive types.
 
 **Rules:**
 

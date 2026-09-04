@@ -5,7 +5,8 @@
 //       (centre, rotation, four board corners) to the console.
 // WHY:  BUILD_PLAN Phase 5 "done when": search, position, confirm, and see the
 //       coordinates and derived corners logged. Phase 8 reads the same area
-//       to build the warped board; Phase 11 saves it with the game.
+//       to build the warped board; Phase 11 saves it with the game, and
+//       reopens the picker from the menu.
 
 import type { IGeocoder } from '@mapdata/geocode/NominatimGeocoder';
 import { describeArea } from '@mapdata/model/MapArea';
@@ -40,7 +41,7 @@ export class AreaBar {
     button.type = 'button';
     button.textContent = 'Choose area…';
     button.addEventListener('click', () => {
-      this.open();
+      this.openPicker();
     });
     this.el.append(this.summary);
     if (deps.presets !== undefined && deps.presets.length > 0) {
@@ -55,12 +56,31 @@ export class AreaBar {
     return this.area;
   }
 
+  /** The one-line description shown in the bar, for the menu to echo. */
+  public get label(): string {
+    return describeSelection(this.area);
+  }
+
+  /**
+   * Moves the bar to an area chosen elsewhere — resuming a saved game — without
+   * announcing a change the caller is already handling.
+   */
+  public setArea(area: SelectedArea): void {
+    this.area = area;
+    this.render();
+  }
+
+  /** Opens the map picker, as the "Choose area…" button does. */
+  public open(): void {
+    this.openPicker();
+  }
+
   public dispose(): void {
     this.picker?.dispose();
     this.el.remove();
   }
 
-  private open(): void {
+  private openPicker(): void {
     if (this.picker !== null) return;
     this.picker = new AreaPicker(
       this.container,
@@ -115,11 +135,14 @@ export class AreaBar {
   }
 
   private render(): void {
-    const a = this.area;
-    this.summary.textContent = `Area ${a.centerLat.toFixed(4)}, ${a.centerLon.toFixed(4)} · ${String(
-      a.sizeMeters / 1000,
-    )} km · ${String(Math.round(a.rotationDeg))}°`;
+    this.summary.textContent = `Area ${describeSelection(this.area)}`;
   }
+}
+
+function describeSelection(a: SelectedArea): string {
+  return `${a.centerLat.toFixed(4)}, ${a.centerLon.toFixed(4)} · ${String(
+    a.sizeMeters / 1000,
+  )} km · ${String(Math.round(a.rotationDeg))}°`;
 }
 
 export function formatAreaReport(area: MapArea): string {

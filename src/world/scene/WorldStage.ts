@@ -23,6 +23,10 @@ import { ResizeHandler } from './ResizeHandler';
 
 const BACKGROUND = 0x1a1d21;
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
 export class WorldStage {
   public readonly scene: Scene;
   public readonly camera: PerspectiveCamera;
@@ -32,6 +36,7 @@ export class WorldStage {
 
   private readonly resize: ResizeHandler;
   private lights: Object3D;
+  private bounds: BoardBounds;
   private readonly unsubscribeControls: () => void;
 
   public constructor(container: HTMLElement, bounds: BoardBounds) {
@@ -45,10 +50,12 @@ export class WorldStage {
 
     this.lights = createLights(bounds);
     this.scene.add(this.lights);
+    this.bounds = bounds;
 
     this.resize = new ResizeHandler(container, this.renderer, this.camera);
     this.loop = new RenderLoop(this.renderer, this.scene, this.camera);
     this.unsubscribeControls = this.loop.onTick(() => {
+      this.clampTarget();
       this.controls.update();
     });
   }
@@ -72,6 +79,22 @@ export class WorldStage {
     this.scene.remove(this.lights);
     this.lights = createLights(bounds);
     this.scene.add(this.lights);
+    this.bounds = bounds;
+  }
+
+  /**
+   * Panning is free movement, and free movement means the board can be pushed
+   * off screen with no way back but a reload. The target is kept within half a
+   * board of the edge: enough to look along a coastline from outside it, not
+   * enough to lose the game.
+   */
+  private clampTarget(): void {
+    const b = this.bounds;
+    const margin = (b.maxX - b.minX) * 0.5;
+    const t = this.controls.target;
+    t.x = clamp(t.x, b.minX - margin, b.maxX + margin);
+    t.z = clamp(t.z, b.minZ - margin, b.maxZ + margin);
+    t.y = clamp(t.y, b.minY, b.maxY);
   }
 
   public add(...objects: Object3D[]): void {

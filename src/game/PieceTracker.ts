@@ -63,4 +63,9 @@ export class PieceTracker {
   public all(): readonly TrackedPiece[] {
     return [...this.bySquare.values()];
   }
+
+  /** Every piece with the square it is standing on, for anyone who needs both. */
+  public entries(): readonly (readonly [Square, TrackedPiece])[] {
+    return [...this.bySquare.entries()];
+  }
 }

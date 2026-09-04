@@ -34,3 +34,5 @@ export const SEA = 0x2f6ba6;
 
 export const LABEL_TEXT = '#f4efe4';
 export const LABEL_BACK = 'rgba(28, 30, 34, 0.72)';
+/** Halo behind outlined label text: near-black, so bright text reads on sand and dark text on water. */
+export const LABEL_HALO = 'rgba(10, 12, 15, 0.92)';

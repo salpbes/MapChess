@@ -20,9 +20,13 @@ export const APP_CONFIG = Object.freeze({
   /** Single-threaded Stockfish glue; its .wasm sits beside it. Copied by scripts/copy-engine.mjs (D-017). */
   engineUrl: `${import.meta.env.BASE_URL}engine/stockfish-18-lite-single.js`,
 
-  /** Default seating until Phase 11's menu exists. */
+  /** What the menu offers first, before a saved game says otherwise. */
   defaultHumanColor: 'white' as const,
-  defaultDifficulty: 'club' as const,
+  // Low enough that a first game is winnable; the menu offers four others.
+  defaultDifficulty: 'beginner' as const,
+
+  /** localStorage key holding the one autosaved game (D-034). */
+  saveKey: 'mapchess.savedGame',
 
   /** Free vector basemap for the 2D picker, no API key (D-019). */
   mapStyleUrl: 'https://tiles.openfreemap.org/styles/liberty',

@@ -3,10 +3,13 @@
 //       highlight layers, spins up the Stockfish worker, connects pointer
 //       clicks → BoardPicker → GameLoop, and routes the selected area's
 //       heights and features into BoardComposer, whose layout BoardScene
-//       shows. Returns a handle so main.ts can tear it all down on hot reload.
+//       shows. The Phase 11 shell — menu, controls, record, game-over screen
+//       and autosave — hangs off the same bus. Returns a handle so main.ts can
+//       tear it all down on hot reload.
 // WHY:  This is the one place where "which layout", "which piece factory",
-//       "which engine" and "which opponent" are decided. Phase 8's layout
-//       swap lives in BoardComposer; nothing in world/ or game/ changed for it.
+//       "which engine", "which opponent" and "where saves live" are decided.
+//       Phase 8's layout swap lives in BoardComposer; nothing in world/ or
+//       game/ changed for it.
 
 import { StockfishAI } from '@ai/StockfishAI';
 import { FlatBoardLayout } from '@domain/board/FlatBoardLayout';
@@ -15,6 +18,10 @@ import { ChessEngine } from '@domain/chess/ChessEngine';
 import type { GameEvents } from '@game/GameEvents';
 import { GameLoop } from '@game/GameLoop';
 import type { Players } from '@game/GameLoop';
+import { SaveManager } from '@game/SaveManager';
+import type { SaveContext } from '@game/SaveManager';
+import { isSavedGame } from '@game/SavedGame';
+import type { SavedGame } from '@game/SavedGame';
 import { ThemeTracker } from '@game/ThemeTracker';
 import { IndexedDbStore, STORES } from '@mapdata/cache/KeyValueStore';
 import { ElevationLoader } from '@mapdata/elevation/ElevationLoader';
@@ -33,6 +40,7 @@ import {
   OverpassFeatureProvider,
 } from '@mapdata/features/OverpassFeatureProvider';
 import type { CachedFeatures } from '@mapdata/features/OverpassFeatureProvider';
+import { primaryPlaceName } from '@mapdata/features/primaryPlace';
 import { NominatimGeocoder } from '@mapdata/geocode/NominatimGeocoder';
 import type { HeightField } from '@mapdata/model/HeightField';
 import { FIXTURE_AREAS } from '@mapdata/model/fixtureAreas';
@@ -40,16 +48,23 @@ import type { MapFeature } from '@mapdata/model/MapFeature';
 import type { SelectedArea } from '@mapdata/model/SelectedArea';
 import { browserBase64 } from '@shared/encoding/base64';
 import { EventBus } from '@shared/events/EventBus';
+import { LocalJsonStore } from '@shared/storage/LocalJsonStore';
 import { AreaBar } from '@ui/AreaBar';
 import { BoardDebugPanel } from '@ui/BoardDebugPanel';
+import { DataStatus } from '@ui/DataStatus';
 import { FeaturesDebugPanel } from '@ui/FeaturesDebugPanel';
 import { FpsMeter } from '@ui/FpsMeter';
+import { GameControls } from '@ui/GameControls';
+import { GameOverScreen } from '@ui/GameOverScreen';
 import { HeightmapDebugPanel } from '@ui/HeightmapDebugPanel';
+import { HintCard } from '@ui/HintCard';
 import { IdentityCard } from '@ui/IdentityCard';
-import { OpponentPanel } from '@ui/OpponentPanel';
-import type { NewGameRequest } from '@ui/OpponentPanel';
+import { MainMenu } from '@ui/MainMenu';
+import type { NewGameRequest, SavedGameSummary } from '@ui/MainMenu';
 import { PromotionPrompt } from '@ui/PromotionPrompt';
+import { RecordPanel } from '@ui/RecordPanel';
 import { StatusBar } from '@ui/StatusBar';
+import { ViewControls } from '@ui/ViewControls';
 import { BoardScene } from '@world/builders/BoardScene';
 import { BoardView } from '@world/pieces/BoardView';
 import { HighlightLayer } from '@world/pieces/HighlightLayer';
@@ -96,6 +111,7 @@ export function bootstrap(
   stage.add(...view.objects);
   const stopAnimator = stage.loop.onTick((dt) => {
     animator.update(dt);
+    highlights.update(dt);
   });
 
   // --- game ---
@@ -112,18 +128,72 @@ export function bootstrap(
   });
   const game = new GameLoop({ engine, view, promotion, bus, ai });
 
+  // --- persistence (Phase 11: one autosaved game, including its area) ---
+  const saves = new SaveManager({
+    bus,
+    store: new LocalJsonStore<SavedGame>(config.saveKey, isSavedGame),
+    context: (): SaveContext => ({
+      area: areaBar.current,
+      players: toPlayers(seating.humanColor),
+      difficulty: seating.difficulty,
+    }),
+  });
+  // Read once, before the first autosave overwrites it, so the menu can offer it.
+  const savedOnLoad: SavedGame | null = saves.read();
+
+  // The seating the shell will use for the next new game, and the save it is
+  // still willing to resume. Both change only through startGame / resumeSavedGame.
+  let seating: NewGameRequest = {
+    humanColor: savedOnLoad === null ? config.defaultHumanColor : toHumanColor(savedOnLoad.players),
+    difficulty: savedOnLoad?.difficulty ?? config.defaultDifficulty,
+  };
+  let resumable: SavedGame | null = savedOnLoad;
+  /** What the current board is called, once its features have arrived. */
+  let placeName: string | null = null;
+
   // --- ui ---
   const statusBar = new StatusBar(uiContainer, bus);
   const themeTracker = new ThemeTracker(bus);
   const identityCard = new IdentityCard(uiContainer, bus, themeTracker);
-  const initialSeating: NewGameRequest = {
-    humanColor: config.defaultHumanColor,
-    difficulty: config.defaultDifficulty,
-  };
-  const panel = new OpponentPanel(uiContainer, initialSeating, (request) => {
-    ai.setDifficulty(request.difficulty);
-    game.newGame(toPlayers(request.humanColor));
+  const record = new RecordPanel(uiContainer, bus, themeTracker);
+  const hintCard = new HintCard(uiContainer, bus, themeTracker);
+
+  const menu = new MainMenu(uiContainer, seating, {
+    onNewGame: (request) => {
+      startGame(request);
+    },
+    onResume: () => {
+      resumeSavedGame();
+    },
+    onChooseArea: () => {
+      areaBar.open();
+    },
+    // The name if the map knows one; the coordinates are the fallback, not the point.
+    areaLabel: () => placeName ?? areaBar.label,
+    savedGame: () => summarise(resumable),
   });
+  const controls = new GameControls(uiContainer, bus, {
+    onMenu: () => {
+      menu.open();
+    },
+    onHint: () => {
+      void game.requestHint();
+    },
+    onUndo: () => {
+      game.undo();
+    },
+    onResign: () => {
+      // Resigning on behalf of whoever the player is sitting as.
+      game.resign(resigningColor());
+    },
+    canHint: () => game.canHint(),
+    canUndo: () => game.canUndo(),
+    canResign: () => game.outcome === null && seating.humanColor !== 'none',
+  });
+  const gameOver = new GameOverScreen(uiContainer, bus, themeTracker, () => {
+    menu.open();
+  });
+
   const debug = new URLSearchParams(window.location.search).has('debug');
   const fps = debug
     ? new FpsMeter(uiContainer, () => ({
@@ -147,9 +217,26 @@ export function bootstrap(
     ),
     browserBase64,
   );
-  // The data panels are development aids; outside ?debug the loaders report to the console only.
+  // Loading and failure are visible to every player; the debug panels add the detail.
+  const dataStatus = new DataStatus(uiContainer, () => {
+    loadArea(areaBar.current);
+  });
   const heightmapPanel = debug ? new HeightmapDebugPanel(uiContainer) : null;
-  const elevation = new ElevationLoader(elevationProvider, heightmapPanel ?? SILENT_ELEVATION_VIEW);
+  const elevationView: IElevationView = {
+    showLoading: (done, total) => {
+      dataStatus.terrain.showLoading(done, total);
+      heightmapPanel?.showLoading(done, total);
+    },
+    showField: (result, elapsedMs) => {
+      dataStatus.terrain.showField(result, elapsedMs);
+      heightmapPanel?.showField(result, elapsedMs);
+    },
+    showError: (message) => {
+      dataStatus.terrain.showError(message);
+      heightmapPanel?.showError(message);
+    },
+  };
+  const elevation = new ElevationLoader(elevationProvider, elevationView);
 
   // Features: fixtures first (offline), then IndexedDB-cached, rate-limited Overpass (D-024).
   const featureProvider = new FixtureFeatureProvider(
@@ -159,14 +246,32 @@ export function bootstrap(
     ),
   );
   const featuresPanel = debug ? new FeaturesDebugPanel(uiContainer) : null;
-  const features = new FeatureLoader(featureProvider, featuresPanel ?? SILENT_FEATURES_VIEW);
+  const featuresView: IFeaturesView = {
+    showLoading: () => {
+      dataStatus.features.showLoading();
+      featuresPanel?.showLoading();
+    },
+    showFeatures: (summary, result) => {
+      dataStatus.features.showFeatures(summary, result);
+      featuresPanel?.showFeatures(summary, result);
+    },
+    showError: (message) => {
+      dataStatus.features.showError(message);
+      featuresPanel?.showError(message);
+    },
+  };
+  const features = new FeatureLoader(featureProvider, featuresView);
 
-  const areaBar = new AreaBar(uiContainer, config.defaultArea, {
+  const areaBar: AreaBar = new AreaBar(uiContainer, savedOnLoad?.area ?? config.defaultArea, {
     geocoder: new NominatimGeocoder(),
     styleUrl: config.mapStyleUrl,
     presets: FIXTURE_AREAS,
     onAreaChanged: (area) => {
+      placeName = null;
       loadArea(area);
+      // A new area is a new board, so it is a new game: identities from the old
+      // map would otherwise follow pieces onto ground they never came from.
+      startGame(seating);
     },
   });
 
@@ -174,13 +279,19 @@ export function bootstrap(
   const picker = new BoardPicker(stage.camera, initialLayout, null, pieces);
   const input = new PointerInput(stage.renderer.domElement);
   input.onClick((ndc) => {
+    if (menu.isOpen) return;
     const square = picker.pick(ndc);
     if (square !== null) void game.handleSquareClick(square);
+  });
+  input.onMove((ndc) => {
+    boardScene.setHoveredSquare(ndc === null || menu.isOpen ? null : picker.pick(ndc));
   });
 
   // --- board: flat until terrain arrives, then warped (Phase 8) ---
   const boardScene = new BoardScene({ stage, pieces, highlights, picker });
   const composer = new BoardComposer(config.boardSizeMeters, ({ model, mode }) => {
+    // The flat placeholder board carries no features; keep the last known name.
+    if (model.features !== null) placeName = primaryPlaceName(model.features);
     boardScene.show(model);
     themeTracker.setTheme(model.theme);
     // Positions changed under the pieces; re-place them from the engine's position.
@@ -201,6 +312,32 @@ export function bootstrap(
     });
   }
 
+  function startGame(request: NewGameRequest): void {
+    resumable = null;
+    seating = request;
+    ai.setDifficulty(request.difficulty);
+    game.newGame(toPlayers(request.humanColor));
+  }
+
+  function resumeSavedGame(): void {
+    const saved = resumable;
+    if (saved === null) return;
+    resumable = null;
+    seating = { humanColor: toHumanColor(saved.players), difficulty: saved.difficulty };
+    ai.setDifficulty(saved.difficulty);
+    if (!sameArea(saved.area, areaBar.current)) {
+      areaBar.setArea(saved.area);
+      loadArea(saved.area);
+    }
+    saves.resume(game);
+  }
+
+  function resigningColor(): 'white' | 'black' {
+    // Hot-seat: whoever is to move gives up. Otherwise the player's own colour.
+    if (seating.humanColor === 'white' || seating.humanColor === 'black') return seating.humanColor;
+    return engine.turn;
+  }
+
   const boardDebug = debug
     ? new BoardDebugPanel(
         uiContainer,
@@ -213,9 +350,16 @@ export function bootstrap(
     : null;
   if (debug) boardScene.setOverlay({ labels: true, features: true });
 
-  loadArea(config.defaultArea);
-  game.start(toPlayers(initialSeating.humanColor));
+  const viewControls = new ViewControls(uiContainer, {
+    onLabelsChanged: (mode) => {
+      boardScene.setLabelMode(mode);
+    },
+  });
+
+  loadArea(areaBar.current);
+  game.start(toPlayers(seating.humanColor));
   stage.start();
+  menu.open();
 
   return {
     layout: () => boardScene.layout ?? initialLayout,
@@ -231,10 +375,17 @@ export function bootstrap(
       featuresPanel?.dispose();
       elevation.dispose();
       heightmapPanel?.dispose();
+      dataStatus.dispose();
       areaBar.dispose();
       stopFps();
       fps?.dispose();
-      panel.dispose();
+      viewControls.dispose();
+      gameOver.dispose();
+      controls.dispose();
+      menu.dispose();
+      hintCard.dispose();
+      record.dispose();
+      saves.dispose();
       identityCard.dispose();
       themeTracker.dispose();
       statusBar.dispose();
@@ -248,22 +399,6 @@ export function bootstrap(
   };
 }
 
-/** Loaders still log to the console; without ?debug nothing is drawn for them. */
-const SILENT_ELEVATION_VIEW: IElevationView = {
-  showLoading: () => undefined,
-  showField: () => undefined,
-  showError: (message) => {
-    console.error('Elevation failed:', message);
-  },
-};
-const SILENT_FEATURES_VIEW: IFeaturesView = {
-  showLoading: () => undefined,
-  showFeatures: () => undefined,
-  showError: (message) => {
-    console.error('Features failed:', message);
-  },
-};
-
 function toPlayers(humanColor: NewGameRequest['humanColor']): Players {
   switch (humanColor) {
     case 'white':
@@ -275,4 +410,29 @@ function toPlayers(humanColor: NewGameRequest['humanColor']): Players {
     case 'none':
       return { white: 'ai', black: 'ai' };
   }
+}
+
+function toHumanColor(players: Players): NewGameRequest['humanColor'] {
+  if (players.white === 'human' && players.black === 'human') return 'both';
+  if (players.white === 'human') return 'white';
+  if (players.black === 'human') return 'black';
+  return 'none';
+}
+
+function summarise(saved: SavedGame | null): SavedGameSummary | null {
+  if (saved === null) return null;
+  return {
+    moveCount: saved.moves.length,
+    areaLabel: `${saved.area.centerLat.toFixed(3)}, ${saved.area.centerLon.toFixed(3)}`,
+    savedAt: new Date(saved.savedAt),
+  };
+}
+
+function sameArea(a: SelectedArea, b: SelectedArea): boolean {
+  return (
+    a.centerLat === b.centerLat &&
+    a.centerLon === b.centerLon &&
+    a.sizeMeters === b.sizeMeters &&
+    a.rotationDeg === b.rotationDeg
+  );
 }

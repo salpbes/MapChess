@@ -83,6 +83,28 @@ export class ChessEngine implements IChessEngine {
     return this.findLegal(request) !== null;
   }
 
+  public isPinned(square: Square): boolean {
+    const piece = this.chess.get(square);
+    // A king is never pinned: nothing stands behind it to be exposed.
+    if (piece === undefined || piece.type === 'k') return false;
+
+    // The definition of an absolute pin, asked directly: lift the piece off
+    // and see whether its king is suddenly under attack. Done on a copy, so
+    // the real position is never momentarily illegal.
+    const probe = new Chess(this.chess.fen());
+    probe.remove(square);
+    const king = probe
+      .board()
+      .flat()
+      .find((p) => p !== null && p.type === 'k' && p.color === piece.color);
+    if (king === undefined || king === null) return false;
+    return probe.isAttacked(king.square, piece.color === 'w' ? 'b' : 'w');
+  }
+
+  public isAttacked(square: Square, byColor: Color): boolean {
+    return this.chess.isAttacked(square, byColor === 'white' ? 'w' : 'b');
+  }
+
   public move(request: MoveRequest): Move {
     const legal = this.findLegal(request);
     if (legal === null) {

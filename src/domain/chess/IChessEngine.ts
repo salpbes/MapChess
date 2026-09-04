@@ -24,6 +24,18 @@ export interface IChessEngine {
   /** True if a pawn moving from→to would reach the last rank and needs a promotion piece. */
   requiresPromotion(from: Square, to: Square): boolean;
   isLegal(request: MoveRequest): boolean;
+  /**
+   * True when the piece on this square is the only thing standing between its
+   * own king and an attacker — so every move it could make is illegal. Answers
+   * "why can this piece not move?", which an empty legal-move list cannot.
+   */
+  isPinned(square: Square): boolean;
+  /**
+   * True when any piece of `byColor` could capture on this square in the
+   * current position. Answers "is my knight in danger there?" — the question
+   * behind most advice worth giving a beginner.
+   */
+  isAttacked(square: Square, byColor: Color): boolean;
 
   /** Plays the move. Throws IllegalMoveError if it is not legal in this position. */
   move(request: MoveRequest): Move;

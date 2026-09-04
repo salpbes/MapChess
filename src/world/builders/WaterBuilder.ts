@@ -1,13 +1,19 @@
-// WHAT: Water: rivers and streams as ribbons, lakes as filled polygons, and a
+// WHAT: Water: rivers and streams as ribbons, lakes as filled polygons, a
+//       translucent surface over any cell that is itself under the sea, and a
 //       sea plane on coastal boards.
 // HOW:  Ribbons follow each waterway polyline at a width by type, lying on
 //       whichever platform (or terrain, outside the board) the point is over,
 //       lifted slightly. Lakes are ShapeGeometry (earcut) at the platform of
-//       their centre. The sea is a plane at sea level, clamped below the
-//       board's lowest platform so it never floods a playable cell. All
-//       ribbons are one mesh; all lakes one mesh; the sea one plane.
+//       their centre. Cells whose cover is water get a translucent sheet just
+//       above their own platform, so the square reads as submerged and the
+//       piece on it as standing in the shallows. The outer sea is a plane at
+//       sea level, clamped below the board's lowest platform. All ribbons are
+//       one mesh; all lakes one mesh; all shallows one mesh; the sea one plane.
 // WHY:  After the warp, rivers run along cell edges; drawing them as water is
-//       what makes that visible and the valley recognisable.
+//       what makes that visible and the valley recognisable. The shallows are
+//       how a board with a bay in the corner tells the truth about it: the
+//       square stays playable, because the rules need 64 of them, but it is
+//       plainly sea rather than a beach the board invented.
 
 import {
   BufferAttribute,
@@ -40,6 +46,8 @@ const RIBBON_WIDTH: Readonly<Record<string, number>> = {
   ditch: 2.5,
 };
 const LIFT = 0.6;
+/** How far the shallows float over a submerged platform: ankle-deep on a piece. */
+const SHALLOW_LIFT = 3.5;
 /** Ribbons and lakes are drawn only this far outside the board. */
 const MARGIN = 220;
 
@@ -72,11 +80,53 @@ export class WaterBuilder {
       mesh.name = 'lakes';
       group.add(mesh);
     }
+    const shallows = shallowCells(model);
+    if (shallows !== null) {
+      const mesh = new Mesh(shallows, shallowMaterial());
+      mesh.name = 'shallows';
+      // Over the platform it covers, and over the pieces' plinths.
+      mesh.renderOrder = 1;
+      group.add(mesh);
+    }
     if (features.some((f) => f.kind === 'coastline') && model.heights !== null) {
       group.add(sea(model));
     }
     return group;
   }
+}
+
+/**
+ * One sheet per water-covered cell, a hair above its platform. Translucent, so
+ * the blue platform and the foot of any piece standing there both show through.
+ */
+function shallowCells(model: WorldModel): BufferGeometry | null {
+  const cover = model.cover;
+  if (cover === null) return null;
+
+  const parts: BufferGeometry[] = [];
+  for (const cell of model.layout.cells) {
+    if (cover.get(cell.square) !== 'water') continue;
+    const shape = new Shape(cell.polygon.map((p) => new Vector2(p.x, -p.z)));
+    const g = new ShapeGeometry(shape).toNonIndexed();
+    g.rotateX(-Math.PI / 2);
+    g.translate(0, cell.platformY + SHALLOW_LIFT, 0);
+    parts.push(g);
+  }
+  return parts.length === 0 ? null : merge(parts);
+}
+
+function shallowMaterial(): MeshStandardMaterial {
+  return new MeshStandardMaterial({
+    color: SEA,
+    roughness: 0.2,
+    metalness: 0.05,
+    flatShading: true,
+    transparent: true,
+    // Enough to read as water, clear enough to keep the checkerboard underneath.
+    opacity: 0.62,
+    depthWrite: false,
+    side: DoubleSide,
+  });
 }
 
 function waterMaterial(color: number): MeshStandardMaterial {

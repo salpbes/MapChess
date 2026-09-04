@@ -10,11 +10,11 @@
 
 import type { MoveRequest } from '@domain/chess/types';
 
-import { DIFFICULTY_SETTINGS } from './difficulty';
+import { ADVICE_SETTINGS, DIFFICULTY_SETTINGS, goCommand, optionCommands } from './difficulty';
 import type { EngineSettings } from './difficulty';
 import { EngineError } from './errors';
 import type { Difficulty, IChessAI } from './IChessAI';
-import { isReadyOk, isUciOk, parseBestMove } from './uci';
+import { isReadyOk, isUciOk, parseBestMove, parseOptionName } from './uci';
 
 interface Pending {
   readonly resolve: (move: MoveRequest) => void;
@@ -40,6 +40,8 @@ export class StockfishAI implements IChessAI {
   private readonly readyPromise: Promise<void>;
   private readonly graceMs: number;
   private readonly lineListeners = new Set<(line: string) => void>();
+  /** Option names this build advertised during the handshake. */
+  private readonly supported = new Set<string>();
   private settings: EngineSettings;
   private pending: Pending | null = null;
   private disposed = false;
@@ -77,8 +79,40 @@ export class StockfishAI implements IChessAI {
     if (this.pending !== null) throw new EngineError('busy');
     await this.readyPromise;
 
+    const settings = this.settings;
+    const started = Date.now();
+    const move = await this.search(fen, settings);
+
+    // A shallow search answers instantly; pausing makes the easy levels read as
+    // an opponent thinking rather than as the board glitching.
+    const owed = settings.minThinkMs - (Date.now() - started);
+    if (owed > 0) await new Promise((resolve) => setTimeout(resolve, owed));
+    return move;
+  }
+
+  /**
+   * A suggestion for whoever is to move, searched at full strength no matter
+   * how weak the opponent is set to. The level's own options are put back
+   * afterwards, including when the search fails: they persist in the engine,
+   * so leaving them raised would silently turn a Learner into a Strong.
+   */
+  public async hint(fen: string): Promise<MoveRequest> {
+    if (this.disposed) throw new EngineError('disposed');
+    if (this.pending !== null) throw new EngineError('busy');
+    await this.readyPromise;
+
+    for (const command of optionCommands(ADVICE_SETTINGS, this.supported)) this.send(command);
+    try {
+      return await this.search(fen, ADVICE_SETTINGS);
+    } finally {
+      this.applySettings();
+    }
+  }
+
+  /** One `position` + `go`, resolved by the next `bestmove` or abandoned. */
+  private search(fen: string, settings: EngineSettings): Promise<MoveRequest> {
     return new Promise<MoveRequest>((resolve, reject) => {
-      const timeout = this.settings.moveTimeMs + this.graceMs;
+      const timeout = settings.budgetMs + this.graceMs;
       const timer = setTimeout(() => {
         this.pending = null;
         this.send('stop');
@@ -87,7 +121,7 @@ export class StockfishAI implements IChessAI {
       this.pending = { resolve, reject, timer };
 
       this.send(`position fen ${fen}`);
-      this.send(`go movetime ${String(this.settings.moveTimeMs)}`);
+      this.send(goCommand(settings));
     });
   }
 
@@ -102,6 +136,8 @@ export class StockfishAI implements IChessAI {
 
   private async handshake(timeoutMs: number): Promise<void> {
     this.send('uci');
+    // Every `option name …` line up to `uciok` fills `supported`, so the
+    // settings that follow are only the ones this build actually understands.
     await this.waitFor(isUciOk, timeoutMs, 'uciok');
     this.send('ucinewgame');
     this.applySettings();
@@ -109,12 +145,13 @@ export class StockfishAI implements IChessAI {
   }
 
   private applySettings(): void {
-    this.send(`setoption name Skill Level value ${String(this.settings.skillLevel)}`);
-    this.send(`setoption name Hash value ${String(this.settings.hashMb)}`);
+    for (const command of optionCommands(this.settings, this.supported)) this.send(command);
     this.send('isready');
   }
 
   private onLine(line: string): void {
+    const option = parseOptionName(line);
+    if (option !== null) this.supported.add(option);
     for (const listener of [...this.lineListeners]) listener(line);
 
     const pending = this.pending;

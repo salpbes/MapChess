@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { isReadyOk, isUciOk, parseBestMove } from '@ai/uci';
+import { isReadyOk, isUciOk, parseBestMove, parseOptionName } from '@ai/uci';
 
 describe('parseBestMove', () => {
   it('parses a plain move', () => {
@@ -34,5 +34,28 @@ describe('handshake predicates', () => {
     expect(isUciOk('id name Stockfish')).toBe(false);
     expect(isReadyOk('readyok\n')).toBe(true);
     expect(isReadyOk('ready')).toBe(false);
+  });
+});
+
+describe('parseOptionName', () => {
+  it('reads a name that contains spaces', () => {
+    expect(parseOptionName('option name Skill Level type spin default 20 min 0 max 20')).toBe(
+      'Skill Level',
+    );
+  });
+
+  it('reads the strength-limiting options by name', () => {
+    expect(parseOptionName('option name UCI_LimitStrength type check default false')).toBe(
+      'UCI_LimitStrength',
+    );
+    expect(parseOptionName('option name UCI_Elo type spin default 1320 min 1320 max 3190')).toBe(
+      'UCI_Elo',
+    );
+  });
+
+  it('ignores anything that is not an option line', () => {
+    for (const line of ['uciok', 'bestmove e2e4', 'info depth 1', 'option name broken']) {
+      expect(parseOptionName(line), line).toBeNull();
+    }
   });
 });
