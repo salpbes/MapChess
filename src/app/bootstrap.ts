@@ -40,6 +40,10 @@ import {
   OverpassFeatureProvider,
 } from '@mapdata/features/OverpassFeatureProvider';
 import type { CachedFeatures } from '@mapdata/features/OverpassFeatureProvider';
+import { buildBriefing } from '@mapdata/board/buildBriefing';
+import type { BriefingInputs } from '@mapdata/board/buildBriefing';
+import { WikidataProvider } from '@mapdata/history/WikidataProvider';
+import type { HistoryFact } from '@mapdata/history/historyFacts';
 import { primaryPlaceName } from '@mapdata/features/primaryPlace';
 import { NominatimGeocoder } from '@mapdata/geocode/NominatimGeocoder';
 import type { HeightField } from '@mapdata/model/HeightField';
@@ -51,6 +55,8 @@ import { EventBus } from '@shared/events/EventBus';
 import { LocalJsonStore } from '@shared/storage/LocalJsonStore';
 import { AreaBar } from '@ui/AreaBar';
 import { BoardDebugPanel } from '@ui/BoardDebugPanel';
+import { BriefingPanel } from '@ui/BriefingPanel';
+import { ControlDock } from '@ui/ControlDock';
 import { DataStatus } from '@ui/DataStatus';
 import { FeaturesDebugPanel } from '@ui/FeaturesDebugPanel';
 import { FpsMeter } from '@ui/FpsMeter';
@@ -60,10 +66,12 @@ import { HeightmapDebugPanel } from '@ui/HeightmapDebugPanel';
 import { HintCard } from '@ui/HintCard';
 import { IdentityCard } from '@ui/IdentityCard';
 import { MainMenu } from '@ui/MainMenu';
+import { PanelColumn } from '@ui/PanelColumn';
 import type { NewGameRequest, SavedGameSummary } from '@ui/MainMenu';
 import { PromotionPrompt } from '@ui/PromotionPrompt';
 import { RecordPanel } from '@ui/RecordPanel';
 import { StatusBar } from '@ui/StatusBar';
+import { Tooltips } from '@ui/Tooltips';
 import { ViewControls } from '@ui/ViewControls';
 import { BoardScene } from '@world/builders/BoardScene';
 import { BoardView } from '@world/pieces/BoardView';
@@ -150,13 +158,29 @@ export function bootstrap(
   let resumable: SavedGame | null = savedOnLoad;
   /** What the current board is called, once its features have arrived. */
   let placeName: string | null = null;
+  /** Drops a Wikidata answer that arrives after the player has moved on. */
+  let briefingGeneration = 0;
 
   // --- ui ---
   const statusBar = new StatusBar(uiContainer, bus);
+  // One tooltip for every `data-tip` in the overlay, placed where it fits.
+  const tooltips = new Tooltips(uiContainer);
   const themeTracker = new ThemeTracker(bus);
-  const identityCard = new IdentityCard(uiContainer, bus, themeTracker);
-  const record = new RecordPanel(uiContainer, bus, themeTracker);
-  const hintCard = new HintCard(uiContainer, bus, themeTracker);
+  const briefing = new BriefingPanel(uiContainer);
+  // The reveal is drawn on the briefing's paper rather than floating over the board.
+  const identityCard = new IdentityCard(briefing.selectionSlot, bus, themeTracker);
+  // Optional, CC0, and never allowed to hold the board up: the briefing is
+  // shown at once from OSM alone, then re-shown if Wikidata answers.
+  const historyProvider = new WikidataProvider(
+    new IndexedDbStore<HistoryFact>(STORES.history, isHistoryFact),
+  );
+  // Left column, top to bottom: the controls, the record, then a hint when
+  // there is one. Flex does the arithmetic that three absolute positions used
+  // to have to agree on.
+  const column = new PanelColumn(uiContainer);
+  const dock = new ControlDock(column.element);
+  const record = new RecordPanel(column.element, bus, themeTracker);
+  const hintCard = new HintCard(column.element, bus, themeTracker);
 
   const menu = new MainMenu(uiContainer, seating, {
     onNewGame: (request) => {
@@ -172,7 +196,7 @@ export function bootstrap(
     areaLabel: () => placeName ?? areaBar.label,
     savedGame: () => summarise(resumable),
   });
-  const controls = new GameControls(uiContainer, bus, {
+  const controls = new GameControls({ menu: dock.placeSlot, actions: dock.actionSlot }, bus, {
     onMenu: () => {
       menu.open();
     },
@@ -262,18 +286,23 @@ export function bootstrap(
   };
   const features = new FeatureLoader(featureProvider, featuresView);
 
-  const areaBar: AreaBar = new AreaBar(uiContainer, savedOnLoad?.area ?? config.defaultArea, {
-    geocoder: new NominatimGeocoder(),
-    styleUrl: config.mapStyleUrl,
-    presets: FIXTURE_AREAS,
-    onAreaChanged: (area) => {
-      placeName = null;
-      loadArea(area);
-      // A new area is a new board, so it is a new game: identities from the old
-      // map would otherwise follow pieces onto ground they never came from.
-      startGame(seating);
+  const areaBar: AreaBar = new AreaBar(
+    { summary: briefing.coordinateSlot, buttons: dock.placeSlot },
+    savedOnLoad?.area ?? config.defaultArea,
+    {
+      geocoder: new NominatimGeocoder(),
+      styleUrl: config.mapStyleUrl,
+      pickerHost: uiContainer,
+      presets: FIXTURE_AREAS,
+      onAreaChanged: (area) => {
+        placeName = null;
+        loadArea(area);
+        // A new area is a new board, so it is a new game: identities from the old
+        // map would otherwise follow pieces onto ground they never came from.
+        startGame(seating);
+      },
     },
-  });
+  );
 
   // --- input ---
   const picker = new BoardPicker(stage.camera, initialLayout, null, pieces);
@@ -292,6 +321,24 @@ export function bootstrap(
   const composer = new BoardComposer(config.boardSizeMeters, ({ model, mode }) => {
     // The flat placeholder board carries no features; keep the last known name.
     if (model.features !== null) placeName = primaryPlaceName(model.features);
+    const inputs: BriefingInputs | null =
+      model.features === null || model.heights === null || model.cover === null
+        ? null
+        : {
+            features: model.features,
+            heights: model.heights,
+            cover: model.cover,
+            bounds: model.layout.bounds,
+          };
+    briefing.show(inputs === null ? null : buildBriefing(inputs));
+    if (inputs !== null) {
+      const generation = ++briefingGeneration;
+      void historyProvider.factsFor(inputs.features).then((history) => {
+        // A later board may have arrived while Wikidata was answering.
+        if (generation !== briefingGeneration || history.size === 0) return;
+        briefing.show(buildBriefing({ ...inputs, history }));
+      });
+    }
     boardScene.show(model);
     themeTracker.setTheme(model.theme);
     // Positions changed under the pieces; re-place them from the engine's position.
@@ -350,7 +397,7 @@ export function bootstrap(
     : null;
   if (debug) boardScene.setOverlay({ labels: true, features: true });
 
-  const viewControls = new ViewControls(uiContainer, {
+  const viewControls = new ViewControls(dock.actionSlot, {
     onLabelsChanged: (mode) => {
       boardScene.setLabelMode(mode);
     },
@@ -385,9 +432,13 @@ export function bootstrap(
       menu.dispose();
       hintCard.dispose();
       record.dispose();
+      dock.dispose();
+      column.dispose();
+      briefing.dispose();
       saves.dispose();
       identityCard.dispose();
       themeTracker.dispose();
+      tooltips.dispose();
       statusBar.dispose();
       ai.dispose();
       stopAnimator();
@@ -397,6 +448,19 @@ export function bootstrap(
       stage.dispose();
     },
   };
+}
+
+/** Guards a cached fact against a shape written by an older version. */
+function isHistoryFact(value: unknown): value is HistoryFact {
+  if (typeof value !== 'object' || value === null) return false;
+  const f = value as Partial<HistoryFact>;
+  return (
+    typeof f.id === 'string' &&
+    (f.label === null || typeof f.label === 'string') &&
+    (f.year === null || typeof f.year === 'number') &&
+    (f.kind === null || typeof f.kind === 'string') &&
+    (f.heritage === null || typeof f.heritage === 'string')
+  );
 }
 
 function toPlayers(humanColor: NewGameRequest['humanColor']): Players {

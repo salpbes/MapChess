@@ -692,6 +692,10 @@ Four things surfaced the first time the game was actually played, all fixed on t
 
 - **The menu says where you are, not what your coordinates are.** A drawn map button replaces "Change…", and beside it the board is named from its own features — Rievaulx, Holy Island, Achtriochtan — with coordinates only as the fallback. Loading became a proper screen — the board blurs behind a centred card with six chess pieces hopping in turn, the progress line and a rotating tip — and the two instruction lines under the menu are gone (D-048).
 
+- **The board says what it is.** A collapsible gazetteer entry at the top of the left column — relief, water, land cover, settlements, and what the map still remembers of older names — counted and quoted from OSM and the height field, never invented (D-049). Real dates then arrived on top of it from Wikidata, looked up by the Q-id OSM already carries — "Rievaulx Abbey — abbey, founded 1132, scheduled monument" — CC0, cached, and never allowed to hold the board up (D-050).
+
+- **The HUD became paper.** The gazetteer's parchment spread to the status bar, the area bar, the move record and both control clusters, with the palette in custom properties so it can be retuned in one place (D-051). The full-screen overlays stay dark.
+
 ### Risks / things I'm unsure about
 
 - **The shell is not covered by tests, because the UI never is here.** Vitest runs in `node` with no DOM (BUILD_PLAN §3), so every assertion in this phase is on `game/`: the loop, the save format, the trackers. The menu, the record panel and the result card were checked by hand, not by machine. That is the same bargain the project has made since Phase 1, but this phase is the most DOM there has ever been.

@@ -83,6 +83,7 @@ export function normalizeFeatures(
         geometry,
         names: namesOf(tags),
         elevationMeters: parseElevation(tags.ele),
+        wikidata: parseWikidata(tags.wikidata),
       });
     }
   }
@@ -190,6 +191,11 @@ function meanPoint(pts: readonly BoardPoint[]): BoardPoint {
 }
 
 // -------------------------------------------------------------------- names
+
+/** A Q-id and nothing else; OSM occasionally holds junk in this tag. */
+function parseWikidata(value: string | undefined): string | null {
+  return value !== undefined && /^Q[1-9][0-9]*$/.test(value) ? value : null;
+}
 
 function namesOf(tags: Tags): FeatureNames {
   const names: { -readonly [K in keyof FeatureNames]?: string } = {};

@@ -33,11 +33,12 @@ export class MemoryStore<T> implements KeyValueStore<T> {
 
 const DB_NAME = 'mapchess';
 /** Bump when adding a store; `onupgradeneeded` creates any that are missing. */
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export const STORES = {
   elevationTiles: 'elevation-tiles',
   features: 'features',
+  history: 'history',
 } as const;
 
 export type StoreName = (typeof STORES)[keyof typeof STORES];

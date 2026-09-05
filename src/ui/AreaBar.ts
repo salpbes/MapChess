@@ -1,8 +1,11 @@
 // WHAT: A one-line summary of the currently selected area with a button to
 //       change it; owns the AreaPicker's lifecycle and logs the result.
-// HOW:  Holds the current SelectedArea. "Choose area…" opens an AreaPicker;
-//       confirm stores the new area, calls back, and prints a full report
-//       (centre, rotation, four board corners) to the console.
+// HOW:  Holds the current SelectedArea. A map button opens an AreaPicker; a
+//       star button drops a short list of the offline example areas —
+//       a list of its own rather than a `<select>`, because a native select is
+//       obliged to show its text and these are icon buttons. Confirming a new
+//       area stores it, calls back, and prints a full report (centre, rotation,
+//       four board corners) to the console.
 // WHY:  BUILD_PLAN Phase 5 "done when": search, position, confirm, and see the
 //       coordinates and derived corners logged. Phase 8 reads the same area
 //       to build the warped board; Phase 11 saves it with the game, and
@@ -15,10 +18,26 @@ import type { FixtureAreaDef } from '@mapdata/model/fixtureAreas';
 import type { SelectedArea } from '@mapdata/model/SelectedArea';
 
 import { AreaPicker } from './AreaPicker';
+import { iconButton } from './icons';
+
+/**
+ * The summary reads as part of the place, so it is printed on the briefing
+ * paper; the buttons that change the place stay in the control dock.
+ */
+export interface AreaBarSlots {
+  readonly summary: HTMLElement;
+  readonly buttons: HTMLElement;
+}
 
 export interface AreaBarDeps {
   readonly geocoder: IGeocoder;
   readonly styleUrl: string;
+  /**
+   * Where the full-screen picker is mounted. Not this bar's own container: the
+   * bar is a row inside the control dock, and a picker parented there would be
+   * laid out inside the dock rather than over the whole window.
+   */
+  readonly pickerHost: HTMLElement;
   readonly onAreaChanged: (area: SelectedArea) => void;
   /** Offline areas offered in a dropdown for instant switching. */
   readonly presets?: readonly FixtureAreaDef[];
@@ -28,27 +47,27 @@ export class AreaBar {
   private readonly el: HTMLDivElement;
   private readonly summary: HTMLSpanElement;
   private picker: AreaPicker | null = null;
+  private closePresets: (() => void) | null = null;
 
   public constructor(
-    private readonly container: HTMLElement,
+    slots: AreaBarSlots,
     private area: SelectedArea,
     private readonly deps: AreaBarDeps,
   ) {
     this.el = document.createElement('div');
     this.el.className = 'area-bar';
     this.summary = document.createElement('span');
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = 'Choose area…';
-    button.addEventListener('click', () => {
-      this.openPicker();
-    });
-    this.el.append(this.summary);
+    this.summary.className = 'area-bar__summary';
+    slots.summary.appendChild(this.summary);
     if (deps.presets !== undefined && deps.presets.length > 0) {
-      this.el.appendChild(this.presetSelect(deps.presets));
+      this.el.appendChild(this.presetPicker(deps.presets));
     }
-    this.el.appendChild(button);
-    container.appendChild(this.el);
+    this.el.appendChild(
+      iconButton('map', 'Choose a place on the map', 'area-bar__button', () => {
+        this.openPicker();
+      }),
+    );
+    slots.buttons.appendChild(this.el);
     this.render();
   }
 
@@ -76,14 +95,16 @@ export class AreaBar {
   }
 
   public dispose(): void {
+    this.closePresets?.();
     this.picker?.dispose();
+    this.summary.remove();
     this.el.remove();
   }
 
   private openPicker(): void {
     if (this.picker !== null) return;
     this.picker = new AreaPicker(
-      this.container,
+      this.deps.pickerHost,
       {
         geocoder: this.deps.geocoder,
         styleUrl: this.deps.styleUrl,
@@ -109,33 +130,62 @@ export class AreaBar {
     this.picker = null;
   }
 
-  private presetSelect(presets: readonly FixtureAreaDef[]): HTMLSelectElement {
-    const select = document.createElement('select');
-    select.setAttribute('aria-label', 'Offline example areas');
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = 'Example areas…';
-    select.appendChild(placeholder);
-    for (const p of presets) {
-      const opt = document.createElement('option');
-      opt.value = p.name;
-      opt.textContent = p.name.charAt(0).toUpperCase() + p.name.slice(1);
-      opt.title = p.description;
-      select.appendChild(opt);
+  /**
+   * A star button and a short list under it. Closes on a choice, on Escape, or
+   * on a click anywhere else — the three ways anyone expects a menu to close.
+   */
+  private presetPicker(presets: readonly FixtureAreaDef[]): HTMLDivElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'area-bar__presets';
+
+    const list = document.createElement('div');
+    list.className = 'area-bar__list';
+    list.hidden = true;
+
+    const close = (): void => {
+      list.hidden = true;
+      document.removeEventListener('pointerdown', onOutside, true);
+      document.removeEventListener('keydown', onKey, true);
+    };
+    const onOutside = (event: PointerEvent): void => {
+      if (!wrap.contains(event.target as Node)) close();
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') close();
+    };
+    this.closePresets = close;
+
+    for (const preset of presets) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'area-bar__list-item';
+      row.textContent = preset.name.charAt(0).toUpperCase() + preset.name.slice(1);
+      row.title = preset.description;
+      row.addEventListener('click', () => {
+        close();
+        this.area = preset.area;
+        this.render();
+        this.deps.onAreaChanged(preset.area);
+      });
+      list.appendChild(row);
     }
-    select.addEventListener('change', () => {
-      const chosen = presets.find((p) => p.name === select.value);
-      select.value = '';
-      if (chosen === undefined) return;
-      this.area = chosen.area;
-      this.render();
-      this.deps.onAreaChanged(chosen.area);
+
+    const open = iconButton('star', 'Example areas, ready offline', 'area-bar__button', () => {
+      if (!list.hidden) {
+        close();
+        return;
+      }
+      list.hidden = false;
+      document.addEventListener('pointerdown', onOutside, true);
+      document.addEventListener('keydown', onKey, true);
     });
-    return select;
+
+    wrap.append(open, list);
+    return wrap;
   }
 
   private render(): void {
-    this.summary.textContent = `Area ${describeSelection(this.area)}`;
+    this.summary.textContent = describeSelection(this.area);
   }
 }
 

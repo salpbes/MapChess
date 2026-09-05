@@ -54,247 +54,280 @@ body {
 }
 
 /*
-  Paint order inside #ui is DOM order, and the bars and panels are constructed
-  after the dialogs. These four levels are the whole stacking story: HUD, then
-  what covers the HUD, then what covers that.
+  The gazetteer's paper, promoted to the whole HUD. Defined once here so the
+  ground colour and the ink can be retuned in one place instead of in eleven.
 */
-.menu-backdrop,
-.gameover-backdrop {
-  z-index: 20;
+:root {
+  --paper: #e9dec4;
+  --paper-edge: #b9a074;
+  --paper-rule: rgba(120, 95, 55, 0.35);
+  --paper-ink: #3d3220;
+  --paper-ink-strong: #4a3315;
+  --paper-ink-soft: #6b5433;
+  --paper-ink-faint: #8a6f45;
+  --paper-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
 }
 
-.promotion-backdrop {
-  z-index: 30;
+/*
+  Paper without an image: a warm ground, three soft blooms of foxing at odd
+  positions so the mottling does not read as a pattern, a hairline fibre across
+  the grain, and an aged darkening towards the edges. Every layer is a
+  gradient, so it costs no request and scales with whatever it is applied to.
+*/
+.status-bar,
+.dock,
+.record,
+.hint,
+.briefing {
+  border: 1px solid var(--paper-edge);
+  border-radius: 3px;
+  font-family: var(--paper-serif);
+  color: var(--paper-ink);
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(circle at 18% 12%, rgba(139, 112, 66, 0.13), transparent 46%),
+    radial-gradient(circle at 82% 58%, rgba(122, 96, 54, 0.11), transparent 42%),
+    radial-gradient(circle at 44% 92%, rgba(150, 124, 79, 0.1), transparent 38%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0) 0 3px, rgba(120, 95, 55, 0.03) 3px 4px);
+  box-shadow:
+    inset 0 0 22px rgba(120, 90, 50, 0.2),
+    0 5px 16px rgba(0, 0, 0, 0.42);
 }
 
-.area-picker {
-  z-index: 40;
+/* Anything that scrolls inside paper needs a thumb that is not a hole in it. */
+.record,
+.movelist,
+.hint,
+.briefing__coordinates:not(:empty) {
+  padding-top: 3px;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper-ink-faint);
 }
 
-/* ---- Phase 3: minimal HUD ---- */
+.briefing__body {
+  scrollbar-color: #b39a6c transparent;
+}
+
+.record::-webkit-scrollbar-thumb,
+.movelist::-webkit-scrollbar-thumb,
+.hint::-webkit-scrollbar-thumb,
+.briefing__body::-webkit-scrollbar-thumb {
+  background: #b39a6c;
+  background-clip: padding-box;
+}
+
+.record::-webkit-scrollbar-thumb:hover,
+.movelist::-webkit-scrollbar-thumb:hover,
+.hint::-webkit-scrollbar-thumb:hover,
+.briefing__body::-webkit-scrollbar-thumb:hover {
+  background: #967f52;
+  background-clip: padding-box;
+}
+
+/* One button treatment across the paper panels. */
+.controls__button,
+.view-controls__button,
+.area-bar__button,
+.area-bar select {
+  border: 1px solid var(--paper-edge);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.34);
+  color: var(--paper-ink-strong);
+  font-family: var(--paper-serif);
+  cursor: pointer;
+}
+
+.controls__button:hover:not(:disabled),
+.view-controls__button:hover,
+.area-bar__button:hover,
+.area-bar select:hover {
+  background: rgba(255, 255, 255, 0.62);
+}
+
+/* ---- Phase 3: the one line that says whose move it is ---- */
+
+/*
+  The left column. Pointer-transparent itself, so the strip of board behind an
+  empty column stays clickable; each panel in it takes the pointer back.
+*/
+.column {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  bottom: 12px;
+  width: 230px;
+  display: flex;
+  flex-direction: column;
+  /* The gap the record keeps from the controls above it. */
+  gap: 12px;
+  pointer-events: none;
+}
+
+.column > * {
+  pointer-events: auto;
+}
+
+.dock {
+  flex: 0 0 auto;
+  padding: 2px 9px;
+  font-size: 12.5px;
+}
+
+/* Choose the ground, play the game, change the view — in that order. */
+.dock__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+}
+
+.dock__row + .dock__row {
+  border-top: 1px solid var(--paper-rule);
+}
+
+.dock__row--place {
+  flex-wrap: wrap;
+}
+
+/*
+  The three components contribute buttons to these two rows rather than being
+  boxes inside them, so their own wrappers are taken out of the layout.
+*/
+.area-bar,
+.controls,
+.view-controls {
+  display: contents;
+}
+
+/*
+  Paper tooltips. `title` is deliberately not used: the native one waits a
+  second, arrives in the operating system's colours, and cannot be styled to
+  match. Positioned by Tooltips, which measures it against the window — a
+  pseudo-element could not be measured, so the old version guessed.
+*/
+.tooltip {
+  position: fixed;
+  z-index: 60;
+  max-width: 240px;
+  width: max-content;
+  padding: 4px 8px;
+  border: 1px solid var(--paper-edge);
+  border-radius: 3px;
+  background: var(--paper);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.4);
+  color: var(--paper-ink);
+  font-family: var(--paper-serif);
+  font-size: 11.5px;
+  line-height: 1.35;
+  text-align: left;
+  pointer-events: none;
+}
+
+/* The hint, lit while the board is waiting on the player. */
+.controls__button--waiting:not(:disabled) {
+  animation: hint-breathe 2s ease-in-out infinite;
+}
+
+@keyframes hint-breathe {
+  0%,
+  100% {
+    border-color: var(--paper-edge);
+    box-shadow: none;
+  }
+  50% {
+    border-color: #b45cff;
+    box-shadow: 0 0 0 2px rgba(180, 92, 255, 0.22);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .controls__button--waiting:not(:disabled) {
+    animation: none;
+    border-color: #b45cff;
+  }
+}
 
 .status-bar {
   position: absolute;
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 6px 14px;
-  border-radius: 6px;
-  background: rgba(20, 22, 26, 0.75);
+  padding: 5px 14px;
   font-size: 14px;
-  letter-spacing: 0.02em;
+  font-weight: 600;
+  color: var(--paper-ink-strong);
+  letter-spacing: 0.01em;
   user-select: none;
 }
 
-/* ---- Phase 4: frame-rate meter (?debug) ---- */
+/* ---- Phase 5: the chosen area ---- */
 
-.fps-meter {
-  position: absolute;
-  /* Above the view controls, which own the bottom-right corner. */
-  bottom: 44px;
-  right: 12px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  background: rgba(20, 22, 26, 0.6);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: #9fd89f;
+/* Icon buttons: square, the glyph centred, the label in the tooltip. */
+.controls__button,
+.view-controls__button,
+.area-bar__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  color: var(--paper-ink-strong);
 }
 
-/* ---- Phase 5: area selection ---- */
+/* Resign is the one that grows a word when it asks. */
+.controls__confirm {
+  padding-right: 4px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
 
-.heightmap-panel {
+.controls__button:has(.controls__confirm:not([hidden])) {
+  width: auto;
+  padding: 0 7px;
+}
+
+/* The example-areas list, dropped under its star. */
+.area-bar__presets {
+  position: relative;
+  display: inline-flex;
+}
+
+.area-bar__list {
   position: absolute;
-  top: 52px;
-  /* Clears the Phase 11 record panel, which owns the left column. */
-  left: 234px;
+  top: calc(100% + 5px);
+  left: 0;
+  z-index: 5;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  border-radius: 6px;
-  background: rgba(20, 22, 26, 0.75);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  max-width: 260px;
+  min-width: 130px;
+  padding: 4px;
+  border: 1px solid var(--paper-edge);
+  border-radius: 3px;
+  background: var(--paper);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
 }
 
-.heightmap-panel__canvas {
-  width: 160px;
-  height: 160px;
-  image-rendering: pixelated;
-  border: 1px solid #3a3e46;
-  background: #000;
-}
-
-.heightmap-panel__caption {
-  color: #c9cdd4;
-  line-height: 1.35;
-}
-
-/* ---- Phase 7: features ---- */
-
-/* Piece identity: a ⓘ toggle and, next to it, a one-line pill that expands on click. */
-.identity {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  display: flex;
-  flex-direction: row-reverse;
-  align-items: flex-start;
-  gap: 6px;
-  max-width: 60vw;
-}
-
-.identity__toggle {
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: 1px solid #555a63;
-  border-radius: 50%;
-  background: rgba(20, 22, 26, 0.75);
-  color: #ffd447;
-  font: inherit;
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.identity__toggle--off {
-  color: #7d8189;
-}
-
-.identity__card {
-  max-width: 260px;
-  padding: 4px 10px;
+.area-bar__list-item {
+  padding: 5px 8px;
   border: 0;
-  border-radius: 13px;
-  background: rgba(20, 22, 26, 0.78);
-  color: #e6e6e6;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--paper-ink);
   font: inherit;
-  font-size: 12px;
-  line-height: 1.35;
+  font-family: var(--paper-serif);
+  font-size: 12.5px;
   text-align: left;
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.identity__card--full {
-  white-space: normal;
-  padding: 8px 12px;
-  border-radius: 8px;
+.area-bar__list-item:hover {
+  background: rgba(120, 95, 55, 0.16);
 }
 
-.identity__line {
-  font-weight: 600;
-  color: #ffd447;
-}
-
-.identity__reason {
-  margin-top: 4px;
-  color: #e6e6e6;
-}
-
-.identity__cell {
-  margin-top: 4px;
-  color: #c9cdd4;
-}
-
-.identity__ground {
-  font-size: 11px;
-  color: #8fb8ff;
-  font-variant-numeric: tabular-nums;
-}
-
-.board-debug {
-  position: absolute;
-  /* Stacked above the frame-rate meter, which is above the view controls. */
-  bottom: 78px;
-  right: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 6px 8px;
-  border-radius: 4px;
-  background: rgba(20, 22, 26, 0.6);
-  font-size: 12px;
-  color: #c9cdd4;
-  user-select: none;
-}
-
-.board-debug label {
-  cursor: pointer;
-}
-
-.features-panel {
-  position: absolute;
-  top: 150px;
-  right: 12px;
-  width: 300px;
-  max-height: calc(100vh - 220px);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  border-radius: 6px;
-  background: rgba(20, 22, 26, 0.8);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.features-panel__caption {
-  color: #e6e6e6;
-}
-
-.features-panel__counts {
-  color: #a9adb5;
-  line-height: 1.4;
-}
-
-.features-panel__list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  overflow-y: auto;
-  border-top: 1px solid #2f333a;
-}
-
-.features-panel__item {
-  display: flex;
-  gap: 6px;
-  padding: 2px 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.features-panel__kind {
-  flex: 0 0 auto;
-  color: #8fb8ff;
-}
-
-.features-panel__old {
-  color: #ffd447;
-}
-
-.area-bar {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 6px 6px 12px;
-  border-radius: 6px;
-  background: rgba(20, 22, 26, 0.75);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-
-.area-bar button,
-.area-bar select,
+/* The picker is a full-screen map tool, not part of the paper HUD. */
 .area-picker__button {
   padding: 5px 10px;
   border: 1px solid #555a63;
@@ -306,7 +339,6 @@ body {
   cursor: pointer;
 }
 
-.area-bar button:hover,
 .area-picker__button:hover {
   background: #4a4f59;
 }
@@ -314,6 +346,8 @@ body {
 .area-picker {
   position: absolute;
   inset: 0;
+  /* Above the menu that opened it. */
+  z-index: 40;
   display: grid;
   grid-template-columns: 1fr 340px;
   background: #1a1d21;
@@ -431,9 +465,13 @@ body {
   background: #ffe27a;
 }
 
+/* ---- Overlays and ?debug panels, which keep the dark treatment ---- */
+
 .promotion-backdrop {
   position: absolute;
   inset: 0;
+  /* Above the menu, below the area picker. */
+  z-index: 30;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -467,64 +505,330 @@ body {
   outline-offset: 1px;
 }
 
-/* ---- Phase 11: the game shell ---- */
-
-/* Bottom-left: the three things a game in progress needs. */
-.controls {
+.heightmap-panel {
   position: absolute;
-  bottom: 10px;
-  left: 12px;
+  top: 52px;
+  /* Clears the left column, which ends at 242px. */
+  left: 254px;
   display: flex;
+  flex-direction: column;
   gap: 6px;
-  padding: 6px;
+  padding: 8px;
   border-radius: 6px;
   background: rgba(20, 22, 26, 0.75);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  max-width: 260px;
 }
 
-.controls__button {
-  padding: 5px 10px;
-  border: 1px solid #555a63;
+.heightmap-panel__canvas {
+  width: 160px;
+  height: 160px;
+  image-rendering: pixelated;
+  border: 1px solid #3a3e46;
+  background: #000;
+}
+
+.heightmap-panel__caption {
+  color: #c9cdd4;
+  line-height: 1.35;
+}
+
+.board-debug {
+  position: absolute;
+  /* Stacked above the frame-rate meter, which is above the view controls. */
+  bottom: 78px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
   border-radius: 4px;
-  background: #3a3e46;
-  color: #e6e6e6;
-  font: inherit;
-  font-size: 13px;
+  background: rgba(20, 22, 26, 0.6);
+  font-size: 12px;
+  color: #c9cdd4;
+  user-select: none;
+}
+
+.board-debug label {
   cursor: pointer;
 }
 
-.controls__button:hover:not(:disabled) {
-  background: #4a4f59;
+.features-panel {
+  position: absolute;
+  /* Left of the board with the other ?debug panels; the briefing owns the right. */
+  top: 240px;
+  left: 254px;
+  width: 300px;
+  max-height: calc(100vh - 220px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(20, 22, 26, 0.8);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
+.features-panel__caption {
+  color: #e6e6e6;
+}
+
+.features-panel__counts {
+  color: #a9adb5;
+  line-height: 1.4;
+}
+
+.features-panel__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  border-top: 1px solid #2f333a;
+}
+
+.features-panel__item {
+  display: flex;
+  gap: 6px;
+  padding: 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.features-panel__kind {
+  flex: 0 0 auto;
+  color: #8fb8ff;
+}
+
+.features-panel__old {
+  color: #ffd447;
+}
+
+.fps-meter {
+  position: absolute;
+  /* Above the view controls, which own the bottom-right corner. */
+  bottom: 44px;
+  right: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(20, 22, 26, 0.6);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #9fd89f;
+}
+
+/* ---- Phase 10: piece identity, one line on the paper, expanding on click ---- */
+
+.identity {
+  display: block;
+}
+
+.identity__card {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--paper-ink);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.identity__card--full {
+  white-space: normal;
+}
+
+.identity__line {
+  font-weight: 700;
+  color: var(--paper-ink-strong);
+}
+
+.identity__reason {
+  margin-top: 3px;
+  color: var(--paper-ink);
+}
+
+.identity__cell {
+  margin-top: 3px;
+  color: var(--paper-ink-soft);
+}
+
+.identity__ground {
+  font-size: 11px;
+  color: var(--paper-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Phase 11: the buttons a game in progress needs ---- */
+
 .controls__button:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: default;
 }
 
-.controls__button--danger {
-  border-color: #d4674a;
-  background: #6d3225;
-  color: #ffd6cb;
+.controls__button--danger,
+.controls__button--danger:hover:not(:disabled) {
+  border-color: #9c3b23;
+  background: rgba(156, 59, 35, 0.18);
+  color: #8c2f18;
+  font-weight: 700;
+}
+
+/*
+  Right column: the gazetteer entry, with the selected square under it. Reading
+  about the place and following the moves are different activities, so they sit
+  on opposite sides rather than competing for one column.
+*/
+.briefing {
+  position: absolute;
+  /* The identity card used to own the top-right; it is on this sheet now. */
+  top: 12px;
+  right: 12px;
+  width: 230px;
+  padding: 8px 11px 11px;
+  font-size: 12.5px;
+}
+
+/* Open, it runs to just above the view controls and scrolls inside itself. */
+.briefing--open {
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ruled off from the entry above only when there is something to rule off. */
+.briefing__selection:has(.identity:not([hidden])) {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(120, 95, 55, 0.35);
+}
+
+.briefing__toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: #4a3315;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  /* A gazetteer heading, not a UI label. */
+  letter-spacing: 0.02em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.briefing__caret {
+  flex: 0 0 auto;
+  font-size: 10px;
+}
+
+.briefing__heading {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.briefing__coordinates:not(:empty) {
+  padding-top: 3px;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper-ink-faint);
+}
+
+.briefing__body {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 6px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(120, 95, 55, 0.35);
+  /* The entry scrolls; the selection under it stays put at the foot. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  line-height: 1.5;
+  color: var(--paper-ink);
+}
+
+.briefing__label {
+  display: block;
+  font-size: 9.5px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: #8a6f45;
+}
+
+.briefing__remark {
+  padding-top: 6px;
+  border-top: 1px solid rgba(120, 95, 55, 0.35);
+  font-style: italic;
+  color: #6b5433;
 }
 
 /* Left column: captured material over the move list. */
 .record {
-  position: absolute;
-  top: 52px;
-  left: 12px;
-  bottom: 56px;
-  width: 210px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 6px 10px 8px;
+  font-size: 12.5px;
+}
+
+/* Open, it takes whatever height the column has left over. */
+.record--open {
+  flex: 1 1 auto;
+}
+
+.record__toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--paper-ink-strong);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.record__caret {
+  flex: 0 0 auto;
+  font-size: 10px;
+}
+
+.record__body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: rgba(20, 22, 26, 0.72);
-  font-size: 12px;
+  min-height: 0;
+  margin-top: 6px;
+  padding-top: 7px;
+  border-top: 1px solid var(--paper-rule);
+  overflow: hidden;
 }
 
 .record__empty {
-  color: #8b9099;
+  color: var(--paper-ink-faint);
+  font-style: italic;
 }
 
 .captured {
@@ -533,7 +837,7 @@ body {
   gap: 2px;
   min-height: 40px;
   padding-bottom: 6px;
-  border-bottom: 1px solid #2f333a;
+  border-bottom: 1px solid var(--paper-rule);
 }
 
 .captured__row {
@@ -551,7 +855,8 @@ body {
 }
 
 .captured__lead {
-  color: #9fd89f;
+  color: #4a6b3f;
+  font-weight: 700;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
@@ -572,11 +877,11 @@ body {
 }
 
 .movelist__row:nth-child(odd) {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(120, 95, 55, 0.08);
 }
 
 .movelist__no {
-  color: #8b9099;
+  color: var(--paper-ink-faint);
 }
 
 .movelist__ply {
@@ -587,42 +892,9 @@ body {
 }
 
 /* Bottom-right: what you are looking at, rather than what is happening. */
-.view-controls {
-  position: absolute;
-  bottom: 10px;
-  right: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 8px;
-  border-radius: 6px;
-  background: rgba(20, 22, 26, 0.72);
-  font-size: 12px;
-}
-
-.view-controls__hint {
-  color: #7d8189;
-  cursor: help;
-  user-select: none;
-}
-
-.view-controls__button {
-  padding: 4px 9px;
-  border: 1px solid #555a63;
-  border-radius: 4px;
-  background: #3a3e46;
-  color: #e6e6e6;
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.view-controls__button:hover {
-  background: #4a4f59;
-}
-
 .view-controls__button--off {
-  color: #8b9099;
+  color: var(--paper-ink-faint);
+  font-style: italic;
 }
 
 /*
@@ -753,6 +1025,8 @@ body {
 .gameover-backdrop {
   position: absolute;
   inset: 0;
+  /* Over the HUD and the loading veil; under the promotion prompt and picker. */
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1003,24 +1277,14 @@ body {
   rank — the pieces the advice is usually about.
 */
 .hint {
-  position: absolute;
-  left: 12px;
-  bottom: 56px;
-  width: 210px;
+  flex: 0 0 auto;
   max-height: 210px;
   overflow-y: auto;
   padding: 10px 12px;
+  /* Violet still, so the card and the pulsing squares read as one thing — but
+     on paper now, like everything else in the HUD. */
   border: 2px solid #b45cff;
-  border-radius: 10px;
-  /* Matches the pulsing overlay on the board, so card and squares read as one thing. */
-  background: rgba(26, 20, 36, 0.94);
-  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5);
   animation: hint-in 220ms ease-out;
-}
-
-/* The record gives up the bottom of the column while a hint is showing. */
-#ui:has(.hint:not([hidden])) .record {
-  bottom: 278px;
 }
 
 @keyframes hint-in {
@@ -1044,8 +1308,7 @@ body {
   flex: 0 0 auto;
   font-size: 26px;
   line-height: 1;
-  color: #ffffff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  color: var(--paper-ink-strong);
 }
 
 .hint__body {
@@ -1059,28 +1322,28 @@ body {
   font-size: 15px;
   font-weight: 700;
   line-height: 1.2;
-  color: #dcb3ff;
+  color: #7b28b8;
 }
 
 .hint__reason {
-  font-size: 12px;
-  line-height: 1.4;
-  color: #e6e6e6;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--paper-ink);
 }
 
 .hint__instruction {
   margin-top: 2px;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.4;
-  color: #ffd447;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--paper-ink-strong);
 }
 
 .hint__notation {
   margin-left: 5px;
   padding: 1px 5px;
-  border-radius: 4px;
-  background: rgba(255, 212, 71, 0.16);
+  border-radius: 3px;
+  background: rgba(120, 95, 55, 0.16);
   font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1090,7 +1353,7 @@ body {
 .hint__place {
   font-size: 11px;
   line-height: 1.35;
-  color: #9aa0a8;
+  color: var(--paper-ink-faint);
 }
 
 .hint__dismiss {
@@ -1103,7 +1366,7 @@ body {
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: #8b9099;
+  color: var(--paper-ink-faint);
   font: inherit;
   font-size: 16px;
   line-height: 1;
@@ -1111,6 +1374,6 @@ body {
 }
 
 .hint__dismiss:hover {
-  background: #2f333a;
-  color: #e6e6e6;
+  background: rgba(120, 95, 55, 0.18);
+  color: var(--paper-ink);
 }

@@ -22,6 +22,7 @@ function place(name: string, subtype: string, kind: FeatureKind = 'place'): MapF
     subtype,
     names: { name },
     elevationMeters: null,
+    wikidata: null,
     geometry: { type: 'point', point: { x: 0, z: 0 } },
   };
 }
@@ -52,6 +53,7 @@ describe('primaryPlaceName', () => {
         subtype: 'river',
         names: { name: 'River Rye' },
         elevationMeters: null,
+        wikidata: null,
         geometry: { type: 'line', points: [{ x: 0, z: 0 }] },
       },
       {
@@ -60,6 +62,7 @@ describe('primaryPlaceName', () => {
         subtype: null,
         names: { name: 'Abbot Hagg Wood' },
         elevationMeters: null,
+        wikidata: null,
         geometry: { type: 'polygon', ring: [{ x: 0, z: 0 }] },
       },
     ];

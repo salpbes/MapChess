@@ -44,6 +44,12 @@ export interface MapFeature {
   readonly geometry: FeatureGeometry;
   readonly names: FeatureNames;
   readonly elevationMeters: number | null;
+  /**
+   * The `wikidata` tag, e.g. "Q1247496". OSM names the entity itself, so a
+   * lookup never has to guess which Rievaulx is meant. Null on the vast
+   * majority of features.
+   */
+  readonly wikidata: string | null;
 }
 
 export const FEATURE_KINDS: readonly FeatureKind[] = [

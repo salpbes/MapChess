@@ -478,3 +478,41 @@ The name is now back on the feature point, expanding in place from the glyph, an
 **Grown into a loading screen:** the pill became a full-screen veil that blurs the half-built board, with a card in the middle carrying the six piece types hopping one after another, the progress line and the tip. The veil takes `pointer-events: none` and only Retry takes a click, so the menu above it and the HUD below it both stay usable while tiles are in flight — a loading state that disables the interface is worse than one you can see past. It sits at `z-index: 15`, under the menu: at startup the menu is the thing to interact with, and on an area change mid-game the menu is closed and the card has the screen to itself. The hop respects `prefers-reduced-motion`.
 
 **Why the instruction lines went:** they were read once and then were furniture. The camera hint still sits in the bottom-right cluster where it is out of the way, and castling now announces itself by highlighting the rook (D-038), which is what the second line was compensating for.
+
+## D-049 — A gazetteer entry for the board, counted from the map and nothing else
+
+**Date:** 2026-09-04 · **Phase:** 11 (follow-up)
+
+**Decision:** A collapsible panel at the top of the left column headed "The field of Rievaulx", with up to five labelled lines — Ground, Water, Cover, Settled, Remembered — and one closing remark chosen from the numbers. Open or shut is remembered in `localStorage`, and the move record moves down while it is open. `buildBriefing()` is a pure function over the features, the height field and the land cover already fetched for the board.
+
+**The rule this file exists under: there is no history in it, because there is no source for one.** OpenStreetMap records names, `old_name`, `historic=*` and elevation. It does not record dates or events. So every sentence is counted or quoted from that data — "73 m to 200 m, the top of it Ashberry Hill", "Doric Temple, Rievaulx Abbey and Rievaulx Methodist Church", "still called Abhainn Chomhann by somebody who edited the map". The voice is a dry gazetteer's; the facts are the map's. Writing "founded by Cistercians in 1132" for a real abbey would be a confident lie about a real place, and the fact that it happens to be true of Rievaulx is exactly why it is dangerous — the same sentence generated for the next abbey would not be.
+
+**Why the remark keys on how many things are named, not on how long the entry is:** Ground, Cover and Settled always produce a sentence, so length says nothing about how much is actually known. An area with no names at all now gets "OpenStreetMap has almost nothing to say about this square of the world. The board named it anyway," which is both true and the funniest thing the data supports.
+
+**Rejected:** fetching Wikipedia or Wikidata summaries for named features (real history, real source — and a network call per board, a licence question, and a long tail of articles about the wrong "Rievaulx"); a fixed template every area fills in (padding out an empty moor to five lines means inventing four of them).
+
+## D-050 — Real history, from Wikidata, by the Q-id OSM already carries
+
+**Date:** 2026-09-04 · **Phase:** 11 (follow-up)
+
+**Decision:** The briefing gains up to four "On record" lines looked up from Wikidata: "Rievaulx Abbey — abbey, founded 1132, scheduled monument". The Q-id comes from the feature's own `wikidata` tag, which the normaliser now keeps. `WikidataProvider` batches `wbgetentities` fifty ids at a time, makes a second batched call to turn the referenced ids for "instance of" (P31) and heritage status (P1435) into words, rate-limits itself to one request per 400 ms, caches each fact by Q-id in IndexedDB, and resolves to an empty map on any failure. The briefing renders from OSM alone the moment the board is ready and re-renders if Wikidata answers; a generation counter drops an answer for a board the player has left.
+
+**Why Wikidata and not Wikipedia:** both are CORS-enabled and both would work. Wikidata is CC0, so no attribution line is owed and none of it is prose — P571 is a timestamp, P1435 is an identifier. There is nothing in a date that can be subtly misworded, nothing to quote out of context, and nothing generated. The Wikipedia extract is richer and CC BY-SA, which means a credit in the UI and a share-alike question; it remains available if that trade is ever wanted.
+
+**Why this is not the thing D-049 refused to do:** D-049 forbids _inventing_ history, and that stands. This is a lookup keyed by an identifier the map itself supplies, so there is no guessing which Rievaulx is meant and no sentence written by MapChess. The abbey is dated 1132 because Wikidata says `+1132-03-05T00:00:00Z`, not because it sounded right.
+
+**Why a fact needs a date or a designation:** the first run printed "Aonach Dubh — mountain" and "River Coe — river". True, sourced, and worth nothing to a player looking at a mountain. A kind on its own is flavour beside a fact, not a fact, so `isWorthPrinting` requires P571 or P1435. Glen Coe consequently gets no history lines at all, which is the honest answer for a glen whose OSM entries carry two Q-ids between them.
+
+**Rejected:** blocking the board on the lookup (it is the only genuinely optional data in the project — a Wikimedia outage must be invisible); shipping canned Wikidata fixtures for offline development (the three fixture areas would then disagree with the live database as it is edited, and a stale date is worse than none).
+
+## D-051 — The HUD is paper
+
+**Date:** 2026-09-04 · **Phase:** 11 (follow-up)
+
+**Decision:** The gazetteer's aged-paper treatment now covers the whole in-game HUD: the status bar, the area bar, the move record, the game controls, the view controls and the hint card all sit on the same sheet stock, in the same serif, in the same ink. The palette lives in seven custom properties on `:root` (`--paper`, `--paper-edge`, `--paper-rule`, three inks and `--paper-serif`), and the ground itself — four gradients and an inset ageing shadow — is written once in a selector group rather than per panel. Buttons across the paper panels share one treatment.
+
+**Why:** the briefing arrived as a sheet of parchment in a HUD of dark translucent slabs and read as a visitor rather than as part of the game. One of the two had to give, and paper is the one that means something here: this is a board carved out of a real map, and the panels around it are the notes you would keep beside it.
+
+**What stays dark, and why:** the MapLibre area picker, the loading veil, the main menu, the game-over card and the promotion prompt. The picker is a map tool with its own conventions; the veil exists to dim the board and would defeat itself in cream; and the three modals are moments that interrupt play rather than parts of it. Converting them is a smaller decision than it looks and can follow.
+
+**Kept against the grain:** the hint card's violet border and headline. D-043 pairs that colour with the pulsing squares on the board, and D-045 records what happened the last time the hint's colour collided with something — the tie between the card and the ground it points at outranks the palette.

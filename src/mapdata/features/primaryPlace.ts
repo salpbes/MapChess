@@ -41,7 +41,15 @@ const FALLBACK_RANK: Readonly<Record<MapFeature['kind'], number>> = {
 };
 
 export function primaryPlaceName(features: readonly MapFeature[]): string | null {
-  let best: { name: string; rank: number } | null = null;
+  return placesByImportance(features)[0] ?? null;
+}
+
+/**
+ * Every named place, largest settlement first, ties broken alphabetically so
+ * the same board always reads the same way. Names appear once each.
+ */
+export function placesByImportance(features: readonly MapFeature[]): readonly string[] {
+  const ranked = new Map<string, number>();
 
   for (const feature of features) {
     const name = feature.names.name ?? feature.names.oldName;
@@ -53,11 +61,10 @@ export function primaryPlaceName(features: readonly MapFeature[]): string | null
         : FALLBACK_RANK[feature.kind];
     if (rank === 0) continue;
 
-    // Same rank, same answer every time: the earlier name alphabetically wins.
-    if (best === null || rank > best.rank || (rank === best.rank && name < best.name)) {
-      best = { name, rank };
-    }
+    ranked.set(name, Math.max(ranked.get(name) ?? 0, rank));
   }
 
-  return best?.name ?? null;
+  return [...ranked.entries()]
+    .sort(([aName, aRank], [bName, bRank]) => bRank - aRank || aName.localeCompare(bName))
+    .map(([name]) => name);
 }

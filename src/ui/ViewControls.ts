@@ -1,9 +1,8 @@
-// WHAT: Switches that change what you are looking at rather than what is
-//       happening: how much the places on the board say, and a reminder of how
-//       to move the camera.
-// HOW:  A small cluster in the bottom-right corner. The button cycles names →
-//       markers → off, remembered in localStorage like the identity card's, so
-//       a player who turns them down does not have to do it again next time.
+// WHAT: The switch for how much the places on the board say.
+// HOW:  One icon button in the control dock, cycling names → markers → off and
+//       changing icon with the state: a tag, a pin, a struck-through tag. The
+//       choice is remembered in localStorage like the identity card's, so a
+//       player who turns them down does not have to do it again next time.
 // WHY:  The labels are the best part of the board and the worst thing between
 //       the camera and a piece, depending entirely on where you are looking
 //       from. That is a decision only the player can make, and one they change
@@ -13,17 +12,20 @@
 
 import type { LabelMode } from '@world/builders/LabelBuilder';
 
+import { icon } from './icons';
+import type { IconName } from './icons';
+
 const STORAGE_KEY = 'mapchess.labelMode';
 /** Cycled in this order by repeated clicks. */
 const MODES: readonly LabelMode[] = ['names', 'markers', 'off'];
-const MODE_LABEL: Readonly<Record<LabelMode, string>> = {
-  names: 'Names',
-  markers: 'Markers',
-  off: 'Labels off',
+const MODE_ICON: Readonly<Record<LabelMode, IconName>> = {
+  names: 'tag',
+  markers: 'pin',
+  off: 'tagOff',
 };
 const MODE_HINT: Readonly<Record<LabelMode, string>> = {
-  names: 'Showing place names — click for markers only',
-  markers: 'Showing markers only — click to hide them',
+  names: 'Place names are showing — click for markers only',
+  markers: 'Markers only — click to hide them',
   off: 'Nothing on the board — click for place names',
 };
 
@@ -42,11 +44,6 @@ export class ViewControls {
     this.root = document.createElement('div');
     this.root.className = 'view-controls';
 
-    const help = document.createElement('span');
-    help.className = 'view-controls__hint';
-    help.textContent = 'drag · right-drag · scroll';
-    help.title = 'Drag to orbit · right-drag or two fingers to slide the board · scroll to zoom';
-
     this.labels = document.createElement('button');
     this.labels.type = 'button';
     this.labels.className = 'view-controls__button';
@@ -55,7 +52,7 @@ export class ViewControls {
       if (next !== undefined) this.set(next, deps);
     });
 
-    this.root.append(help, this.labels);
+    this.root.appendChild(this.labels);
     container.appendChild(this.root);
 
     this.render();
@@ -83,8 +80,9 @@ export class ViewControls {
   }
 
   private render(): void {
-    this.labels.textContent = MODE_LABEL[this.mode];
-    this.labels.title = MODE_HINT[this.mode];
+    this.labels.replaceChildren(icon(MODE_ICON[this.mode]));
+    this.labels.dataset.tip = MODE_HINT[this.mode];
+    this.labels.setAttribute('aria-label', MODE_HINT[this.mode]);
     this.labels.classList.toggle('view-controls__button--off', this.mode === 'off');
   }
 }

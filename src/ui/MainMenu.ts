@@ -12,6 +12,8 @@ import { DIFFICULTIES } from '@ai/IChessAI';
 import type { Difficulty } from '@ai/IChessAI';
 import type { Color } from '@domain/chess/types';
 
+import { icon } from './icons';
+
 export interface NewGameRequest {
   readonly humanColor: Color | 'both' | 'none';
   readonly difficulty: Difficulty;
@@ -214,7 +216,7 @@ function place(value: HTMLElement, onChoose: () => void): HTMLDivElement {
   open.className = 'menu__map';
   open.title = 'Choose a different place on the map';
   open.setAttribute('aria-label', 'Choose a different place on the map');
-  open.appendChild(mapIcon());
+  open.appendChild(icon('map', 24));
   open.addEventListener('click', onChoose);
 
   const text = document.createElement('div');
@@ -226,28 +228,6 @@ function place(value: HTMLElement, onChoose: () => void): HTMLDivElement {
 
   row.append(open, text);
   return row;
-}
-
-const SVG_NS = 'http://www.w3.org/2000/svg';
-
-/** A folded paper map, drawn rather than lettered so it reads at a glance. */
-function mapIcon(): SVGSVGElement {
-  const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('width', '24');
-  svg.setAttribute('height', '24');
-  svg.setAttribute('fill', 'none');
-  svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '1.6');
-  svg.setAttribute('stroke-linecap', 'round');
-  svg.setAttribute('stroke-linejoin', 'round');
-  svg.setAttribute('aria-hidden', 'true');
-  for (const d of ['M9 4 3 6.5v13.5L9 17.5l6 2.5 6-2.5V4l-6 2.5L9 4Z', 'M9 4v13.5', 'M15 6.5V20']) {
-    const path = document.createElementNS(SVG_NS, 'path');
-    path.setAttribute('d', d);
-    svg.appendChild(path);
-  }
-  return svg;
 }
 
 function divider(): HTMLHRElement {

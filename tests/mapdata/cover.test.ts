@@ -25,6 +25,7 @@ const COASTLINE: MapFeature = {
   subtype: null,
   names: {},
   elevationMeters: null,
+  wikidata: null,
   geometry: {
     type: 'line',
     points: [
