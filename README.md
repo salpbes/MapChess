@@ -12,14 +12,21 @@ Every piece is somebody. Click White's rook at Rievaulx and a card names it — 
 
 ## Screenshots
 
-<!--
-  TODO: capture and add. Four worth having, in this order:
-    1. A board mid-game on Rievaulx, briefing open, a piece selected.
-    2. Glen Coe from a low angle — the relief is the whole point.
-    3. Lindisfarne, showing the submerged sea squares against the tidal sand.
-    4. The hint card with its violet squares lit on the board.
-  Put them in docs/screenshots/ and link them here.
--->
+**Rievaulx, North Yorkshire** — the River Rye valley below the abbey, six moves into a Giuoco Piano. The gazetteer on the right is counted from the map data; the dates come from Wikidata by the Q-id OpenStreetMap already carries. The selected pawn stands on Ashberry Farm.
+
+![A game in progress on the fields of Rievaulx](docs/screenshots/01-rievaulx-midgame.png)
+
+**Glen Coe, Highlands** — the same 64 squares on ground that rises 300 m across the board. Every cell is terraced to its own mean height, so the glen is playable and still recognisably a glen.
+
+![Glen Coe, the board terraced up the hillside](docs/screenshots/02-glencoe-relief.png)
+
+**Holy Island of Lindisfarne** — squares whose ground sits at or below sea level are drawn as water rather than beach, so a piece there stands in the shallows and the square is still one of the 64.
+
+![Lindisfarne, with sea squares around the island](docs/screenshots/03-lindisfarne-sea.png)
+
+**A hint, for anyone still learning.** The engine is asked at full strength whatever level the opponent is set to, and the answer is spelled out in words, with the notation beside it and the name of the map cell it lands on.
+
+![The hint card, with the suggested move lit on the board](docs/screenshots/04-hint.png)
 
 ## Run
 

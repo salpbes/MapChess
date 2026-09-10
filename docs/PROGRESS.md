@@ -767,6 +767,18 @@ pointing at your mistakes were built, played, and taken back out again.
   `IBlunderWarner`, the `danger` highlight role and the `warnsAt`/`helpsAt`
   difficulty gates.
 
+**A bug the screenshots found**
+
+- `src/game/SaveManager.ts` — a save is no longer written for a game with no
+  moves in it. Starting the app starts a fresh board before the menu opens, and
+  that start published an empty history straight over the save on disk. The
+  menu went on offering the game it had read a moment earlier — "12 moves ·
+  saved just now" — while the store held nothing, so **Resume game restored an
+  empty board**. It had never worked across a restart, which is precisely what
+  Phase 11's "done when" asked for. No test caught it because the test for
+  resuming never started the second game the way the composition root does;
+  both halves are pinned by `tests/game/save.test.ts` now.
+
 ### Why it was done this way
 
 **The attribution is in the app, not only the README** (D-053). ODbL requires
@@ -811,9 +823,8 @@ constantly. It is now a promise chain.
 
 ### What's left
 
-Nothing in the plan. Outside it, three things are worth naming:
+Nothing in the plan. Outside it, two things are worth naming:
 
-- **No screenshots in the README yet** — the section is a placeholder.
 - **No deployment.** `base: './'` means `dist/` will run anywhere; it needs a
   host chosen.
 - **No phone or tablet layout.** There is not one width media query in the

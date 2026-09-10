@@ -193,6 +193,39 @@ describe('SaveManager', () => {
     expect(resumed?.area).toEqual(RIEVAULX);
   });
 
+  it('survives the fresh board the app starts before the menu opens', () => {
+    // The bug this pins down: bootstrap reads the save, then calls start() on a
+    // cold board, and that start published an empty history straight over the
+    // save. The menu went on offering the twelve moves it had already read
+    // while the store held nothing, so Resume restored an empty game.
+    const store = new MemoryJsonStore<SavedGame>();
+    const first = newGame(store);
+    for (const move of SCOTCH) first.engine.move(move);
+    first.loop.start({ white: 'human', black: 'human' });
+    const fen = first.engine.fen;
+    expect(store.read()?.moves).toHaveLength(SCOTCH.length);
+
+    // A fresh process, doing what the composition root does in this order.
+    const second = newGame(store);
+    const offered = second.saves.read();
+    second.loop.start({ white: 'human', black: 'human' });
+
+    expect(offered?.moves).toHaveLength(SCOTCH.length);
+    expect(store.read()?.moves).toHaveLength(SCOTCH.length);
+
+    // …and only now does the player press Resume.
+    expect(second.saves.resume(second.loop)).not.toBeNull();
+    expect(second.engine.fen).toBe(fen);
+  });
+
+  it('does not create a save for a game nobody has moved in', () => {
+    const store = new MemoryJsonStore<SavedGame>();
+    const { loop, saves } = newGame(store);
+    loop.start({ white: 'human', black: 'human' });
+    expect(store.read()).toBeNull();
+    expect(saves.hasSave()).toBe(false);
+  });
+
   it('has nothing to resume when the store is empty', () => {
     const { loop, saves } = newGame(new MemoryJsonStore<SavedGame>());
     expect(saves.hasSave()).toBe(false);

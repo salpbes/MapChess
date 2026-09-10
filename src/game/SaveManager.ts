@@ -81,6 +81,14 @@ export class SaveManager {
   }
 
   private write(): void {
+    // A game with nothing in it is not worth saving, and writing one destroys
+    // the game the player is about to be offered. Starting the app starts a
+    // fresh board before the menu opens, and that start publishes an empty
+    // history — which used to overwrite the save 150 ms after the page loaded,
+    // so "Resume game" restored an empty board while the menu, holding the copy
+    // it had read a moment earlier, still promised twelve moves.
+    if (this.moves.length === 0 && this.resignedBy === null) return;
+
     const { area, players, difficulty } = this.deps.context();
     const now = this.deps.now ?? (() => new Date());
     this.deps.store.write({
