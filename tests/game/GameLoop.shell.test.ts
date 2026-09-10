@@ -633,6 +633,41 @@ describe('GameLoop watch mode', () => {
     loop.newGame({ white: 'ai', black: 'ai' });
     expect(loop.isPaused).toBe(false);
   });
+
+  it('plays nothing while the menu is open', async () => {
+    // What a watched game reloaded from a save used to do: start playing
+    // itself under the front door, before the player had chosen anything.
+    const { engine, loop } = watching();
+    loop.setAtMenu(true);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(engine.history).toHaveLength(0);
+
+    loop.setAtMenu(false);
+    await vi.waitFor(() => {
+      expect(engine.history.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('does not let the menu masquerade as the pause button', () => {
+    const { bus, loop } = watching();
+    const seen = vi.fn();
+    bus.on('paused-changed', seen);
+
+    loop.setAtMenu(true);
+    expect(loop.isPaused).toBe(false);
+    expect(seen).not.toHaveBeenCalled();
+  });
+
+  it('leaves a pause the player set alone when the menu closes', async () => {
+    const { engine, loop } = watching();
+    loop.setPaused(true);
+    loop.setAtMenu(true);
+    loop.setAtMenu(false);
+
+    expect(loop.isPaused).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(engine.history).toHaveLength(0);
+  });
 });
 
 describe('GameLoop last-move highlight', () => {

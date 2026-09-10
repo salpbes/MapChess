@@ -206,6 +206,10 @@ export function bootstrap(
     // The name if the map knows one; the coordinates are the fallback, not the point.
     areaLabel: () => placeName ?? areaBar.label,
     savedGame: () => summarise(resumable),
+    // Nothing plays behind the front door — see GameLoop.setAtMenu.
+    onVisibility: (open) => {
+      game.setAtMenu(open);
+    },
   });
   const controls = new GameControls({ menu: dock.placeSlot, actions: dock.actionSlot }, bus, {
     onMenu: () => {
@@ -432,9 +436,12 @@ export function bootstrap(
   });
 
   loadArea(areaBar.current);
+  // The menu goes up first so the hold is already on when the game starts:
+  // otherwise a watched game announces "White is thinking…" on its way to
+  // being held, and the status bar keeps saying it behind the front door.
+  menu.open();
   game.start(toPlayers(seating.humanColor));
   stage.start();
-  menu.open();
 
   return {
     layout: () => boardScene.layout ?? initialLayout,

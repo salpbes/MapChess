@@ -201,9 +201,14 @@ body {
   font-size: 12.5px;
 }
 
-/* Choose the ground, play the game, change the view — in that order. */
+/*
+  Choose the ground, play the game, change the view — in that order. Both rows
+  wrap: watch mode adds a pause button, and nine icons do not fit across the
+  column, so the row has to become two rather than run off the paper.
+*/
 .dock__row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   padding: 6px 0;
@@ -211,10 +216,6 @@ body {
 
 .dock__row + .dock__row {
   border-top: 1px solid var(--paper-rule);
-}
-
-.dock__row--place {
-  flex-wrap: wrap;
 }
 
 /*

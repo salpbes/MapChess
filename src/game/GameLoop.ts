@@ -59,8 +59,15 @@ export class GameLoop {
   private hint: Move | null = null;
   /** Whether the engine is asked to rate the position after every change. */
   private assessing = false;
-  /** Watch mode, held. Nothing else can pause: a human is never kept waiting. */
+  /** Watch mode, held by the player. Nothing else can pause: a human is never kept waiting. */
   private paused = false;
+  /**
+   * Held because the front door is open. Kept apart from `paused` so the pause
+   * button keeps telling the truth about what the *player* asked for: opening
+   * the menu must not make it read "paused", and closing it must not undo a
+   * pause the player set themselves.
+   */
+  private atMenu = false;
   /** Whether the coach card is kept up to date. */
   private coaching = false;
   /** An evaluation in flight; the engine takes one search at a time. */
@@ -145,6 +152,7 @@ export class GameLoop {
     return this.players.white === 'ai' && this.players.black === 'ai';
   }
 
+  /** What the player asked for. The menu's hold is deliberately not part of it. */
   public get isPaused(): boolean {
     return this.paused;
   }
@@ -158,7 +166,18 @@ export class GameLoop {
     if (paused === this.paused) return;
     this.paused = paused;
     this.deps.bus.emit('paused-changed', { paused });
-    if (!paused) void this.maybePlayAi();
+    if (!this.isHeld()) void this.maybePlayAi();
+  }
+
+  /**
+   * The menu is a modal front door, and nothing plays behind it. Without this
+   * a watched game reloaded from a save started playing itself under the menu:
+   * the board was already running before the player had chosen anything.
+   */
+  public setAtMenu(atMenu: boolean): void {
+    if (atMenu === this.atMenu) return;
+    this.atMenu = atMenu;
+    if (!this.isHeld()) void this.maybePlayAi();
   }
 
   /** Null while the game is playable. */
@@ -452,7 +471,7 @@ export class GameLoop {
   private async maybePlayAi(): Promise<void> {
     const { engine, ai, bus } = this.deps;
     if (ai === undefined || this.isHumanTurn() || this.outcome !== null) return;
-    if (this.busy || this.paused) return;
+    if (this.busy || this.isHeld()) return;
 
     const generation = this.generation;
     const color = engine.turn;
@@ -546,9 +565,12 @@ export class GameLoop {
     return this.outcome === null;
   }
 
-  /** As above: a watcher can press pause while the engine is mid-search. */
+  /**
+   * As above: a watcher can press pause while the engine is mid-search — and
+   * either kind of hold counts, the player's pause or the menu being open.
+   */
   private isHeld(): boolean {
-    return this.paused;
+    return this.paused || this.atMenu;
   }
 
   private publishStatus(): void {

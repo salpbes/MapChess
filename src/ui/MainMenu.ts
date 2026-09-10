@@ -33,6 +33,8 @@ export interface MainMenuDeps {
   readonly areaLabel: () => string;
   /** Null when there is nothing to resume. */
   readonly savedGame: () => SavedGameSummary | null;
+  /** Called whenever the menu appears or goes away, however it happened. */
+  readonly onVisibility?: (open: boolean) => void;
 }
 
 const SIDE_OPTIONS: readonly { value: NewGameRequest['humanColor']; label: string }[] = [
@@ -135,10 +137,12 @@ export class MainMenu {
   public open(): void {
     this.refresh();
     this.backdrop.hidden = false;
+    this.deps.onVisibility?.(true);
   }
 
   public close(): void {
     this.backdrop.hidden = true;
+    this.deps.onVisibility?.(false);
   }
 
   public dispose(): void {
