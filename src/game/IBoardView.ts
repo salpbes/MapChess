@@ -15,6 +15,8 @@ export interface BoardHighlights {
   readonly check?: Square;
   /** The two squares of a suggested move: where it starts and where it lands. */
   readonly hint?: readonly Square[];
+  /** The two squares of the move just played, so a reply can be seen at all. */
+  readonly last?: readonly Square[];
 }
 
 export interface IBoardView {

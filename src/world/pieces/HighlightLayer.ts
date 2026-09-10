@@ -19,7 +19,7 @@ import type { IBoardLayout } from '@domain/board/IBoardLayout';
 import type { Square } from '@domain/board/Square';
 import type { Cell } from '@domain/board/types';
 
-export type HighlightRole = 'selected' | 'move' | 'capture' | 'check' | 'hint';
+export type HighlightRole = 'selected' | 'move' | 'capture' | 'check' | 'hint' | 'last';
 
 export interface HighlightSet {
   readonly selected?: Square;
@@ -27,6 +27,8 @@ export interface HighlightSet {
   readonly captures?: readonly Square[];
   readonly check?: Square;
   readonly hint?: readonly Square[];
+  /** The two squares of the move just played. */
+  readonly last?: readonly Square[];
 }
 
 const STYLE: Readonly<Record<HighlightRole, { color: number; opacity: number }>> = {
@@ -41,6 +43,12 @@ const STYLE: Readonly<Record<HighlightRole, { color: number; opacity: number }>>
     which is exactly where a beginner most needs to see one.
   */
   hint: { color: 0xb45cff, opacity: 0.55 },
+  /*
+    The selection colour, faded. The move just played and the piece in your
+    hand are the same kind of fact — "this is what is happening" — so they are
+    the same colour, and the weaker one is the one already over with.
+  */
+  last: { color: 0xffd447, opacity: 0.2 },
 };
 
 /** The hint fades between these, twice per PULSE_SECONDS. */
@@ -66,6 +74,7 @@ export class HighlightLayer {
       capture: makeMaterial('capture'),
       check: makeMaterial('check'),
       hint: makeMaterial('hint'),
+      last: makeMaterial('last'),
     };
   }
 
@@ -88,7 +97,9 @@ export class HighlightLayer {
     // Restart from the bright end so a new hint announces itself.
     this.pulsing = (set.hint ?? []).length > 0;
     this.pulseTime = PULSE_SECONDS / 4;
-    // Drawn first, so a selection or a legal-move dot paints over the advice.
+    // Faintest first: everything else paints over the move already played.
+    for (const sq of set.last ?? []) this.add(sq, 'last');
+    // Then the advice, so a selection or a legal-move dot paints over it.
     for (const sq of set.hint ?? []) this.add(sq, 'hint');
     if (set.check !== undefined) this.add(set.check, 'check');
     for (const sq of set.moves ?? []) this.add(sq, 'move');

@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { isReadyOk, isUciOk, parseBestMove, parseOptionName } from '@ai/uci';
+import { isReadyOk, isUciOk, parseBestMove, parseInfoScore, parseOptionName } from '@ai/uci';
 
 describe('parseBestMove', () => {
   it('parses a plain move', () => {
@@ -57,5 +57,46 @@ describe('parseOptionName', () => {
     for (const line of ['uciok', 'bestmove e2e4', 'info depth 1', 'option name broken']) {
       expect(parseOptionName(line), line).toBeNull();
     }
+  });
+});
+
+describe('parseInfoScore', () => {
+  it('reads a centipawn score and the depth it came from', () => {
+    const score = parseInfoScore(
+      'info depth 12 seldepth 18 multipv 1 score cp 34 nodes 91234 pv e2e4',
+    );
+    expect(score).toEqual({ kind: 'centipawns', value: 34, depth: 12 });
+  });
+
+  it('reads a negative score, which means the side to move is worse', () => {
+    expect(parseInfoScore('info depth 8 score cp -256 pv d7d5')?.value).toBe(-256);
+  });
+
+  it('reads a forced mate as moves, not as pawns', () => {
+    const score = parseInfoScore('info depth 20 score mate 3 pv f3f7');
+    expect(score).toEqual({ kind: 'mate', value: 3, depth: 20 });
+    expect(parseInfoScore('info depth 20 score mate -2 pv h4h2')?.value).toBe(-2);
+  });
+
+  it('ignores the alternatives in a multi-PV search', () => {
+    // Only multipv 1 describes the position; the rest are other candidate moves.
+    expect(parseInfoScore('info depth 10 multipv 2 score cp -80 pv a2a3')).toBeNull();
+    expect(parseInfoScore('info depth 10 multipv 1 score cp 20 pv e2e4')).not.toBeNull();
+  });
+
+  it('ignores lines that carry no score at all', () => {
+    for (const line of [
+      'info depth 1 currmove e2e4 currmovenumber 1',
+      'info string NNUE evaluation using nn-x.nnue',
+      'bestmove e2e4',
+      'readyok',
+      '',
+    ]) {
+      expect(parseInfoScore(line), line).toBeNull();
+    }
+  });
+
+  it('copes with a score line that never mentions depth', () => {
+    expect(parseInfoScore('info score cp 5')?.depth).toBe(0);
   });
 });

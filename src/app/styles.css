@@ -76,6 +76,8 @@ body {
 */
 .status-bar,
 .dock,
+.coach,
+.assessment,
 .record,
 .hint,
 .briefing {
@@ -94,22 +96,48 @@ body {
     0 5px 16px rgba(0, 0, 0, 0.42);
 }
 
-/* Anything that scrolls inside paper needs a thumb that is not a hole in it. */
-.record,
-.movelist,
-.hint,
-.briefing__coordinates:not(:empty) {
-  padding-top: 3px;
-  font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
-  color: var(--paper-ink-faint);
+/*
+  Scrollbars. The browser's default is a bright grey slab on a white track,
+  which on a dark overlay reads as a rendering fault. Firefox takes the
+  two-property form; WebKit needs the pseudo-elements, and needs the
+  `::-webkit-scrollbar` rule itself before it will honour the thumb. The thumb
+  is inset behind a transparent border so it reads as a floating pill rather
+  than a filled channel.
+*/
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #4a4f59 transparent;
 }
 
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: #3f444d;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #5a606b;
+  background-clip: padding-box;
+}
+
+/* The three that scroll inside paper: a dark thumb there is a hole in the page. */
+.movelist,
+.hint,
 .briefing__body {
   scrollbar-color: #b39a6c transparent;
 }
 
-.record::-webkit-scrollbar-thumb,
 .movelist::-webkit-scrollbar-thumb,
 .hint::-webkit-scrollbar-thumb,
 .briefing__body::-webkit-scrollbar-thumb {
@@ -117,7 +145,6 @@ body {
   background-clip: padding-box;
 }
 
-.record::-webkit-scrollbar-thumb:hover,
 .movelist::-webkit-scrollbar-thumb:hover,
 .hint::-webkit-scrollbar-thumb:hover,
 .briefing__body::-webkit-scrollbar-thumb:hover {
@@ -1376,4 +1403,127 @@ body {
 .hint__dismiss:hover {
   background: rgba(120, 95, 55, 0.18);
   color: var(--paper-ink);
+}
+
+/* ---- Phase 12: the credit line, which is not optional ---- */
+
+.attribution {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  max-width: calc(100vw - 280px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+  font-family: var(--paper-serif);
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: #9aa0a8;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
+}
+
+.attribution a {
+  color: #b9c2cc;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(185, 194, 204, 0.35);
+}
+
+.attribution a:hover,
+.attribution a:focus-visible {
+  color: #ffffff;
+  border-bottom-color: #ffffff;
+}
+
+.attribution__dot {
+  opacity: 0.6;
+}
+
+/* ---- The coach: where the game is, and the one thing to do about it ---- */
+
+.coach {
+  flex: 0 0 auto;
+  padding: 7px 10px 8px;
+  font-size: 12.5px;
+}
+
+.coach__heading {
+  font-size: 9.5px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--paper-ink-faint);
+}
+
+.coach__title {
+  margin-top: 1px;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--paper-ink-strong);
+}
+
+.coach__advice {
+  margin-top: 3px;
+  line-height: 1.38;
+  color: var(--paper-ink);
+}
+
+.coach__facts {
+  margin-top: 5px;
+  padding-top: 4px;
+  border-top: 1px solid var(--paper-rule);
+  font-size: 10.5px;
+  color: var(--paper-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Phase 12: how the game stands, when asked for ---- */
+
+.assessment {
+  flex: 0 0 auto;
+  padding: 7px 10px 8px;
+  font-size: 12.5px;
+}
+
+.assessment__heading {
+  font-size: 9.5px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--paper-ink-faint);
+}
+
+/*
+  Black's share is the track, White's the fill — so the bar reads left to
+  right the way the board is described everywhere else in the game.
+*/
+.assessment__bar {
+  height: 9px;
+  margin: 5px 0 6px;
+  border: 1px solid var(--paper-edge);
+  border-radius: 2px;
+  background: #4a4038;
+  overflow: hidden;
+}
+
+.assessment__fill {
+  height: 100%;
+  background: #f2ead6;
+  transition: width 320ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assessment__fill {
+    transition: none;
+  }
+}
+
+.assessment__verdict {
+  font-weight: 700;
+  color: var(--paper-ink-strong);
+}
+
+.assessment__detail {
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--paper-ink-faint);
+  font-variant-numeric: tabular-nums;
 }

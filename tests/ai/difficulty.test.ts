@@ -115,3 +115,67 @@ describe('optionCommands', () => {
     expect(commands('strong', new Set()).length).toBeGreaterThan(0);
   });
 });
+
+describe('one engine, three callers', () => {
+  /**
+   * The adapter's own queue is what stops a hint or an assessment stealing the
+   * search the opponent is waiting on. This models the failure it was written
+   * for: two callers passing the same "is anything pending?" check across an
+   * await, and the later one overwriting the earlier one's slot.
+   */
+  it('a slot claimed after an await is not safe to check before it', async () => {
+    let slot: string | null = null;
+    const claim = async (name: string): Promise<string> => {
+      // The shape the adapter used to have: check, yield, then claim.
+      if (slot !== null) throw new Error('busy');
+      await Promise.resolve();
+      slot = name;
+      return name;
+    };
+    await Promise.all([claim('move'), claim('hint')]);
+    // Both passed the check; the second overwrote the first.
+    expect(slot).toBe('hint');
+  });
+
+  it('a queue lets each one finish before the next begins', async () => {
+    let chain: Promise<unknown> = Promise.resolve();
+    let slot: string | null = null;
+    const order: string[] = [];
+    const enqueue = <T>(work: () => Promise<T>): Promise<T> => {
+      const run = chain.then(work, work);
+      chain = run.then(
+        () => undefined,
+        () => undefined,
+      );
+      return run;
+    };
+    const claim = (name: string): Promise<void> =>
+      enqueue(async () => {
+        expect(slot, `${name} found the slot taken`).toBeNull();
+        slot = name;
+        await Promise.resolve();
+        order.push(name);
+        slot = null;
+      });
+
+    await Promise.all([claim('move'), claim('hint'), claim('assessment')]);
+    expect(order).toEqual(['move', 'hint', 'assessment']);
+    expect(slot).toBeNull();
+  });
+
+  it('keeps going after one caller fails', async () => {
+    let chain: Promise<unknown> = Promise.resolve();
+    const enqueue = <T>(work: () => Promise<T>): Promise<T> => {
+      const run = chain.then(work, work);
+      chain = run.then(
+        () => undefined,
+        () => undefined,
+      );
+      return run;
+    };
+    const failed = enqueue(() => Promise.reject(new Error('engine gone')));
+    await expect(failed).rejects.toThrow('engine gone');
+    // A rejected caller must not stop the queue for everyone after it.
+    await expect(enqueue(() => Promise.resolve('next'))).resolves.toBe('next');
+  });
+});

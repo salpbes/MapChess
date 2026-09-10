@@ -667,7 +667,7 @@ You can now start, play, quit and resume without ever opening the console. Openi
 
 ### What's left
 
-Phase 12 — polish and ship: a performance pass, the mobile check if wanted, **on-screen OSM and Terrarium attribution** (the ODbL requirement — it is currently only in the README, which does not satisfy it for the running app), README screenshots, and deployment to static hosting.
+Phase 12 — polish and ship: a performance pass, the mobile check if wanted, **on-screen OSM and Terrarium attribution** (the ODbL requirement — it is currently only in the README, which does not satisfy it for the running app), README screenshots, and deployment to static hosting. Reported below.
 
 ### Follow-ups after playing it
 
@@ -703,3 +703,138 @@ Four things surfaced the first time the game was actually played, all fixed on t
 - **Resigning in hot-seat resigns for whoever is to move.** Defensible, but there is no way to resign on behalf of the other side, and no undo for a mis-click beyond the four-second confirmation.
 - **A save survives a code change it should not.** The guard catches a changed _shape_, but not changed _meaning_ — if a future phase alters how a move request is interpreted, a version-1 save would replay into something subtly different. Bumping `SAVE_VERSION` is a manual discipline.
 - **`savedAt` is only shown, never trusted.** A clock change makes "3 min ago" wrong; nothing else depends on it.
+
+---
+
+## Phase 12 — Polish & ship
+
+**Date:** 2026-09-10
+**Project completion: 100%**
+
+### In plain English
+
+The game is finished, and it says who its data belongs to. It loads about
+twice as fast, it makes a noise when a piece lands, it can tell you who is
+winning if you ask, and it has a coach that tells you what your opening is
+called and one thing worth doing about it. Two features that tried to teach by
+pointing at your mistakes were built, played, and taken back out again.
+
+### What I built
+
+**Shipping requirements**
+
+- `src/ui/Attribution.ts` — the credit strip along the bottom: OpenStreetMap
+  (ODbL), AWS Terrain Tiles, Stockfish, Wikidata. Links, not just words.
+- `public/engine/LICENSE-stockfish.txt` — the GPL text, shipped beside the
+  binary, with the on-screen link pointing at the _source_ as the licence
+  requires rather than at a homepage.
+- `vite.config.ts` — `base: './'`, so `dist/` runs from any path on any host.
+- `README.md` — run, play, deploy, and the data licences in full.
+
+**Performance**
+
+- `src/ui/AreaPicker.ts` behind a dynamic `import()` — MapLibre is 970 kB and
+  is not needed until somebody opens the picker. The first-load bundle went
+  from 1,740 kB to 793 kB (D-052).
+
+**The game got easier to read**
+
+- `src/game/assessment.ts`, `src/ui/AssessmentCard.ts` — an optional win
+  estimate: a bar, a sentence, and the conventional number. Off by default,
+  and always searched at full strength whatever level is being played (D-054).
+- `src/ui/Sounds.ts` — a knock for a move, a heavier one for a capture, a
+  rising pair for check. Synthesised through WebAudio, so nothing is
+  downloaded. Off until asked for (D-056).
+- Last-move highlight and a recenter button (D-056); watch mode gained a
+  pause, since neither resign nor take-back applies with no human seat (D-055).
+
+**The coach**
+
+- `src/domain/chess/openings.ts` — 55 named opening lines, longest-prefix
+  matched. The same table answers "what is this called?" and "what do strong
+  players play here?" (D-060).
+- `src/game/coaching.ts`, `src/ui/CoachCard.ts` — three lines that are always
+  saying something: the opening's name, one thing worth doing, and two numbers.
+  On at every level.
+- `src/domain/chess/values.ts` — the piece values, in one place.
+
+**Built and then removed**
+
+- A modal that questioned a move which dropped material, at Learner (D-058,
+  reversed by D-062); a standing card naming what was already hanging, with
+  faint red rings on the board, at the two easiest levels (D-059, reversed by
+  D-061). Both are gone, along with `blunder.ts`, `hanging.ts`, `exchange.ts`,
+  `IBlunderWarner`, the `danger` highlight role and the `warnsAt`/`helpsAt`
+  difficulty gates.
+
+### Why it was done this way
+
+**The attribution is in the app, not only the README** (D-053). ODbL requires
+the credit to reach the person using the data. A line in a repository file does
+not do that for someone who opens a deployed URL, which is exactly the person
+the licence is about.
+
+**The picker is loaded on demand rather than split by vendor chunking** (D-052).
+Chunking would still have fetched MapLibre on first paint; a dynamic import
+means a player who never changes area never downloads a map library at all.
+
+**Three attempts at helping a beginner, one survivor.** D-058 questioned a move
+as it was made, D-059 pointed at what was already hanging, D-060 talks about
+the position without ever mentioning a mistake. The first two were unwanted for
+the same reason: they corrected the player instead of accompanying them, and
+they were silent until the moment they accused you. Only the third survived
+contact with somebody actually playing. That is one question asked three times,
+not three failed features — but it is worth writing down that the two which
+interrupted are the two that went (D-061, D-062).
+
+**The engine takes one search at a time, in a queue** (D-057 neighbourhood).
+The hint, the assessment and the opponent's move all ask Stockfish for a
+search, and the original "refuse if busy" guard let two callers past the same
+check before either claimed the slot — the second overwrote the first, whose
+watchdog then fired and played a fallback move. Black appeared to blunder
+constantly. It is now a promise chain.
+
+### How to check it yourself
+
+1. `npm run dev`, open the URL.
+2. The credit strip is along the bottom before you do anything. Every source is
+   a link.
+3. Start a game at any level. The **Your game** card sits under the controls
+   from move one: it names the opening ("Italian Game"), suggests what strong
+   players do, and counts your material and development.
+4. Play 1. e4 — the card changes to "King's Pawn Opening" and the square you
+   came from stays lit.
+5. Press the 📖 to switch the coach off, the scales to switch the win estimate
+   on, the speaker for sound.
+6. `npm run build && npx vite preview` — the first-load bundle is ~793 kB and
+   the map library is only fetched when you open **Choose area**.
+
+### What's left
+
+Nothing in the plan. Outside it, three things are worth naming:
+
+- **No screenshots in the README yet** — the section is a placeholder.
+- **No deployment.** `base: './'` means `dist/` will run anywhere; it needs a
+  host chosen.
+- **No phone or tablet layout.** There is not one width media query in the
+  stylesheet: the left column is a fixed 230 px and the briefing 300 px, which
+  on a phone would cover the board they describe.
+
+### Risks / things I'm unsure about
+
+- **The DOM layer is still untested.** Vitest runs in `node` (BUILD_PLAN §3),
+  so of 32 test files exactly one covers `ui/`, and it tests a list of strings.
+  Four CSS regressions in this phase were found by playing the game rather than
+  by the suite. The bargain has held since Phase 1, but this phase added ten
+  more panels to the side of it that nothing checks.
+- **The opening book is 55 lines chosen by hand.** Every line is played out on
+  a real engine by `tests/domain/chess/openings.test.ts`, so none of them is
+  illegal — but "Sicilian, Najdorf territory" is a judgement about where a name
+  starts applying, and a stronger player may disagree with several of them.
+- **The coach's advice is arithmetic, not understanding.** It counts
+  development, material and passed pawns and picks the first rule that fires.
+  It will tell you to castle in a position where castling is wrong.
+- **Two reversals in one phase is a signal.** D-058 and D-059 were both built,
+  documented, and removed within days. They were cheap to remove because they
+  sat behind seams — but the pattern says features aimed at "helping" should be
+  played before they are polished.

@@ -470,3 +470,274 @@ describe('GameLoop hints', () => {
     expect(await loop.requestHint()).toBeNull();
   });
 });
+
+/** Reports a fixed score, and records what it was asked. */
+class RatingAI extends FirstLegalAI {
+  public evaluations = 0;
+  public evaluate(_fen: string): Promise<{ kind: 'centipawns'; value: number; depth: number }> {
+    this.evaluations += 1;
+    return Promise.resolve({ kind: 'centipawns', value: 120, depth: 10 });
+  }
+}
+
+describe('GameLoop assessment', () => {
+  function withRater() {
+    const engine = new ChessEngine();
+    const bus = new EventBus<GameEvents>();
+    const ai = new RatingAI(engine);
+    const loop = new GameLoop({
+      engine,
+      view: new FakeView(),
+      promotion: new ScriptedChooser(),
+      bus,
+      ai,
+    });
+    return { engine, bus, ai, loop };
+  }
+
+  it('says nothing at all until it is asked to', async () => {
+    const { ai, loop } = withRater();
+    loop.start({ white: 'human', black: 'human' });
+    await loop.handleSquareClick('e2');
+    await loop.handleSquareClick('e4');
+    expect(ai.evaluations).toBe(0);
+  });
+
+  it('rates the position once switched on', async () => {
+    const { bus, ai, loop } = withRater();
+    const seen = vi.fn();
+    bus.on('assessment-changed', seen);
+    loop.start({ white: 'human', black: 'human' });
+
+    loop.setAssessing(true);
+    await vi.waitFor(() => {
+      expect(ai.evaluations).toBeGreaterThan(0);
+    });
+    await vi.waitFor(() => {
+      expect(seen).toHaveBeenCalled();
+    });
+    const [{ assessment }] = seen.mock.calls[seen.mock.calls.length - 1] as [
+      { assessment: { number: string } | null },
+    ];
+    expect(assessment?.number).toBe('+1.2');
+  });
+
+  it('clears the card when switched off, without asking the engine again', async () => {
+    const { bus, ai, loop } = withRater();
+    loop.start({ white: 'human', black: 'human' });
+    loop.setAssessing(true);
+    await vi.waitFor(() => {
+      expect(ai.evaluations).toBeGreaterThan(0);
+    });
+
+    const cleared = vi.fn();
+    bus.on('assessment-changed', cleared);
+    const before = ai.evaluations;
+    loop.setAssessing(false);
+    expect(cleared).toHaveBeenCalledWith({ assessment: null });
+    expect(ai.evaluations).toBe(before);
+  });
+
+  it('does not rate a finished game', async () => {
+    const engine = new ChessEngine();
+    for (const move of FOOLS_MATE) engine.move(move);
+    const bus = new EventBus<GameEvents>();
+    const ai = new RatingAI(engine);
+    const loop = new GameLoop({
+      engine,
+      view: new FakeView(),
+      promotion: new ScriptedChooser(),
+      bus,
+      ai,
+    });
+    loop.start({ white: 'human', black: 'ai' });
+    loop.setAssessing(true);
+    await Promise.resolve();
+    expect(ai.evaluations).toBe(0);
+  });
+});
+
+/**
+ * Takes a moment over each move. An instant opponent plays the whole game out
+ * before a test can get between two moves, which is the only place pause is
+ * observable.
+ */
+class UnhurriedAI extends FirstLegalAI {
+  public override async chooseMove(): Promise<MoveRequest> {
+    await new Promise((resolve) => setTimeout(resolve, 8));
+    return super.chooseMove();
+  }
+}
+
+describe('GameLoop watch mode', () => {
+  function watching() {
+    const engine = new ChessEngine();
+    const bus = new EventBus<GameEvents>();
+    const loop = new GameLoop({
+      engine,
+      view: new FakeView(),
+      promotion: new ScriptedChooser(),
+      bus,
+      ai: new UnhurriedAI(engine),
+    });
+    loop.start({ white: 'ai', black: 'ai' });
+    return { engine, bus, loop };
+  }
+
+  it('knows when nobody is waiting on a person', () => {
+    const { loop } = watching();
+    expect(loop.isWatching()).toBe(true);
+
+    const played = setup({ ai: true });
+    played.loop.start({ white: 'human', black: 'ai' });
+    expect(played.loop.isWatching()).toBe(false);
+  });
+
+  it('stops the computers where they are, and starts them again', async () => {
+    const { engine, loop } = watching();
+    await vi.waitFor(() => {
+      expect(engine.history.length).toBeGreaterThan(0);
+    });
+
+    loop.setPaused(true);
+    expect(loop.isPaused).toBe(true);
+    // A reply already being searched is discarded, so settle before measuring.
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const held = engine.history.length;
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(engine.history).toHaveLength(held);
+
+    loop.setPaused(false);
+    await vi.waitFor(() => {
+      expect(engine.history.length).toBeGreaterThan(held);
+    });
+  });
+
+  it('announces the change so the button can turn round', () => {
+    const { bus, loop } = watching();
+    const seen = vi.fn();
+    bus.on('paused-changed', seen);
+
+    loop.setPaused(true);
+    expect(seen).toHaveBeenCalledWith({ paused: true });
+    // Pressing it twice is not two events.
+    loop.setPaused(true);
+    expect(seen).toHaveBeenCalledTimes(1);
+    loop.setPaused(false);
+    expect(seen).toHaveBeenCalledWith({ paused: false });
+  });
+
+  it('never starts a new game already held', () => {
+    const { loop } = watching();
+    loop.setPaused(true);
+    loop.newGame({ white: 'ai', black: 'ai' });
+    expect(loop.isPaused).toBe(false);
+  });
+});
+
+describe('GameLoop last-move highlight', () => {
+  it('shows nothing before the first move', () => {
+    const { view, loop } = setup();
+    loop.start();
+    expect(view.highlights.last).toBeUndefined();
+  });
+
+  it('lights the two squares of the move just played', async () => {
+    const { view, loop } = setup();
+    loop.start();
+    await loop.handleSquareClick('e2');
+    await loop.handleSquareClick('e4');
+    expect(view.highlights.last).toEqual(['e2', 'e4']);
+  });
+
+  it('keeps it lit while the next piece is picked up', async () => {
+    const { view, loop } = setup();
+    loop.start();
+    await loop.handleSquareClick('e2');
+    await loop.handleSquareClick('e4');
+    await loop.handleSquareClick('e7');
+    expect(view.highlights.selected).toBe('e7');
+    expect(view.highlights.last).toEqual(['e2', 'e4']);
+  });
+
+  it('follows a take-back to the move before', () => {
+    const { engine, view, loop } = setup();
+    for (const move of OPENING) engine.move(move);
+    loop.start();
+    expect(view.highlights.last).toEqual(['g1', 'f3']);
+
+    loop.undo();
+    expect(view.highlights.last).toEqual(['e7', 'e5']);
+  });
+
+  it('is gone again on a new game', () => {
+    const { engine, view, loop } = setup();
+    for (const move of OPENING) engine.move(move);
+    loop.start();
+    expect(view.highlights.last).toBeDefined();
+
+    loop.newGame({ white: 'human', black: 'human' });
+    expect(view.highlights.last).toBeUndefined();
+  });
+});
+
+describe('the coach card', () => {
+  it('says nothing until it is switched on', () => {
+    const { bus, loop } = setup();
+    const seen = vi.fn();
+    bus.on('coaching-changed', seen);
+    loop.start();
+    expect(seen).toHaveBeenCalledWith({ coaching: null });
+  });
+
+  it('names the opening and offers the book once it is on', () => {
+    const { bus, loop } = setup();
+    const seen = vi.fn<(e: GameEvents['coaching-changed']) => void>();
+    bus.on('coaching-changed', seen);
+    loop.start();
+
+    loop.setCoaching(true);
+    const notes = seen.mock.lastCall?.[0].coaching;
+    expect(notes?.title).toBe('Opening');
+    expect(notes?.advice).toContain('Strong players');
+  });
+
+  it('follows the game as it is played', async () => {
+    const { bus, loop } = setup();
+    loop.start();
+    loop.setCoaching(true);
+    const seen = vi.fn<(e: GameEvents['coaching-changed']) => void>();
+    bus.on('coaching-changed', seen);
+
+    await loop.handleSquareClick('e2');
+    await loop.handleSquareClick('e4');
+    expect(seen.mock.lastCall?.[0].coaching?.title).toBe("King's Pawn Opening");
+  });
+
+  it('clears itself when the game is over', () => {
+    const { bus, loop } = setup({ fen: '6k1/8/8/8/8/8/5PPP/r6K w - - 0 1' });
+    loop.start();
+    loop.setCoaching(true);
+    const seen = vi.fn<(e: GameEvents['coaching-changed']) => void>();
+    bus.on('coaching-changed', seen);
+
+    loop.setCoaching(true);
+    expect(loop.outcome).not.toBeNull();
+    expect(seen).toHaveBeenCalledWith({ coaching: null });
+  });
+
+  it('leaves the last note up while the computer thinks', async () => {
+    const { bus, loop } = setup({ ai: true });
+    loop.start({ white: 'human', black: 'ai' });
+    loop.setCoaching(true);
+
+    const seen = vi.fn<(e: GameEvents['coaching-changed']) => void>();
+    bus.on('coaching-changed', seen);
+    await loop.handleSquareClick('e2');
+    await loop.handleSquareClick('e4');
+
+    // Whatever it said, it never said "nothing" — advice for a position the
+    // player cannot move in would be advice for the wrong side.
+    expect(seen).not.toHaveBeenCalledWith({ coaching: null });
+  });
+});

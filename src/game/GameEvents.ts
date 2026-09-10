@@ -9,6 +9,8 @@ import type { IllegalMoveError } from '@domain/chess/errors';
 import type { Color, GameStatus, Move, MoveRequest, PieceType } from '@domain/chess/types';
 import type { EventBus } from '@shared/events/EventBus';
 
+import type { Assessment } from './assessment';
+import type { Coaching } from './coaching';
 import type { MoveAdvice } from './explainMove';
 import type { GameOutcome } from './GameOutcome';
 
@@ -48,6 +50,12 @@ export interface GameEvents extends Record<string, unknown> {
   'hint-offered': { readonly move: Move; readonly advice: MoveAdvice };
   /** Advice was asked for and could not be given. */
   'hint-failed': { readonly error: unknown };
+  /** How the engine rates the position, or null when it has nothing to say. */
+  'assessment-changed': { readonly assessment: Assessment | null };
+  /** The two computers were stopped, or set going again. */
+  'paused-changed': { readonly paused: boolean };
+  /** Where the game is and the one thing to do about it, or null when off. */
+  'coaching-changed': { readonly coaching: Coaching | null };
   /** The engine failed or misbehaved; the game continued with `fallback`. */
   'ai-error': { readonly error: unknown; readonly fallback: MoveRequest };
 }

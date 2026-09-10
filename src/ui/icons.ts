@@ -32,6 +32,22 @@ const PATHS: Readonly<Record<string, readonly string[]>> = {
   tag: ['M20 4h-7.2L4 12.8 11.2 20 20 11.2V4Z', 'M16.4 7.6h.01'],
   // A map pin: markers without their names.
   pin: ['M12 21s6-5.9 6-10.2A6 6 0 0 0 6 10.8C6 15.1 12 21 12 21Z', 'M12 11h.01'],
+  // Two bars: hold the watched game.
+  pause: ['M9 5v14', 'M15 5v14'],
+  // A triangle: set it going again.
+  play: ['M7 4.5v15l13-7.5Z'],
+  // A speaker, with and without its sound.
+  sound: ['M4 9.5v5h3.5L12 18V6L7.5 9.5H4Z', 'M15.5 9.5a3.6 3.6 0 0 1 0 5', 'M18 7a7 7 0 0 1 0 10'],
+  soundOff: ['M4 9.5v5h3.5L12 18V6L7.5 9.5H4Z', 'M16 10l5 4', 'M21 10l-5 4'],
+  // Four corners round a centre: put the board back where it was.
+  recenter: ['M4 9V5h4', 'M20 9V5h-4', 'M4 15v4h4', 'M20 15v4h-4', 'M12 12h.01'],
+  // A pair of scales: how the game stands.
+  scales: ['M12 4v16', 'M7 20h10', 'M4 8h16', 'M4 8l-2.5 5h5Z', 'M20 8l-2.5 5h5Z'],
+  // An open book: what the opening is called and what to do in it.
+  book: [
+    'M12 7.2S9.6 5.2 3.8 5.8v12.4c5.8-.6 8.2 1.4 8.2 1.4s2.4-2 8.2-1.4V5.8C14.4 5.2 12 7.2 12 7.2Z',
+    'M12 7.2v12.4',
+  ],
   // The tag, struck through: nothing on the board.
   tagOff: ['M20 4h-7.2L4 12.8 11.2 20 20 11.2V4Z', 'M3.5 3.5l17 17'],
 };

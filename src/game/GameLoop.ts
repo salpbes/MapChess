@@ -20,6 +20,8 @@ import { IllegalMoveError } from '@domain/chess/errors';
 import type { IChessEngine } from '@domain/chess/IChessEngine';
 import type { Color, Move, MoveRequest } from '@domain/chess/types';
 
+import { assess } from './assessment';
+import { coach } from './coaching';
 import { explainMove } from './explainMove';
 import type { BlockedReason, GameBus } from './GameEvents';
 import { outcomeOf } from './GameOutcome';
@@ -55,6 +57,14 @@ export class GameLoop {
   private resignedBy: Color | null = null;
   /** A suggestion on screen, shown until the position changes under it. */
   private hint: Move | null = null;
+  /** Whether the engine is asked to rate the position after every change. */
+  private assessing = false;
+  /** Watch mode, held. Nothing else can pause: a human is never kept waiting. */
+  private paused = false;
+  /** Whether the coach card is kept up to date. */
+  private coaching = false;
+  /** An evaluation in flight; the engine takes one search at a time. */
+  private analysis: Promise<void> | null = null;
   /** Incremented on every new game so a stale engine reply can be ignored. */
   private generation = 0;
 
@@ -67,13 +77,16 @@ export class GameLoop {
     this.busy = false;
     this.resignedBy = null;
     this.hint = null;
+    this.paused = false;
     this.deps.view.showPosition(this.deps.engine.pieces());
     this.deps.bus.emit('game-started', { players: this.players });
+    this.refreshCoaching();
     this.refreshHighlights();
     this.publishStatus();
     this.publishHistory();
     this.publishOutcome();
     void this.maybePlayAi();
+    this.requestAssessment();
   }
 
   /** Resets the engine and starts again with the given seating. */
@@ -97,6 +110,7 @@ export class GameLoop {
     this.busy = false;
     this.resignedBy = null;
     this.hint = null;
+    this.paused = false;
     bus.emit('game-started', { players: this.players });
 
     for (const request of saved.moves) {
@@ -113,15 +127,38 @@ export class GameLoop {
 
     this.resignedBy = saved.resignedBy;
     view.showPosition(engine.pieces());
+    this.refreshCoaching();
     this.refreshHighlights();
     this.publishStatus();
     this.publishHistory();
     this.publishOutcome();
     void this.maybePlayAi();
+    this.requestAssessment();
   }
 
   public isHumanTurn(): boolean {
     return this.players[this.deps.engine.turn] === 'human';
+  }
+
+  /** True when both seats are the computer and there is nothing to wait for. */
+  public isWatching(): boolean {
+    return this.players.white === 'ai' && this.players.black === 'ai';
+  }
+
+  public get isPaused(): boolean {
+    return this.paused;
+  }
+
+  /**
+   * Holds a game the computer is playing against itself. The reply being
+   * searched when this is called is discarded rather than played, so the board
+   * stops on the move you were looking at; setting it going again re-asks.
+   */
+  public setPaused(paused: boolean): void {
+    if (paused === this.paused) return;
+    this.paused = paused;
+    this.deps.bus.emit('paused-changed', { paused });
+    if (!paused) void this.maybePlayAi();
   }
 
   /** Null while the game is playable. */
@@ -196,11 +233,13 @@ export class GameLoop {
     this.hint = null;
     view.showPosition(engine.pieces());
     bus.emit('selection-changed', { square: null, targets: [] });
+    this.refreshCoaching();
     this.refreshHighlights();
     this.publishStatus();
     this.publishHistory();
     // Only reachable when the human undid the opening move of an AI's game.
     void this.maybePlayAi();
+    this.requestAssessment();
     return true;
   }
 
@@ -252,6 +291,69 @@ export class GameLoop {
     // the move applies to; ui/ only renders the sentences.
     bus.emit('hint-offered', { move, advice: explainMove(engine, move) });
     return move;
+  }
+
+  /** Whether to keep the coach card — opening name, one tip — up to date. */
+  public setCoaching(on: boolean): void {
+    this.coaching = on;
+    this.refreshCoaching();
+  }
+
+  /**
+   * Recomputed wherever the position settles, but never cleared while
+   * the computer thinks: advice for a position the player cannot move in is
+   * wrong, and a card that empties itself every other move is a flicker.
+   */
+  private refreshCoaching(): void {
+    const { engine, bus } = this.deps;
+    if (!this.coaching || this.outcome !== null) {
+      bus.emit('coaching-changed', { coaching: null });
+      return;
+    }
+    if (!this.isHumanTurn()) return;
+    bus.emit('coaching-changed', { coaching: coach(engine, engine.turn) });
+  }
+
+  /**
+   * Turns the running assessment on or off. Off by default and off by nature:
+   * it costs a search after every move, and a beginner does not need to be
+   * told continuously how badly it is going.
+   */
+  public setAssessing(on: boolean): void {
+    this.assessing = on;
+    if (on) this.requestAssessment();
+    else this.deps.bus.emit('assessment-changed', { assessment: null });
+  }
+
+  /**
+   * Asked only when the engine is otherwise idle, and never when it is about
+   * to be asked for a move: it takes one search at a time, and a collision
+   * would make the opponent fall back to a random legal move.
+   */
+  private requestAssessment(): void {
+    const { engine, ai, bus } = this.deps;
+    if (!this.assessing || ai?.evaluate === undefined) return;
+    if (this.busy || this.outcome !== null) return;
+    // One at a time: the engine queues them anyway, and a backlog of stale
+    // positions would only be discarded on arrival.
+    if (this.analysis !== null) return;
+
+    const generation = this.generation;
+    const fen = engine.fen;
+    const turn = engine.turn;
+    this.analysis = ai
+      .evaluate(fen)
+      .then((score) => {
+        // The board has moved on; a stale opinion is worse than none.
+        if (generation !== this.generation || fen !== this.deps.engine.fen) return;
+        bus.emit('assessment-changed', { assessment: score === null ? null : assess(score, turn) });
+      })
+      .catch((error: unknown) => {
+        console.warn('Could not rate the position.', error);
+      })
+      .finally(() => {
+        this.analysis = null;
+      });
   }
 
   /** Ends the game as a loss for `color`. Ignored once the game is already over. */
@@ -337,18 +439,20 @@ export class GameLoop {
 
     bus.emit('move-played', move);
     bus.emit('selection-changed', { square: null, targets: [] });
+    this.refreshCoaching();
     this.refreshHighlights();
     this.publishStatus();
     this.publishHistory();
     this.publishOutcome();
     void this.maybePlayAi();
+    this.requestAssessment();
     return true;
   }
 
   private async maybePlayAi(): Promise<void> {
     const { engine, ai, bus } = this.deps;
     if (ai === undefined || this.isHumanTurn() || this.outcome !== null) return;
-    if (this.busy) return;
+    if (this.busy || this.paused) return;
 
     const generation = this.generation;
     const color = engine.turn;
@@ -369,6 +473,11 @@ export class GameLoop {
     // the engine was thinking: drop the stale reply. Asked through a method so
     // the answer is re-read rather than remembered from before the await.
     if (generation !== this.generation) return;
+    // Paused while it was thinking: throw the reply away rather than play it,
+    // so the board stops on the position the watcher was looking at. Asked
+    // through a method so the answer is re-read rather than remembered from
+    // before the await.
+    if (this.isHeld()) return;
     if (!this.isPlayable() || this.isHumanTurn()) return;
 
     // The engine is trusted but verified; a bad reply must never break the game.
@@ -401,15 +510,23 @@ export class GameLoop {
     const inDanger = (status.kind === 'playing' && status.inCheck) || status.kind === 'checkmate';
     const check = inDanger ? this.kingSquare() : undefined;
     const hint = this.hint === null ? {} : { hint: [this.hint.from, this.hint.to] };
-
+    // Taken from the history rather than remembered: an undo then rewrites it
+    // for free, and there is no second copy to fall out of step.
+    const played = engine.history[engine.history.length - 1];
+    const last = played === undefined ? {} : { last: [played.from, played.to] };
     if (this.selected === null) {
-      view.showHighlights({ ...hint, ...(check === undefined ? {} : { check }) });
+      view.showHighlights({
+        ...last,
+        ...hint,
+        ...(check === undefined ? {} : { check }),
+      });
       return;
     }
 
     const legal = engine.legalMoves(this.selected);
     const rooks = legal.flatMap((m) => (m.castle === null ? [] : [m.castle.rookFrom]));
     view.showHighlights({
+      ...last,
       ...hint,
       selected: this.selected,
       moves: [...legal.filter((m) => m.captured === null).map((m) => m.to), ...rooks],
@@ -427,6 +544,11 @@ export class GameLoop {
   /** The game can end while the engine is thinking, so this is asked again after every await. */
   private isPlayable(): boolean {
     return this.outcome === null;
+  }
+
+  /** As above: a watcher can press pause while the engine is mid-search. */
+  private isHeld(): boolean {
+    return this.paused;
   }
 
   private publishStatus(): void {

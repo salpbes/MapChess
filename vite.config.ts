@@ -11,6 +11,13 @@ import { defineConfig } from 'vitest/config';
 const alias = (layer: string): string => fileURLToPath(new URL(`./src/${layer}`, import.meta.url));
 
 export default defineConfig({
+  /*
+    Relative asset URLs, so the built folder runs wherever it is dropped: a
+    domain root, a GitHub Pages project subpath, or a file:// directory. The
+    app is one page with no client-side routing, so nothing needs a real base
+    path — and `import.meta.env.BASE_URL` still resolves the engine correctly.
+  */
+  base: './',
   resolve: {
     alias: {
       '@app': alias('app'),

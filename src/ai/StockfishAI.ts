@@ -3,18 +3,36 @@
 //       from the same directory). Speaks UCI over postMessage: handshake once,
 //       push options on difficulty change, and for each request send
 //       `position fen … / go movetime …` and wait for `bestmove`. Every wait
-//       has a timeout; the worker is never touched from anywhere else.
+//       has a timeout; the worker is never touched from anywhere else. Every
+//       request goes through one queue, because the engine searches one
+//       position at a time and there are three callers now: the opponent's
+//       move, a hint, and the running assessment.
 // WHY:  Search runs entirely off the render thread, so the board stays at full
 //       frame rate while the engine thinks (BUILD_PLAN Phase 4). Single-threaded
 //       so it deploys on any static host without COOP/COEP headers (§3).
+//
+//       The queue replaced a "refuse if busy" guard that worked while the
+//       opponent was the only caller. Each entry point checked that nothing was
+//       pending and then awaited before claiming the slot — and that await is
+//       long enough for a second caller to pass the same check, so the later
+//       search overwrote the earlier one's promise. The orphan never resolved,
+//       its watchdog fired, and the opponent fell back to a near-random move.
+//       Waiting a turn is always better than refusing.
 
 import type { MoveRequest } from '@domain/chess/types';
 
-import { ADVICE_SETTINGS, DIFFICULTY_SETTINGS, goCommand, optionCommands } from './difficulty';
+import {
+  ADVICE_SETTINGS,
+  ANALYSIS_SETTINGS,
+  DIFFICULTY_SETTINGS,
+  goCommand,
+  optionCommands,
+} from './difficulty';
 import type { EngineSettings } from './difficulty';
 import { EngineError } from './errors';
 import type { Difficulty, IChessAI } from './IChessAI';
-import { isReadyOk, isUciOk, parseBestMove, parseOptionName } from './uci';
+import { isReadyOk, isUciOk, parseBestMove, parseInfoScore, parseOptionName } from './uci';
+import type { EngineScore } from './uci';
 
 interface Pending {
   readonly resolve: (move: MoveRequest) => void;
@@ -44,6 +62,8 @@ export class StockfishAI implements IChessAI {
   private readonly supported = new Set<string>();
   private settings: EngineSettings;
   private pending: Pending | null = null;
+  /** Every request to the engine, one at a time and in the order asked. */
+  private chain: Promise<unknown> = Promise.resolve();
   private disposed = false;
 
   public constructor(options: StockfishAIOptions) {
@@ -74,9 +94,13 @@ export class StockfishAI implements IChessAI {
     );
   }
 
-  public async chooseMove(fen: string): Promise<MoveRequest> {
+  public chooseMove(fen: string): Promise<MoveRequest> {
     if (this.disposed) throw new EngineError('disposed');
-    if (this.pending !== null) throw new EngineError('busy');
+    return this.enqueue(() => this.searchForMove(fen));
+  }
+
+  private async searchForMove(fen: string): Promise<MoveRequest> {
+    if (this.disposed) throw new EngineError('disposed');
     await this.readyPromise;
 
     const settings = this.settings;
@@ -96,9 +120,12 @@ export class StockfishAI implements IChessAI {
    * afterwards, including when the search fails: they persist in the engine,
    * so leaving them raised would silently turn a Learner into a Strong.
    */
-  public async hint(fen: string): Promise<MoveRequest> {
+  public hint(fen: string): Promise<MoveRequest> {
     if (this.disposed) throw new EngineError('disposed');
-    if (this.pending !== null) throw new EngineError('busy');
+    return this.enqueue(() => this.searchForHint(fen));
+  }
+
+  private async searchForHint(fen: string): Promise<MoveRequest> {
     await this.readyPromise;
 
     for (const command of optionCommands(ADVICE_SETTINGS, this.supported)) this.send(command);
@@ -109,8 +136,63 @@ export class StockfishAI implements IChessAI {
     }
   }
 
+  /**
+   * How the engine rates the position, from the side to move's point of view.
+   * Resolves null rather than rejecting: this drives a display the game does
+   * not need, and an outage should empty it rather than break anything.
+   */
+  public evaluate(fen: string): Promise<EngineScore | null> {
+    if (this.disposed) return Promise.resolve(null);
+    return this.enqueue(() => this.searchForScore(fen));
+  }
+
+  private async searchForScore(fen: string): Promise<EngineScore | null> {
+    try {
+      await this.readyPromise;
+    } catch {
+      return null;
+    }
+
+    // The last score before `bestmove` is the deepest one the search reached.
+    let best: EngineScore | null = null;
+    const listen = (line: string): void => {
+      const score = parseInfoScore(line);
+      if (score !== null && (best === null || score.depth >= best.depth)) best = score;
+    };
+    this.lineListeners.add(listen);
+
+    for (const command of optionCommands(ANALYSIS_SETTINGS, this.supported)) this.send(command);
+    try {
+      await this.search(fen, ANALYSIS_SETTINGS);
+      return best;
+    } catch (error: unknown) {
+      console.warn('Position evaluation failed.', error);
+      return null;
+    } finally {
+      this.lineListeners.delete(listen);
+      this.applySettings();
+    }
+  }
+
+  /**
+   * Runs `work` once everything asked for before it has finished, whether that
+   * finished well or badly. Nothing else may touch the engine in between.
+   */
+  private enqueue<T>(work: () => Promise<T>): Promise<T> {
+    const run = this.chain.then(work, work);
+    // The chain must survive a rejected caller, or the queue stops for good.
+    this.chain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
   /** One `position` + `go`, resolved by the next `bestmove` or abandoned. */
   private search(fen: string, settings: EngineSettings): Promise<MoveRequest> {
+    // The queue is what guarantees this; if it ever does not, fail loudly
+    // rather than silently orphan the search already running.
+    if (this.pending !== null) return Promise.reject(new EngineError('busy'));
     return new Promise<MoveRequest>((resolve, reject) => {
       const timeout = settings.budgetMs + this.graceMs;
       const timer = setTimeout(() => {

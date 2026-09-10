@@ -516,3 +516,157 @@ The name is now back on the feature point, expanding in place from the glyph, an
 **What stays dark, and why:** the MapLibre area picker, the loading veil, the main menu, the game-over card and the promotion prompt. The picker is a map tool with its own conventions; the veil exists to dim the board and would defeat itself in cream; and the three modals are moments that interrupt play rather than parts of it. Converting them is a smaller decision than it looks and can follow.
 
 **Kept against the grain:** the hint card's violet border and headline. D-043 pairs that colour with the pulsing squares on the board, and D-045 records what happened the last time the hint's colour collided with something — the tie between the card and the ground it points at outranks the palette.
+
+## D-052 — The picker is loaded on demand; the build is path-relative
+
+**Date:** 2026-09-05 · **Phase:** 12
+
+**Decision:** `AreaBar` imports `AreaPicker` with a dynamic `import()` inside the open handler, keeping MapLibre out of the initial bundle. `vite.config.ts` sets `base: './'`.
+
+**Why:** MapLibre and its stylesheet are 970 kB of JavaScript and 83 kB of CSS, and they are needed only if the player opens the picker — which many never will, since the game starts on an area already. Deferring it took the initial download from 1,740 kB to 770 kB (463 kB to 207 kB gzipped) and the stylesheet from 100 kB to 17.5 kB. Nothing else in the project is worth splitting: three.js is needed to draw the first frame.
+
+**Why relative asset paths:** the built folder then runs from a domain root, a GitHub Pages project subpath, or a bare directory, with no configuration. MapChess is one page with no client-side routing, so there is nothing that needs a real base path, and `import.meta.env.BASE_URL` still resolves the engine correctly.
+
+## D-053 — The credit line is in the app, not only in the README
+
+**Date:** 2026-09-05 · **Phase:** 12
+
+**Decision:** A small strip in the bottom-right corner, on screen for as long as the board is, naming OpenStreetMap (with a link to its copyright page), the Mapzen terrain tiles, and Wikidata. Each carries the full licence in its tooltip. The area picker keeps MapLibre's own attribution control for the basemap.
+
+**Why:** the ODbL requires the attribution to be visible wherever the data is used, and this game is nothing but that data — a line in a README does not cover a running app that somebody opened from a URL. The terrain tiles ask for credit as well. Wikidata is CC0 and requires nothing; it is named anyway, because taking facts from a source without saying so is poor manners even where it is legal.
+
+**Stockfish added later, and it is the one with a duty attached:** the engine is GPL-3.0 and ships compiled, so the link goes to the source repository rather than the project's front page. What the licence asks is that whoever holds the binary can get the code; the licence text itself ships beside the engine at `engine/LICENSE-stockfish.txt`.
+
+**Rejected:** folding the credit into the menu or an "about" panel (invisible while playing, which is exactly when the data is on screen); shrinking it into a single "©" that expands (the required credit has to be legible, not discoverable).
+
+## D-054 — A win estimate, off by default, never at the level being played
+
+**Date:** 2026-09-05 · **Phase:** 12
+
+**Decision:** A card in the left column showing a two-tone bar of each side's share, a sentence ("White is clearly ahead", "Mate in 3 for Black"), and the conventional number with the search depth beside it. Switched on by an icon in the dock and off by default, remembered in `localStorage`. The score is read from the engine's `info … score cp` lines by `parseInfoScore`, searched under `ANALYSIS_SETTINGS` — Skill Level 20, 350 ms — whatever level the opponent is set to, and turned into White-relative terms by `assess()`.
+
+**Why not the play strength:** a Learner searches one ply, so its opinion of the position is as shallow as its play. An estimate is only worth showing if it is better than the player's own guess.
+
+**Why off by default:** it costs an engine search after every move, and the easy levels exist so a beginner can enjoy losing slowly — a running commentary on how badly it is going is the opposite of that. It is there for whoever wants it.
+
+**Why the bar, the words and the number together:** the bar answers "who is winning" without being read, which is what a beginner needs; the sentence answers it in language; the number is for whoever already knows what "+1.4" means. The depth is shown because it is the honest part — it says how hard the engine actually looked — and the card ends "a guess, not a promise", which it is: 350 ms of search, assuming an opponent who at low levels will not play those moves.
+
+**Why it cannot collide with the opponent:** the engine searches one position at a time and `chooseMove` refuses when busy, which would drop the opponent to a random legal fallback. So an assessment is requested only when the engine is idle and the game is live, and `maybePlayAi` awaits any assessment in flight before asking for a move.
+
+**Rejected:** evaluating continuously during the opponent's own search (there is one engine, and the game's move matters more); showing centipawns alone (jargon); hiding the number (the people most likely to switch this on are the ones who read it).
+
+## D-055 — Watch mode can be paused, and only watch mode
+
+**Date:** 2026-09-05 · **Phase:** 12
+
+**Decision:** A pause button appears in the control dock when both seats are the computer, turning into a play button while held. `GameLoop.setPaused` stops `maybePlayAi` from asking for anything further, and a reply that arrives _after_ the pause is discarded rather than played. A new game is never born paused. Nothing else in the game can be paused.
+
+**Why:** watch mode had no controls at all. Resign is disabled with no human seat and take-back needs a human to hand the board back to, so the only way out of a computer-versus-computer game was the menu — which throws the game away rather than holding it. Somebody watching a game wants to stop on a position and look at it.
+
+**Why discard the reply in flight rather than play it:** pause should stop the board where the watcher is looking, not one move later. The search is wasted, which costs nothing anyone can see, and resuming simply asks again.
+
+**Why not pause a game with a person in it:** there is nothing to pause. The board already waits indefinitely for a human move, and the computer's own reply is a second at most — a pause button there would be a control with no state to control.
+
+## D-056 — The move just played, a noise, and a way back to the opening view
+
+**Date:** 2026-09-05 · **Phase:** 12
+
+**Decision:** Three small additions aimed at making the game followable rather than merely correct.
+
+**The last move is lit** in a faded version of the selection colour — the same yellow, weaker, because "the piece in your hand" and "the move just played" are the same kind of fact and one of them is already over with. It is read straight off `engine.history` at draw time rather than remembered, so a take-back rewrites it for free and there is no second copy to fall out of step. Until now nothing at all said what the computer had done: you had to spot the difference.
+
+**Sound is synthesised**, not loaded — an oscillator and a gain envelope per note, so there is no asset, no request and nothing to wait for. A knock for a move, something heavier for a capture, a rising pair for check, three notes at the end. It is off until pressed, and the press is what creates the `AudioContext`, because a browser will not start audio without a gesture and a page that makes noise on its own is intolerable. A remembered "on" therefore does not sound until the button is pressed once — deliberately, since the alternative is either silence that looks broken or noise nobody asked for.
+
+**Everything queued in one turn of the event loop collapses to a single sound.** Restoring a saved game republishes every move it replays, and forty knocks in a row is not a game resuming, it is a fault. A capture outranks a plain move and the end of the game outranks both.
+
+**Recentre** puts the camera back where it started. Panning is clamped to the board, but a player who has orbited underneath and zoomed in had no way home.
+
+**Rejected:** recorded samples (a download, a licence, and a folder of files for four sounds); animating the last-move highlight (the hint already pulses, and two things breathing at once is a fairground).
+
+## D-057 — A remembered setting is applied like any other, gesture or not
+
+**Date:** 2026-09-05 · **Phase:** 12
+
+**Decision:** `ViewControls` calls `onSoundChanged` at construction alongside the label and assessment settings. `Sounds` handles the browser's gesture requirement itself: it builds the context, tries to resume it, and if it will not resume yet, listens once for the next click or key press and resumes then.
+
+**Why:** the first version skipped the call, on the reasoning that audio cannot start without a gesture and construction is not one. That was true and produced a bug anyway. With sound remembered as on, the button drew itself as on, nothing played, and pressing it turned the setting _off_ — two presses to be heard, and the first one looked broken. The gesture requirement is the audio layer's problem to solve, not a reason for the layer above to withhold a setting it has been asked to apply.
+
+## D-058 — A move that gives something away is questioned, on the easiest level only
+
+> **Reversed by D-062.** The prompt was removed. The reasoning below is kept for the record.
+
+**Date:** 2026-09-05 · **Phase:** 12
+
+**Decision:** At Learner, a human move that leaves material to be taken raises a modal before it is played: what falls, where, what takes it, and how bad it is in words rather than numbers. "Let me think again" is the highlighted button and the answer to Escape or a click outside; the piece stays selected so another square can be chosen at once. `findBlunder` is a pure function in `domain/chess/`, `IBlunderWarner` is the seam, `BlunderPrompt` implements it.
+
+**Why two plies and not a search:** the mistake this is for is a piece put where something cheaper can take it, and that is visible one move deep. It plays the move on a throwaway engine built from the FEN, looks at every capture the opponent could answer with, and counts what each would actually cost them — the piece taken, less the piece we take back if we can. That runs in a millisecond, needs no engine, and is testable exactly.
+
+**Why the threshold is two pawns:** a pawn given away is the ordinary traffic of a beginner's game, and a dialog on every one is a dialog nobody reads. Two means a piece, or a piece for a pawn.
+
+**Why only Learner:** a player who can already see the capture does not want stopping, and being interrupted by something you had already spotted is how a helpful feature becomes an irritation. The level exists for someone who cannot yet see it.
+
+**Known limit:** it warns about what can be taken _after_ the move, so a piece that was already hanging before it will be reported again on an unrelated move. Judging "did this move make it worse" needs the position with the side to move flipped, which chess.js will not give without a null move — and for a learner "your queen is still hanging" is arguably the right thing to say anyway.
+
+**Rejected:** using the engine's evaluation (a search per candidate move, and the answer arrives too late to intercept a click); warning after the move with an offer to take it back (the move has landed, the opponent has replied, and the lesson is diluted); warning at every level with a switch (a switch nobody finds off by default, and nobody wants on above Learner).
+
+## D-059 — What is hanging, shown standing, on the two easiest levels
+
+> **Reversed by D-061.** The card and its board marks were removed. The reasoning below is kept for the record.
+
+**Date:** 2026-09-05 · **Phase:** 12
+
+**Decision:** At Learner and Beginner, the player's own pieces that could be taken for nothing are ringed faintly on the board and named on a card in the left column — worst first, at most three, with a count of any others. It is recomputed wherever the position settles and disappears when there is nothing to say. The marks are hidden while a piece is in hand.
+
+**How it knows:** the same two-ply arithmetic as the blunder warning, asked with the turn handed over — the position with the side to move flipped and any en-passant right dropped. `exchange.ts` now holds that sum once, and both `findBlunder` and `findHanging` call it, so the two can never disagree about what a piece is worth.
+
+**Why standing rather than on demand:** the blunder prompt stops a mistake as it is made, which leaves the mistakes already on the board unaddressed. Those are the harder ones to see, because nothing prompts you to look. The card costs no room when all is well, so it can be left on without becoming furniture.
+
+**Why it hides while a piece is held:** the board is then already carrying that piece's legal moves in green and its captures in red, and a third set of red rings on top is a fairground, not information.
+
+**Why Learner and Beginner, not just Learner:** unlike the blunder prompt this interrupts nothing, so the cost of showing it to someone who did not need it is much lower. Above those levels a player sees it themselves and being told is noise.
+
+**Only the player's own pieces**, never the computer's: it is their turn being advised, and marking what the opponent has left hanging would be telling them what to take, which is a different game.
+
+## D-060 — A coach card that is always saying something
+
+**Date:** 2026-09-07 · **Phase:** 12
+
+**Decision:** A card at the top of the left column, on unless turned off at every level, carrying three short lines: what the opening is called, one thing worth doing now, and two numbers (material, and — in the opening — how many pieces are still at home). It is a single sentence of advice, never a list.
+
+**Why:** the game had plenty of help and none of it was ever *there*. The hint answers this move when asked, the blunder prompt answers a move being made, the danger card answers a position where something is hanging — all of them are silent most of the time, and two of them are silent entirely above Beginner. Nothing told a player where they were or what kind of game they were in. This is the panel that always has something to say, which is the only kind a person learns from.
+
+**Where the content comes from:** a book of 55 named openings in `domain/chess/openings.ts`, longest-prefix matched against the moves played. The same table answers both of a beginner's first-ten-moves questions — "what is this called?" is the longest line followed, "what do good players do here?" is the next move of every line that continues from this position. No engine, no search: it runs after every move and the board never waits for it.
+
+**Why a book and not the engine:** asking Stockfish what to play here is the hint button, which already exists and costs a search. The book costs a string compare and, unlike a search, hands back a *name* — and the name is the part that turns twenty random-looking moves into something a player can look up and play again.
+
+**One rule fires, not all of them.** `coaching.ts` tries them in a fixed order: check, then the book, then the mistakes a new player actually makes (queen out early, pieces still at home, king not castled), then what to do with a passed pawn, a lead, or a deficit. Five things to think about is the same as no advice.
+
+**The move number comes from the FEN, not from the length of the move list.** A position set up from a FEN has no history, and counting the list called move 40 of a rook endgame "move 1" and offered it the first-move opening book. The book is consulted only when the history length matches the position's own ply count — that is, when the game really was played from the start.
+
+**Why on by default, when everything else here is off:** it interrupts nothing, it takes four lines, and it is the panel that teaches. A beginner will not go looking for a switch to find help they do not know exists — which is exactly what happened to D-059, invisible at three of five levels and invisible at the other two until something was already hanging.
+
+**Rejected:** an ECO table (a database, and the card has room for one line); showing every rule that fires (a checklist is not advice); gating it by difficulty like the other help (the mistake D-059 made); putting the opening name in the move record (nobody reads a heading over a list of moves).
+
+## D-061 — The danger card is gone
+
+**Date:** 2026-09-07 · **Phase:** 12 · **Reverses:** D-059
+
+**Decision:** Removed the standing "what is hanging" card, the faint red rings that went with it, `findHanging`, the `danger-changed` event, the `danger` highlight role, and the `helpsAt` difficulty gate. `exchange.ts` stays: the blunder prompt (D-058) still uses the same two-ply sum, and that is where the arithmetic was extracted to in the first place.
+
+**Why:** it was unwanted. (D-062 then removed the blunder prompt too, so the paragraph below about what survives no longer holds.) It was also the wrong shape for the job — a panel that appears only when you have already gone wrong, at two of five difficulty levels, is invisible right up until the moment it accuses you. The help that reads as help is the kind that is always there and usually has something ordinary to say, which is what the coach card (D-060) does instead.
+
+**What is left of the idea:** the blunder prompt still catches a piece being *put* somewhere it can be taken, which was always the sharper half. The coach card notices a material deficit and says what to do about it. Neither of them rings a piece in red and waits.
+
+## D-062 — The blunder prompt is gone too, and with it the exchange arithmetic
+
+**Date:** 2026-09-07 · **Phase:** 12 · **Reverses:** D-058
+
+**Decision:** Removed the "Careful — their pawn can take your knight" modal, `IBlunderWarner`, `findBlunder`, `GameLoop.confirmed()`, the `warner` dependency, and the `warnsAt` difficulty gate. `exchange.ts` went with them; the piece values it also held now live alone in `domain/chess/values.ts`, which is what the rest of the game actually wanted from it.
+
+**Why:** interrupting somebody's move is the most expensive thing a piece of UI can do, and it was buying a lesson the player had not asked for at the exact moment they had decided what to play. Two features in a row (D-058, D-059) tried to teach by pointing at mistakes, and both were unwanted for the same reason: the game was correcting the player instead of accompanying them.
+
+**What replaces it:** nothing, deliberately. The coach card (D-060) says something ordinary and useful on every move without waiting for a mistake, and the hint button answers "what should I play" when it is asked. Between them there is no gap that wants a modal.
+
+**Kept from the wreckage:** `PIECE_VALUE`, because "you are three ahead" needs a price list and there should be exactly one in the codebase. `IChessEngine.isPinned` and `isAttacked` stay too — `explainMove` uses them to write the hint's sentences.
+
+**Note on the reversals.** D-058, D-059 and D-060 were all built in Phase 12 and two of the three are now gone. That is not three failed features so much as one question asked three times — how do you help a beginner without nagging them — where only the answer that never mentions a mistake survived contact with a player.

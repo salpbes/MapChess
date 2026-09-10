@@ -95,6 +95,20 @@ export const ADVICE_SETTINGS: EngineSettings = {
   hashMb: 16,
 };
 
+/**
+ * What the engine is asked for a running assessment of the position. Shorter
+ * than a hint — this runs after every move, not on request — but at full
+ * strength for the same reason: a Learner's own opinion of the position is as
+ * shallow as its play.
+ */
+export const ANALYSIS_SETTINGS: EngineSettings = {
+  strength: { kind: 'skill', level: 20 },
+  search: { kind: 'movetime', ms: 350 },
+  minThinkMs: 0,
+  budgetMs: 350,
+  hashMb: 16,
+};
+
 /** The `go` line that starts a search at this level. */
 export function goCommand(settings: EngineSettings): string {
   return settings.search.kind === 'movetime'

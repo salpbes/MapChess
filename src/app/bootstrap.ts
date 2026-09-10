@@ -54,6 +54,9 @@ import { browserBase64 } from '@shared/encoding/base64';
 import { EventBus } from '@shared/events/EventBus';
 import { LocalJsonStore } from '@shared/storage/LocalJsonStore';
 import { AreaBar } from '@ui/AreaBar';
+import { AssessmentCard } from '@ui/AssessmentCard';
+import { CoachCard } from '@ui/CoachCard';
+import { Attribution } from '@ui/Attribution';
 import { BoardDebugPanel } from '@ui/BoardDebugPanel';
 import { BriefingPanel } from '@ui/BriefingPanel';
 import { ControlDock } from '@ui/ControlDock';
@@ -70,6 +73,7 @@ import { PanelColumn } from '@ui/PanelColumn';
 import type { NewGameRequest, SavedGameSummary } from '@ui/MainMenu';
 import { PromotionPrompt } from '@ui/PromotionPrompt';
 import { RecordPanel } from '@ui/RecordPanel';
+import { Sounds } from '@ui/Sounds';
 import { StatusBar } from '@ui/StatusBar';
 import { Tooltips } from '@ui/Tooltips';
 import { ViewControls } from '@ui/ViewControls';
@@ -134,6 +138,7 @@ export function bootstrap(
       error,
     );
   });
+  // Only the easiest level is questioned; startGame decides when.
   const game = new GameLoop({ engine, view, promotion, bus, ai });
 
   // --- persistence (Phase 11: one autosaved game, including its area) ---
@@ -165,6 +170,10 @@ export function bootstrap(
   const statusBar = new StatusBar(uiContainer, bus);
   // One tooltip for every `data-tip` in the overlay, placed where it fits.
   const tooltips = new Tooltips(uiContainer);
+  // Silent until the player asks; a browser will not start audio otherwise.
+  const sounds = new Sounds(bus);
+  // Required by the ODbL for as long as the board is on screen.
+  const attribution = new Attribution(uiContainer);
   const themeTracker = new ThemeTracker(bus);
   const briefing = new BriefingPanel(uiContainer);
   // The reveal is drawn on the briefing's paper rather than floating over the board.
@@ -179,6 +188,8 @@ export function bootstrap(
   // to have to agree on.
   const column = new PanelColumn(uiContainer);
   const dock = new ControlDock(column.element);
+  const coachCard = new CoachCard(column.element, bus);
+  const assessment = new AssessmentCard(column.element, bus);
   const record = new RecordPanel(column.element, bus, themeTracker);
   const hintCard = new HintCard(column.element, bus, themeTracker);
 
@@ -200,6 +211,11 @@ export function bootstrap(
     onMenu: () => {
       menu.open();
     },
+    onTogglePause: () => {
+      game.setPaused(!game.isPaused);
+    },
+    canPause: () => game.isWatching() && game.outcome === null,
+    isPaused: () => game.isPaused,
     onHint: () => {
       void game.requestHint();
     },
@@ -401,6 +417,18 @@ export function bootstrap(
     onLabelsChanged: (mode) => {
       boardScene.setLabelMode(mode);
     },
+    onAssessingChanged: (on) => {
+      game.setAssessing(on);
+    },
+    onCoachingChanged: (on) => {
+      game.setCoaching(on);
+    },
+    onSoundChanged: (on) => {
+      sounds.setEnabled(on);
+    },
+    onRecenter: () => {
+      stage.reframe(boardScene.layout?.bounds ?? initialLayout.bounds);
+    },
   });
 
   loadArea(areaBar.current);
@@ -432,12 +460,16 @@ export function bootstrap(
       menu.dispose();
       hintCard.dispose();
       record.dispose();
+      assessment.dispose();
+      coachCard.dispose();
       dock.dispose();
       column.dispose();
       briefing.dispose();
       saves.dispose();
       identityCard.dispose();
       themeTracker.dispose();
+      attribution.dispose();
+      sounds.dispose();
       tooltips.dispose();
       statusBar.dispose();
       ai.dispose();

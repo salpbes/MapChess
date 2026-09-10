@@ -8,6 +8,8 @@
 
 import type { MoveRequest } from '@domain/chess/types';
 
+import type { EngineScore } from './uci';
+
 export type Difficulty = 'learner' | 'beginner' | 'casual' | 'club' | 'strong';
 
 /** Weakest first. Saved games from before `learner` and `casual` existed still name a level in this list. */
@@ -31,5 +33,11 @@ export interface IChessAI {
    * would be worse than no advice.
    */
   hint?(fen: string): Promise<MoveRequest>;
+  /**
+   * Optional: how the engine rates this position, from the point of view of
+   * the side to move. Searched at full strength like a hint, and for the same
+   * reason — an assessment as shallow as the opponent's play is worthless.
+   */
+  evaluate?(fen: string): Promise<EngineScore | null>;
   dispose(): void;
 }

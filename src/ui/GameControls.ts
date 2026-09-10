@@ -1,4 +1,5 @@
-// WHAT: The buttons a game in progress needs: Menu, Hint, Take back, Resign.
+// WHAT: The buttons a game in progress needs: Menu, Pause, Hint, Take back,
+//       Resign — Pause only when the computer is playing itself.
 // HOW:  A row in the control dock. Enabled state is recomputed from the
 //       callbacks the app supplies whenever anything the game publishes could
 //       have changed the answer. Resign asks once — the flag turns red and the
@@ -11,7 +12,7 @@
 
 import type { GameBus } from '@game/GameEvents';
 
-import { iconButton } from './icons';
+import { icon, iconButton } from './icons';
 
 const CONFIRM_MS = 4000;
 const BUTTON = 'controls__button';
@@ -27,6 +28,10 @@ export interface GameControlsSlots {
 
 export interface GameControlsDeps {
   readonly onMenu: () => void;
+  readonly onTogglePause: () => void;
+  /** Only watch mode can be paused; nothing else keeps a person waiting. */
+  readonly canPause: () => boolean;
+  readonly isPaused: () => boolean;
   readonly onHint: () => void;
   readonly onUndo: () => void;
   readonly onResign: () => void;
@@ -42,6 +47,7 @@ export class GameControls {
   private readonly resign: HTMLButtonElement;
   private readonly confirmWord: HTMLSpanElement;
   private readonly menu: HTMLButtonElement;
+  private readonly pause: HTMLButtonElement;
   private readonly unsubscribe: (() => void)[];
   private confirmTimer: ReturnType<typeof setTimeout> | null = null;
   private confirming = false;
@@ -59,6 +65,12 @@ export class GameControls {
       deps.onMenu();
     });
     slots.menu.appendChild(this.menu);
+
+    this.pause = iconButton('pause', 'Pause', BUTTON, () => {
+      this.cancelConfirm();
+      deps.onTogglePause();
+      this.refresh();
+    });
 
     this.hint = iconButton(
       'hint',
@@ -91,7 +103,7 @@ export class GameControls {
     this.confirmWord.hidden = true;
     this.resign.appendChild(this.confirmWord);
 
-    this.root.append(this.hint, this.undo, this.resign);
+    this.root.append(this.pause, this.hint, this.undo, this.resign);
     slots.actions.appendChild(this.root);
 
     const refresh = (): void => {
@@ -107,6 +119,7 @@ export class GameControls {
       bus.on('status-changed', refresh),
       bus.on('ai-thinking', refresh),
       bus.on('game-over', refresh),
+      bus.on('paused-changed', refresh),
     ];
     this.refresh();
   }
@@ -119,6 +132,18 @@ export class GameControls {
   }
 
   private refresh(): void {
+    // Watch mode has no resign and no take-back, so without this it has no
+    // controls at all beyond the menu.
+    const watching = this.deps.canPause();
+    this.pause.hidden = !watching;
+    if (watching) {
+      const paused = this.deps.isPaused();
+      this.pause.replaceChildren(icon(paused ? 'play' : 'pause'));
+      const label = paused ? 'Let the game carry on' : 'Pause the game';
+      this.pause.dataset.tip = label;
+      this.pause.setAttribute('aria-label', label);
+    }
+
     const waiting = this.deps.canHint();
     this.hint.disabled = !waiting;
     // Lit while the board is waiting on the player: the one button that is

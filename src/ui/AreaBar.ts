@@ -17,7 +17,12 @@ import type { MapArea } from '@mapdata/model/MapArea';
 import type { FixtureAreaDef } from '@mapdata/model/fixtureAreas';
 import type { SelectedArea } from '@mapdata/model/SelectedArea';
 
-import { AreaPicker } from './AreaPicker';
+// Type-only: the value import is deferred, so MapLibre stays out of the
+// initial bundle. It is a third of the download and is needed only if the
+// player opens the picker.
+import type { AreaPicker } from './AreaPicker';
+
+type AreaPickerConstructor = typeof AreaPicker;
 import { iconButton } from './icons';
 
 /**
@@ -47,6 +52,7 @@ export class AreaBar {
   private readonly el: HTMLDivElement;
   private readonly summary: HTMLSpanElement;
   private picker: AreaPicker | null = null;
+  private opening = false;
   private closePresets: (() => void) | null = null;
 
   public constructor(
@@ -64,7 +70,7 @@ export class AreaBar {
     }
     this.el.appendChild(
       iconButton('map', 'Choose a place on the map', 'area-bar__button', () => {
-        this.openPicker();
+        void this.openPicker();
       }),
     );
     slots.buttons.appendChild(this.el);
@@ -89,9 +95,9 @@ export class AreaBar {
     this.render();
   }
 
-  /** Opens the map picker, as the "Choose area…" button does. */
+  /** Opens the map picker, as the map button does. */
   public open(): void {
-    this.openPicker();
+    void this.openPicker();
   }
 
   public dispose(): void {
@@ -101,9 +107,22 @@ export class AreaBar {
     this.el.remove();
   }
 
-  private openPicker(): void {
-    if (this.picker !== null) return;
-    this.picker = new AreaPicker(
+  private async openPicker(): Promise<void> {
+    // `opening` as well as `picker`: the module takes a moment to arrive and a
+    // second click in that moment would build two pickers.
+    if (this.picker !== null || this.opening) return;
+    this.opening = true;
+    let build: AreaPickerConstructor;
+    try {
+      build = (await import('./AreaPicker')).AreaPicker;
+    } catch (error: unknown) {
+      console.error('Could not load the map picker.', error);
+      return;
+    } finally {
+      this.opening = false;
+    }
+
+    this.picker = new build(
       this.deps.pickerHost,
       {
         geocoder: this.deps.geocoder,
