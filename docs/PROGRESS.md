@@ -719,6 +719,9 @@ winning if you ask, and it has a coach that tells you what your opening is
 called and one thing worth doing about it. Two features that tried to teach by
 pointing at your mistakes were built, played, and taken back out again.
 
+And it is on the internet: **<https://salpbes.github.io/MapChess/>**. A stranger
+can open that and play, which was the whole of what Phase 12 asked for.
+
 ### What I built
 
 **Shipping requirements**
@@ -767,6 +770,18 @@ pointing at your mistakes were built, played, and taken back out again.
   `IBlunderWarner`, the `danger` highlight role and the `warnsAt`/`helpsAt`
   difficulty gates.
 
+**Deployment**
+
+- `.github/workflows/deploy.yml` — every push to `main` runs the four gates
+  the project runs locally (lint, formatting, types, tests) and only then
+  builds and publishes to GitHub Pages. `npm ci` rather than `npm install`,
+  because `public/engine/` is gitignored and the postinstall is what copies
+  Stockfish out of `node_modules`.
+- `index.html` — an inline SVG favicon. Serving the built site from a
+  subdirectory turned up a 404 on every visit: browsers ask for
+  `/favicon.ico` and the page declared none. Inline as a data URI, it costs
+  no request and cannot 404 wherever the site is mounted.
+
 **A bug the screenshots found**
 
 - `src/game/SaveManager.ts` — a save is no longer written for a game with no
@@ -778,6 +793,23 @@ pointing at your mistakes were built, played, and taken back out again.
   Phase 11's "done when" asked for. No test caught it because the test for
   resuming never started the second game the way the composition root does;
   both halves are pinned by `tests/game/save.test.ts` now.
+
+**Two bugs found after shipping, both in watch mode**
+
+- **The computers played behind the menu.** Bootstrap called `game.start()`
+  before `menu.open()`, and a game reloaded from a save takes its seating from
+  that save — so an ai-vs-ai game began trading moves under the front door
+  before the player had chosen anything. `GameLoop.setAtMenu()` now holds it,
+  deliberately as a _separate_ flag from `paused`: the pause button reports
+  what the player asked for, so opening the menu must not make it read
+  "paused" and closing it must not undo a pause they set themselves. The menu
+  also goes up before the game starts now — otherwise `start()` emits
+  `ai-thinking` on its way to being held and the status bar sits there saying
+  "White is thinking…" when nothing is.
+- **Nine icons did not fit the column.** Watch mode adds a pause button, and
+  the last icon sat 8 px outside the paper. `.dock__row--place` wrapped;
+  `.dock__row--actions` did not. Both wrap now: eight icons normally, nine
+  watching, two lines, no overflow.
 
 ### Why it was done this way
 
@@ -808,7 +840,8 @@ constantly. It is now a promise chain.
 
 ### How to check it yourself
 
-1. `npm run dev`, open the URL.
+1. Open <https://salpbes.github.io/MapChess/> — or `npm run dev` for a local
+   copy. Everything below is the same either way.
 2. The credit strip is along the bottom before you do anything. Every source is
    a link.
 3. Start a game at any level. The **Your game** card sits under the controls
@@ -820,24 +853,40 @@ constantly. It is now a promise chain.
    on, the speaker for sound.
 6. `npm run build && npx vite preview` — the first-load bundle is ~793 kB and
    the map library is only fetched when you open **Choose area**.
+7. Menu → New game → **Watch (computer plays both)**, then reload the page.
+   The board stays still at "White to move" behind the menu, and starts only
+   when the menu is dismissed.
 
 ### What's left
 
-Nothing in the plan. Outside it, two things are worth naming:
+Nothing in the plan — the game is built, documented, deployed and playable at
+a public URL. Outside the plan, two things are worth naming, and the first is
+the one that decides who can actually play it:
 
-- **No deployment.** `base: './'` means `dist/` will run anywhere; it needs a
-  host chosen.
 - **No phone or tablet layout.** There is not one width media query in the
   stylesheet: the left column is a fixed 230 px and the briefing 300 px, which
-  on a phone would cover the board they describe.
+  on a phone would cover the board they describe. Most people who are sent a
+  link open it on a phone.
+- **No keyboard play and no colour-blind-safe highlights.** Offered during the
+  phase and never built. Green for a move and red for a capture is the pair
+  most often confused.
 
 ### Risks / things I'm unsure about
 
-- **The DOM layer is still untested.** Vitest runs in `node` (BUILD_PLAN §3),
-  so of 32 test files exactly one covers `ui/`, and it tests a list of strings.
-  Four CSS regressions in this phase were found by playing the game rather than
-  by the suite. The bargain has held since Phase 1, but this phase added ten
-  more panels to the side of it that nothing checks.
+- **The DOM layer is still untested, and it is now the phase's main lesson.**
+  Vitest runs in `node` (BUILD_PLAN §3), so of 32 test files exactly one covers
+  `ui/`, and it tests a list of strings. Everything this phase got wrong was
+  found by a person looking at the screen: four CSS regressions, the resume bug,
+  the computers playing behind the menu, and the icon row running off the paper.
+  Not one was caught by 399 passing tests. The bargain has held since Phase 1,
+  but this phase added ten more panels to the side of it that nothing checks,
+  and the three bugs that reached a shipped build all lived there.
+
+  What worked instead was driving the built site in a headless browser — that is
+  how the resume bug, the favicon 404 and both watch-mode bugs were reproduced
+  and then verified fixed. Those scripts were thrown away; making them part of
+  the suite is the obvious next investment.
+
 - **The opening book is 55 lines chosen by hand.** Every line is played out on
   a real engine by `tests/domain/chess/openings.test.ts`, so none of them is
   illegal — but "Sicilian, Najdorf territory" is a judgement about where a name
@@ -845,6 +894,18 @@ Nothing in the plan. Outside it, two things are worth naming:
 - **The coach's advice is arithmetic, not understanding.** It counts
   development, material and passed pawns and picks the first rule that fires.
   It will tell you to castle in a position where castling is wrong.
+- **A save carries the seating, so restoring one restores watch mode.** That is
+  correct, and it is also why the menu bug existed: the reload path is the only
+  one that starts an ai-vs-ai game without a person having just asked for it.
+  Any future state restored from a save deserves the same suspicion — it arrives
+  before the player has touched anything.
+
+- **The working tree collects `<name> 2.<ext>` duplicates.** Thirty appeared
+  during the phase — identical file copies and empty directory husks, the usual
+  iCloud artefact for a project under `~/Documents`. They fail lint and prettier
+  and `git add -A` would commit them. Harmless once seen; the repository is
+  better off outside a synced folder.
+
 - **Two reversals in one phase is a signal.** D-058 and D-059 were both built,
   documented, and removed within days. They were cheap to remove because they
   sat behind seams — but the pattern says features aimed at "helping" should be

@@ -670,3 +670,19 @@ The name is now back on the feature point, expanding in place from the glyph, an
 **Kept from the wreckage:** `PIECE_VALUE`, because "you are three ahead" needs a price list and there should be exactly one in the codebase. `IChessEngine.isPinned` and `isAttacked` stay too — `explainMove` uses them to write the hint's sentences.
 
 **Note on the reversals.** D-058, D-059 and D-060 were all built in Phase 12 and two of the three are now gone. That is not three failed features so much as one question asked three times — how do you help a beginner without nagging them — where only the answer that never mentions a mistake survived contact with a player.
+
+## D-063 — Nothing plays behind the front door, and the menu is not the pause button
+
+**Date:** 2026-09-10 · **Phase:** 12
+
+**Decision:** `GameLoop` holds the game while the menu is open, through `setAtMenu()` and a flag of its own — not by reusing `setPaused()`. The composition root wires it to the menu's `onVisibility`. The menu is also opened _before_ the first `start()`.
+
+**Why it exists:** a watched game reloaded from a save started playing itself under the menu. The seating comes from the save, so the reload path is the only one that begins an ai-vs-ai game without a person having just asked for it, and `game.start()` ran before `menu.open()`.
+
+**Why a second flag rather than reusing the pause:** the pause button is a statement about what the _player_ wants, and the UI reads it back to them. Reusing it would make opening the menu turn the button to "paused" and closing the menu silently resume a game the player had paused themselves. Two flags, one predicate — `isHeld()` is `paused || atMenu` — keeps the button honest while giving the loop one thing to check.
+
+**Why the menu opens first:** held or not, `start()` publishes `ai-thinking` on its way, and the status bar then sat behind the menu insisting "White is thinking…" when nothing was. Ordering the hold before the start is cheaper than teaching the status bar about the menu.
+
+**What made it safe:** `maybePlayAi` already re-reads the hold after its `await` — the same discipline used for `outcome` and `generation` — so a search in flight when the menu opens has its reply discarded rather than played.
+
+**Rejected:** not starting the game until the menu closes (the board behind the menu would be empty, and the menu is deliberately see-through); teaching `GameLoop` about the menu directly (the loop must not know what a menu is — the composition root wires the two together).

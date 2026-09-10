@@ -6,9 +6,13 @@ There are no buildings. The landscape is the board.
 
 Every piece is somebody. Click White's rook at Rievaulx and a card names it — _Ashberry Hill, the highest ground on this side, 169 m_. The bishop is the abbey; the knight is the river crossing. Black takes its own identities from its own half of the valley.
 
+## Play it
+
+**<https://salpbes.github.io/MapChess/>** — no install, no account. It runs entirely in the browser; the chess engine is WebAssembly and the terrain is fetched from public map data.
+
 ## Status
 
-**Phase 12 of 12.** Playable end to end: choose a place, play the computer on its terrain, take back, resign, resume. See [docs/PROGRESS.md](docs/PROGRESS.md) for the report on each phase.
+**Phase 12 of 12, deployed.** Playable end to end: choose a place, play the computer on its terrain, take back, resign, resume. See [docs/PROGRESS.md](docs/PROGRESS.md) for the report on each phase.
 
 ## Screenshots
 
