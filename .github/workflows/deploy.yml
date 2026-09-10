@@ -1,0 +1,66 @@
+# WHAT: Builds MapChess and publishes it to GitHub Pages.
+# HOW:  Every push to main runs the same four gates the project runs locally —
+#       lint, formatting, types, tests — and only then builds and deploys. The
+#       engine binaries are not in the repository (`public/engine/` is ignored);
+#       `npm ci` runs the postinstall that copies them out of node_modules.
+# WHY:  A deploy that skips the suite is a deploy that ships a red build. The
+#       gates are cheap — the whole suite is under two seconds — so there is no
+#       reason to publish anything that has not passed them.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  # So a deploy can be re-run from the Actions tab without an empty commit.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; queue the second rather than cancelling it, so
+# the last push to main is always the one that ends up published.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `ci`, not `install`: the lockfile is the point, and postinstall puts
+      # the Stockfish build into public/engine/ where the bundler expects it.
+      - run: npm ci
+
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm test
+
+      # `base: './'` means the output works from any path, so nothing here
+      # needs to know the repository name.
+      - run: npm run build
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

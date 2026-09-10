@@ -62,6 +62,25 @@ Nothing is required at runtime except the browser. Elevation and map features
 are fetched from public APIs and cached in IndexedDB; a failure shows an error
 with a retry rather than breaking the game.
 
+### GitHub Pages
+
+`.github/workflows/deploy.yml` builds and publishes on every push to `main`,
+after running lint, formatting, types and the test suite — a deploy that skips
+the suite is a deploy that ships a red build. To set it up once:
+
+1. Create an empty repository on GitHub.
+2. `git remote add origin git@github.com:<you>/<repo>.git`
+3. `git push -u origin main`
+4. **Settings → Pages → Source: GitHub Actions.**
+
+The site then appears at `https://<you>.github.io/<repo>/`. Nothing needs to
+know the repository name: `base: './'` in `vite.config.ts` keeps every asset
+path relative, and the engine is loaded from `import.meta.env.BASE_URL`, so the
+same build works from a subpath and from a domain root.
+
+The engine binaries are not in the repository — `public/engine/` is ignored and
+`npm ci` runs the postinstall that copies them out of `node_modules/stockfish`.
+
 ## Data and licences
 
 The board is made of other people's work, credited on screen and here:

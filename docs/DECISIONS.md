@@ -633,11 +633,11 @@ The name is now back on the feature point, expanding in place from the glyph, an
 
 **Decision:** A card at the top of the left column, on unless turned off at every level, carrying three short lines: what the opening is called, one thing worth doing now, and two numbers (material, and — in the opening — how many pieces are still at home). It is a single sentence of advice, never a list.
 
-**Why:** the game had plenty of help and none of it was ever *there*. The hint answers this move when asked, the blunder prompt answers a move being made, the danger card answers a position where something is hanging — all of them are silent most of the time, and two of them are silent entirely above Beginner. Nothing told a player where they were or what kind of game they were in. This is the panel that always has something to say, which is the only kind a person learns from.
+**Why:** the game had plenty of help and none of it was ever _there_. The hint answers this move when asked, the blunder prompt answers a move being made, the danger card answers a position where something is hanging — all of them are silent most of the time, and two of them are silent entirely above Beginner. Nothing told a player where they were or what kind of game they were in. This is the panel that always has something to say, which is the only kind a person learns from.
 
 **Where the content comes from:** a book of 55 named openings in `domain/chess/openings.ts`, longest-prefix matched against the moves played. The same table answers both of a beginner's first-ten-moves questions — "what is this called?" is the longest line followed, "what do good players do here?" is the next move of every line that continues from this position. No engine, no search: it runs after every move and the board never waits for it.
 
-**Why a book and not the engine:** asking Stockfish what to play here is the hint button, which already exists and costs a search. The book costs a string compare and, unlike a search, hands back a *name* — and the name is the part that turns twenty random-looking moves into something a player can look up and play again.
+**Why a book and not the engine:** asking Stockfish what to play here is the hint button, which already exists and costs a search. The book costs a string compare and, unlike a search, hands back a _name_ — and the name is the part that turns twenty random-looking moves into something a player can look up and play again.
 
 **One rule fires, not all of them.** `coaching.ts` tries them in a fixed order: check, then the book, then the mistakes a new player actually makes (queen out early, pieces still at home, king not castled), then what to do with a passed pawn, a lead, or a deficit. Five things to think about is the same as no advice.
 
@@ -655,7 +655,7 @@ The name is now back on the feature point, expanding in place from the glyph, an
 
 **Why:** it was unwanted. (D-062 then removed the blunder prompt too, so the paragraph below about what survives no longer holds.) It was also the wrong shape for the job — a panel that appears only when you have already gone wrong, at two of five difficulty levels, is invisible right up until the moment it accuses you. The help that reads as help is the kind that is always there and usually has something ordinary to say, which is what the coach card (D-060) does instead.
 
-**What is left of the idea:** the blunder prompt still catches a piece being *put* somewhere it can be taken, which was always the sharper half. The coach card notices a material deficit and says what to do about it. Neither of them rings a piece in red and waits.
+**What is left of the idea:** the blunder prompt still catches a piece being _put_ somewhere it can be taken, which was always the sharper half. The coach card notices a material deficit and says what to do about it. Neither of them rings a piece in red and waits.
 
 ## D-062 — The blunder prompt is gone too, and with it the exchange arithmetic
 
