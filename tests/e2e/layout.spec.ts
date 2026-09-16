@@ -56,6 +56,28 @@ test.describe('the shape of the page', () => {
     await expect(page.getByRole('button', { name: /^Tips/ })).toBeVisible();
   });
 
+  test('credits the data on one row, without shortening the licensed line', async ({ page }) => {
+    await bootBoard(page);
+    await startGame(page);
+
+    const attribution = page.locator('.attribution');
+    await expect(attribution).toBeVisible();
+
+    // Every source still named — dropping a credit to save space is not a
+    // layout decision, it is a licence one.
+    await expect(attribution).toContainText('© OpenStreetMap contributors');
+    await expect(attribution).toContainText('Stockfish');
+    await expect(attribution).toContainText('Wikidata');
+    await expect(attribution).toContainText('Mapzen');
+
+    // One row: two was costing the board a bar's worth of height.
+    const box = await attribution.boundingBox();
+    const lineHeight = await attribution.evaluate(
+      (el) => parseFloat(getComputedStyle(el).fontSize) * 1.6,
+    );
+    expect(box?.height ?? 0).toBeLessThanOrEqual(lineHeight);
+  });
+
   test('the picker is mostly map', async ({ page }) => {
     await bootBoard(page);
     await startGame(page);

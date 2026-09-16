@@ -1868,9 +1868,20 @@ body {
     it. Smaller and tighter fits it back into one on a phone in portrait, and
     it stays well above the 9px floor the ODbL's "legible" asks for.
   */
+  /*
+    Was wrapping to two rows and taking a bar's worth of board with it. The
+    credits themselves all stay — what goes is the prefix saying what kind of
+    source each one is, which the tooltip says anyway. "© OpenStreetMap
+    contributors" is never shortened: that exact wording is what the ODbL asks
+    for, and it is the one line here that is a licence term rather than manners.
+  */
   .attribution {
     gap: 4px;
-    font-size: 9.5px;
+    font-size: 10px;
     line-height: 1.25;
+  }
+
+  .attribution__label {
+    display: none;
   }
 }

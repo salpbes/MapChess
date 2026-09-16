@@ -12,6 +12,12 @@
 //       naming it is poor manners even when it is legal.
 
 interface Source {
+  /**
+   * The part that is dropped on a narrow screen. Only ever a prefix that says
+   * what KIND of source it is — never the credit itself, so the line stays
+   * accurate wherever it is cut.
+   */
+  readonly label?: string;
   readonly text: string;
   readonly href: string;
   readonly detail: string;
@@ -25,19 +31,22 @@ const SOURCES: readonly Source[] = [
       'Rivers, woods, peaks, place names and everything else on the board come from OpenStreetMap, under the Open Database Licence (ODbL).',
   },
   {
-    text: 'Terrain: Mapzen / AWS',
+    label: 'Terrain: ',
+    text: 'Mapzen / AWS',
     href: 'https://registry.opendata.aws/terrain-tiles/',
     detail:
       'Ground heights from Mapzen Terrain Tiles on AWS Open Data, themselves assembled from SRTM, NED and other public surveys.',
   },
   {
-    text: 'Engine: Stockfish',
+    label: 'Engine: ',
+    text: 'Stockfish',
     href: 'https://github.com/official-stockfish/Stockfish',
     detail:
       'The opponent is Stockfish, running as WebAssembly in a worker. Licensed GPL-3.0; the link goes to the source, and the licence text ships beside the engine.',
   },
   {
-    text: 'Facts: Wikidata',
+    label: 'Facts: ',
+    text: 'Wikidata',
     href: 'https://www.wikidata.org/',
     detail:
       'Founding dates and heritage listings from Wikidata, released into the public domain (CC0).',
@@ -63,7 +72,13 @@ export class Attribution {
       link.target = '_blank';
       // Never hand the opened page a handle on this one.
       link.rel = 'noopener noreferrer';
-      link.textContent = source.text;
+      if (source.label !== undefined) {
+        const label = document.createElement('span');
+        label.className = 'attribution__label';
+        label.textContent = source.label;
+        link.appendChild(label);
+      }
+      link.appendChild(document.createTextNode(source.text));
       link.dataset.tip = source.detail;
       this.root.appendChild(link);
     });
