@@ -30,6 +30,13 @@ body {
 
 #world canvas {
   display: block;
+  /*
+    Without this the browser claims every drag and pinch on the canvas for its
+    own pan and zoom, and an orbit gesture scrolls the page instead of turning
+    the board. OrbitControls already maps one finger to rotate and two to
+    slide-and-pinch; this is what lets those events reach it at all.
+  */
+  touch-action: none;
 }
 
 #ui {
@@ -1562,7 +1569,13 @@ body {
     the way out of the game, the way to learn it, and the two things to read.
   */
   :root {
-    --sheet-bar: 72px;
+    /*
+      What the bar reserves from the board: the grip, the buttons, and the peek
+      line that appears when a piece is selected. Anything anchored to the
+      bottom clears this, or the drawer's paper is drawn over it — which is how
+      the ODbL credit ended up half-hidden the first time.
+    */
+    --sheet-bar: 104px;
   }
 
   .sheet {
@@ -1603,6 +1616,22 @@ body {
     height: 5px;
     border-radius: 3px;
     background: rgba(120, 95, 55, 0.4);
+  }
+
+  /*
+    The reveal, while the drawer is shut. One line, clipped rather than
+    wrapped: it sits above the bar and must never push it off the screen.
+  */
+  .sheet__peek {
+    padding: 0 12px 6px;
+    color: var(--paper-ink-strong);
+    font-family: var(--paper-serif);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .sheet__bar {
@@ -1744,5 +1773,49 @@ body {
   /* Both own the bottom-right corner on desktop, where the bar now is. */
   .fps-meter {
     bottom: calc(var(--sheet-bar) + 24px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/*
+  A fingertip is not a cursor. 44px is the smallest target a thumb hits without
+  aiming, and every button below was sized for a mouse.
+
+  Keyed on the pointer rather than the width, deliberately: a touchscreen
+  laptop at 1440px has the same thumbs, and a narrow window on a desktop does
+  not. This is the one place where `pointer: coarse` is the honest question and
+  `max-width` would be a guess.
+*/
+@media (pointer: coarse) {
+  .controls__button,
+  .view-controls__button,
+  .area-bar__button {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Eight 44px buttons do not fit across a phone; let the row take two. */
+  .dock__row {
+    flex-wrap: wrap;
+  }
+
+  /* The headings are the drawer's own controls, so they are targets too. */
+  .briefing__toggle,
+  .record__toggle {
+    min-height: 44px;
+  }
+
+  /*
+    Promotion is the one prompt that appears mid-move and must be answered
+    before anything else can happen, so a mis-tap here costs the game rather
+    than a moment.
+  */
+  .promotion-panel button {
+    min-height: 44px;
+    padding: 10px 16px;
+  }
+
+  .area-picker__button,
+  .area-picker__result-button {
+    min-height: 44px;
   }
 }

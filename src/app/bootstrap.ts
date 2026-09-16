@@ -68,6 +68,7 @@ import { GameOverScreen } from '@ui/GameOverScreen';
 import { HeightmapDebugPanel } from '@ui/HeightmapDebugPanel';
 import { HintCard } from '@ui/HintCard';
 import { IdentityCard } from '@ui/IdentityCard';
+import { identityLine } from '@ui/identityLine';
 import { MainMenu } from '@ui/MainMenu';
 import { PanelColumn } from '@ui/PanelColumn';
 import { PanelSheet } from '@ui/PanelSheet';
@@ -197,6 +198,10 @@ export function bootstrap(
   const briefing = new BriefingPanel(sheet.fieldSlot);
   // The reveal is drawn on the briefing's paper rather than floating over the board.
   const identityCard = new IdentityCard(briefing.selectionSlot, bus, themeTracker);
+  // The same line, in the one place a phone can see it while the drawer is shut.
+  const stopPeek = bus.on('selection-changed', ({ square }) => {
+    sheet.setPeek(square === null ? null : identityLine(themeTracker.describe(square)));
+  });
   // Optional, CC0, and never allowed to hold the board up: the briefing is
   // shown at once from OSM alone, then re-shown if Wikidata answers.
   const historyProvider = new WikidataProvider(
@@ -490,6 +495,7 @@ export function bootstrap(
       coachCard.dispose();
       dock.dispose();
       column.dispose();
+      stopPeek();
       sheet.dispose();
       briefing.dispose();
       saves.dispose();

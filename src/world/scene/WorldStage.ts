@@ -27,6 +27,16 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+/**
+ * Whether the primary pointer is a fingertip. Asked once, at build time, and
+ * deliberately as a capability rather than a screen width: a touchscreen
+ * laptop and a phone want the same orbit limits, and a narrow window on a
+ * desktop does not.
+ */
+function hasCoarsePointer(): boolean {
+  return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+}
+
 export class WorldStage {
   public readonly scene: Scene;
   public readonly camera: PerspectiveCamera;
@@ -37,6 +47,8 @@ export class WorldStage {
   private readonly resize: ResizeHandler;
   private lights: Object3D;
   private bounds: BoardBounds;
+  /** Asked once and kept: reframe must not quietly hand a phone the mouse's limits. */
+  private readonly coarsePointer: boolean;
   private readonly unsubscribeControls: () => void;
 
   public constructor(container: HTMLElement, bounds: BoardBounds) {
@@ -46,7 +58,10 @@ export class WorldStage {
 
     const aspect = container.clientWidth / Math.max(container.clientHeight, 1);
     this.camera = createCamera(bounds, aspect);
-    this.controls = createControls(this.camera, this.renderer.domElement, bounds);
+    this.coarsePointer = hasCoarsePointer();
+    this.controls = createControls(this.camera, this.renderer.domElement, bounds, {
+      coarsePointer: this.coarsePointer,
+    });
 
     this.lights = createLights(bounds);
     this.scene.add(this.lights);
@@ -68,7 +83,9 @@ export class WorldStage {
     this.camera.far = fresh.far;
     this.camera.updateProjectionMatrix();
 
-    const limits = createControls(fresh, this.renderer.domElement, bounds);
+    const limits = createControls(fresh, this.renderer.domElement, bounds, {
+      coarsePointer: this.coarsePointer,
+    });
     this.controls.target.copy(limits.target);
     this.controls.minDistance = limits.minDistance;
     this.controls.maxDistance = limits.maxDistance;

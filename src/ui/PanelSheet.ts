@@ -36,6 +36,7 @@ export class PanelSheet {
   public readonly gameSlot: HTMLDivElement;
 
   private readonly tabs: Readonly<Record<SheetTab, HTMLButtonElement>>;
+  private readonly peek: HTMLDivElement;
   private open = false;
   private tab: SheetTab = 'game';
 
@@ -83,8 +84,18 @@ export class PanelSheet {
       game: this.tabButton('game', 'The game'),
     };
 
+    /*
+      The identity card itself lives on the briefing's paper, which is behind a
+      tab down here. Phase 10 called this reveal the game's best moment, and a
+      moment you have to go and look for is not one — so the bar carries the
+      line while the drawer is shut.
+    */
+    this.peek = document.createElement('div');
+    this.peek.className = 'sheet__peek';
+    this.peek.hidden = true;
+
     bar.append(menu, tips, this.tabs.field, this.tabs.game);
-    chrome.append(handle, bar);
+    chrome.append(handle, this.peek, bar);
 
     const body = document.createElement('div');
     body.className = 'sheet__body';
@@ -96,6 +107,12 @@ export class PanelSheet {
     container.appendChild(this.root);
 
     this.refresh();
+  }
+
+  /** Names what is standing on the selected square; null clears the line. */
+  public setPeek(line: string | null): void {
+    this.peek.textContent = line ?? '';
+    this.peek.hidden = line === null;
   }
 
   /** Opens the drawer on a given tab; used by anything that wants to be read. */

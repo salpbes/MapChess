@@ -16,10 +16,27 @@ import type { BoardBounds } from '@domain/board/types';
 
 import { boardCentre } from './createCamera';
 
+/** ~85°: shallow enough to read relief, never below the platform tops. */
+const MAX_POLAR = Math.PI * 0.47;
+/**
+ * ~72° for a finger. The shallower the view, the more foreshortened the far
+ * rank is — at 85° a cell near the horizon is a few pixels tall, and a
+ * fingertip covering eight of them cannot help but choose the cell behind the
+ * one it is aimed at. Keeping the camera higher is the only fix that works on
+ * the geometry rather than apologising for it afterwards.
+ */
+const MAX_POLAR_COARSE = Math.PI * 0.4;
+
+export interface ControlOptions {
+  /** True where the pointer is a fingertip rather than a cursor. */
+  readonly coarsePointer?: boolean;
+}
+
 export function createControls(
   camera: PerspectiveCamera,
   canvas: HTMLElement,
   bounds: BoardBounds,
+  options: ControlOptions = {},
 ): OrbitControls {
   const width = bounds.maxX - bounds.minX;
   const controls = new OrbitControls(camera, canvas);
@@ -36,8 +53,7 @@ export function createControls(
   // ceiling has to clear wherever createCamera actually put the camera, or the
   // first frame is already clamped and the board jumps.
   controls.maxDistance = Math.max(width * 3, camera.position.distanceTo(controls.target) * 1.25);
-  // ~85°: shallow enough to read relief, never below the platform tops.
-  controls.maxPolarAngle = Math.PI * 0.47;
+  controls.maxPolarAngle = options.coarsePointer === true ? MAX_POLAR_COARSE : MAX_POLAR;
   controls.update();
 
   return controls;

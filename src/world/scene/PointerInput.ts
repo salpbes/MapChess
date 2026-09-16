@@ -17,7 +17,22 @@ export type ClickHandler = (ndc: NdcPoint) => void;
 /** Null when the pointer has left the canvas. */
 export type MoveHandler = (ndc: NdcPoint | null) => void;
 
-const MAX_CLICK_TRAVEL_PX = 6;
+/**
+ * How far a press may travel and still count as a tap rather than an orbit.
+ *
+ * A mouse stays where it is put. A finger rolls: the contact point wanders
+ * several pixels between touch and release without the player intending to
+ * move anything, so the mouse's tolerance silently swallows taps and the board
+ * feels like it is ignoring you.
+ */
+const MAX_CLICK_TRAVEL_PX: Readonly<Record<'fine' | 'coarse', number>> = {
+  fine: 6,
+  coarse: 14,
+};
+
+function travelLimit(pointerType: string): number {
+  return pointerType === 'mouse' ? MAX_CLICK_TRAVEL_PX.fine : MAX_CLICK_TRAVEL_PX.coarse;
+}
 
 export class PointerInput {
   private readonly handlers = new Set<ClickHandler>();
@@ -61,7 +76,7 @@ export class PointerInput {
     const down = this.downAt;
     this.downAt = null;
     if (down === null || e.button !== 0) return;
-    if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > MAX_CLICK_TRAVEL_PX) return;
+    if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > travelLimit(e.pointerType)) return;
 
     const ndc = this.toNdc(e);
     for (const handler of this.handlers) handler(ndc);

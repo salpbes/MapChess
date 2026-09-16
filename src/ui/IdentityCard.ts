@@ -11,14 +11,10 @@
 //       piece's story next to the story of the ground it stands on, and leaves
 //       nothing over the board to dismiss.
 
-import type { Color, PieceType } from '@domain/chess/types';
 import type { GameBus } from '@game/GameEvents';
 import type { SquareStory, ThemeTracker } from '@game/ThemeTracker';
 
-const GLYPH: Readonly<Record<Color, Readonly<Record<PieceType, string>>>> = {
-  white: { king: '♔', queen: '♕', rook: '♖', bishop: '♗', knight: '♘', pawn: '♙' },
-  black: { king: '♚', queen: '♛', rook: '♜', bishop: '♝', knight: '♞', pawn: '♟' },
-};
+import { identityLine } from './identityLine';
 
 /**
  * Hiding was how the card got out of the way when it floated over the board.
@@ -89,11 +85,7 @@ export class IdentityCard {
 
     const line = document.createElement('div');
     line.className = 'identity__line';
-    if (s.piece !== null) {
-      line.textContent = `${GLYPH[s.piece.color][s.piece.currentType]} ${s.piece.cell.name} · ${s.square}`;
-    } else if (s.cell !== null) {
-      line.textContent = `${s.cell.name} · ${s.square}`;
-    }
+    line.textContent = identityLine(s) ?? '';
     this.card.appendChild(line);
 
     if (this.mode !== 'full') return;
