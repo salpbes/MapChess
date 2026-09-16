@@ -80,7 +80,13 @@ body {
 .assessment,
 .record,
 .hint,
-.briefing {
+.briefing,
+/*
+  The drawer is paper too, below the breakpoint. Above it the element is
+  `display: contents` and generates no box at all, so none of this paints and
+  the desktop layout never sees it.
+*/
+.sheet {
   border: 1px solid var(--paper-edge);
   border-radius: 3px;
   font-family: var(--paper-serif);
@@ -1527,4 +1533,216 @@ body {
   font-size: 10.5px;
   color: var(--paper-ink-faint);
   font-variant-numeric: tabular-nums;
+}
+
+/* ---- Phase 13: the same panels, arranged for the screen they are on ---- */
+
+/*
+  Above the breakpoint the sheet is not there at all. Every box it introduces
+  is `display: contents`, so .column and .briefing go on positioning themselves
+  against #ui exactly as they did before it existed — the desktop layout is
+  untouched, which is the whole bargain of §13.3 being a breakpoint rather than
+  a rewrite. `pointer-events` is inherited, so the auto that #ui > * puts on
+  .sheet still reaches the panels through the contents boxes.
+*/
+.sheet,
+.sheet__body,
+.sheet__slot {
+  display: contents;
+}
+
+.sheet__chrome {
+  display: none;
+}
+
+@media (max-width: 880px) {
+  /*
+    Below it the board is the subject and the gazetteer is something you ask
+    for. The panels become one drawer under a bar that is always on the board:
+    the way out of the game, the way to learn it, and the two things to read.
+  */
+  :root {
+    --sheet-bar: 72px;
+  }
+
+  .sheet {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    display: flex;
+    max-height: 78vh;
+    flex-direction: column;
+    /* The bar is thumb-height above the bottom edge of the phone. */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .sheet__chrome {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    order: -1;
+    border-top: 1px solid var(--paper-edge);
+  }
+
+  .sheet__handle {
+    display: flex;
+    width: 100%;
+    height: 20px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .sheet__grip {
+    width: 42px;
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(120, 95, 55, 0.4);
+  }
+
+  .sheet__bar {
+    display: flex;
+    align-items: stretch;
+    padding: 0 8px 8px;
+    gap: 8px;
+  }
+
+  /* 44px: a fingertip, not a cursor. §13.4 raises the board's targets too. */
+  .sheet__button,
+  .sheet__tab {
+    display: inline-flex;
+    min-width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+    border: 1px solid var(--paper-edge);
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.34);
+    color: var(--paper-ink-strong);
+    font-family: var(--paper-serif);
+    font-size: 13px;
+    gap: 6px;
+    cursor: pointer;
+  }
+
+  .sheet__tab {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-weight: 700;
+  }
+
+  .sheet__tab--on {
+    border-color: var(--paper-ink-strong);
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  /*
+    Tips is the one button a new player has to find without being taught, so it
+    carries a word as well as a glyph and does not share the quiet treatment.
+  */
+  .sheet__button--tips {
+    border-color: #7a6a3a;
+    background: rgba(255, 255, 255, 0.62);
+    font-weight: 700;
+  }
+
+  .sheet__body {
+    display: block;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    border-top: 1px solid var(--paper-rule);
+  }
+
+  .sheet[data-open='closed'] .sheet__body {
+    display: none;
+  }
+
+  .sheet[data-tab='field'] .sheet__slot--game,
+  .sheet[data-tab='game'] .sheet__slot--field {
+    display: none;
+  }
+
+  .sheet__slot {
+    display: block;
+  }
+
+  /*
+    The panels themselves: the only thing that changes is that they stop being
+    absolutely positioned columns of a fixed width. Nothing inside them moves.
+  */
+  .column,
+  .briefing,
+  .briefing--open {
+    position: static;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    width: auto;
+    max-height: none;
+  }
+
+  .column {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  /*
+    One sheet of paper, not a stack of them: the drawer carries the ground and
+    the panels inside it contribute only their content. Their own borders and
+    drop shadows read as slabs piled on a slab.
+  */
+  .sheet .dock,
+  .sheet .coach,
+  .sheet .assessment,
+  .sheet .record,
+  .sheet .hint,
+  .sheet .briefing {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background-color: transparent;
+    background-image: none;
+  }
+
+  .sheet {
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 10px 10px 0 0;
+  }
+
+  /*
+    The board keeps the top of the screen to itself: only the line that says
+    whose move it is, which Phase 11 found is the one players read most.
+  */
+  .status-bar {
+    top: calc(10px + env(safe-area-inset-top, 0px));
+  }
+
+  /*
+    The ODbL credit has to be legible, not merely present (D-053). Its desktop
+    cap of `100vw - 280px` leaves 110px on a 390px screen, which wrapped it
+    into a column down the board.
+  */
+  .attribution {
+    right: 8px;
+    bottom: calc(var(--sheet-bar) + env(safe-area-inset-bottom, 0px));
+    left: 8px;
+    max-width: none;
+    justify-content: center;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  }
+
+  /* Both own the bottom-right corner on desktop, where the bar now is. */
+  .fps-meter {
+    bottom: calc(var(--sheet-bar) + 24px + env(safe-area-inset-bottom, 0px));
+  }
 }

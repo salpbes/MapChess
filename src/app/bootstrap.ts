@@ -70,6 +70,7 @@ import { HintCard } from '@ui/HintCard';
 import { IdentityCard } from '@ui/IdentityCard';
 import { MainMenu } from '@ui/MainMenu';
 import { PanelColumn } from '@ui/PanelColumn';
+import { PanelSheet } from '@ui/PanelSheet';
 import type { NewGameRequest, SavedGameSummary } from '@ui/MainMenu';
 import { PromotionPrompt } from '@ui/PromotionPrompt';
 import { RecordPanel } from '@ui/RecordPanel';
@@ -175,7 +176,25 @@ export function bootstrap(
   // Required by the ODbL for as long as the board is on screen.
   const attribution = new Attribution(uiContainer);
   const themeTracker = new ThemeTracker(bus);
-  const briefing = new BriefingPanel(uiContainer);
+  /*
+    The panels mount into the sheet rather than straight into #ui. Above the
+    breakpoint every box it adds is `display: contents`, so they go on
+    positioning themselves against #ui and the desktop layout is byte-for-byte
+    what it was; below it, they become a drawer under a bar (§13.3).
+  */
+  const sheet = new PanelSheet(uiContainer, {
+    onMenu: () => {
+      menu.open();
+    },
+    onTips: () => {
+      void game.requestHint();
+    },
+    onShow: (tab) => {
+      // Asking for the field is already the request to read it.
+      if (tab === 'field') briefing.expand();
+    },
+  });
+  const briefing = new BriefingPanel(sheet.fieldSlot);
   // The reveal is drawn on the briefing's paper rather than floating over the board.
   const identityCard = new IdentityCard(briefing.selectionSlot, bus, themeTracker);
   // Optional, CC0, and never allowed to hold the board up: the briefing is
@@ -186,7 +205,7 @@ export function bootstrap(
   // Left column, top to bottom: the controls, the record, then a hint when
   // there is one. Flex does the arithmetic that three absolute positions used
   // to have to agree on.
-  const column = new PanelColumn(uiContainer);
+  const column = new PanelColumn(sheet.gameSlot);
   const dock = new ControlDock(column.element);
   const coachCard = new CoachCard(column.element, bus);
   const assessment = new AssessmentCard(column.element, bus);
@@ -471,6 +490,7 @@ export function bootstrap(
       coachCard.dispose();
       dock.dispose();
       column.dispose();
+      sheet.dispose();
       briefing.dispose();
       saves.dispose();
       identityCard.dispose();

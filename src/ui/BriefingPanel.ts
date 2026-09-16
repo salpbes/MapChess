@@ -105,6 +105,17 @@ export class BriefingPanel {
     this.render();
   }
 
+  /**
+   * Shows the entry, as though the heading had been pressed.
+   *
+   * On a narrow screen the drawer's own tab is already the gesture that says
+   * "let me read this", so arriving at a collapsed panel makes the reader ask
+   * twice for one thing.
+   */
+  public expand(): void {
+    this.setOpen(true);
+  }
+
   public dispose(): void {
     this.root.remove();
   }

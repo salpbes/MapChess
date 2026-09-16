@@ -11,24 +11,7 @@
 //       (the computers played on behind the menu).
 
 import { test, expect } from './fixtures';
-import { bootBoard, clickSquare, startGame } from './board';
-
-/*
-  Today the left column is 230px of opaque paper over a 390px screen, so any
-  journey that clicks the board fails on the phone project — not flakily, but
-  every time, because the square is behind a panel.
-
-  `test.fail` rather than a skip on purpose: Playwright reports a test marked
-  this way as a failure if it starts PASSING. So when §13.3 moves the panels
-  off the board, these three turn the suite red until the marker is removed.
-  A skip would have gone on quietly claiming nothing was wrong.
-*/
-function coveredByPanelsAt390(): void {
-  test.fail(
-    test.info().project.name === 'phone',
-    'BUILD_PLAN §13.3 — panels cover the board at 390px; remove when the HUD reflows',
-  );
-}
+import { bootBoard, clickSquare, startGame, tapControl } from './board';
 
 test.describe('the six journeys', () => {
   test('start a game', async ({ page }) => {
@@ -42,7 +25,6 @@ test.describe('the six journeys', () => {
   });
 
   test('play a move', async ({ page }) => {
-    coveredByPanelsAt390();
     await bootBoard(page);
     await startGame(page);
 
@@ -54,7 +36,6 @@ test.describe('the six journeys', () => {
   });
 
   test('undo it', async ({ page }) => {
-    coveredByPanelsAt390();
     await bootBoard(page);
     await startGame(page);
 
@@ -62,7 +43,7 @@ test.describe('the six journeys', () => {
     await clickSquare(page, 'e4');
     await expect(page.locator('.record')).toContainText('e4');
 
-    await page.getByRole('button', { name: 'Take back your last move' }).click();
+    await tapControl(page, 'Take back your last move');
 
     await expect(page.locator('.record')).toContainText('No moves yet.');
     await expect(page.locator('.status-bar')).toContainText('White to move');
@@ -74,17 +55,15 @@ test.describe('the six journeys', () => {
 
     // Deliberately two presses: a blocking confirm() would freeze the render
     // loop, so the button arms itself and says "Sure?" instead.
-    const resign = page.getByRole('button', { name: 'Resign' });
-    await resign.click();
+    await tapControl(page, 'Resign');
     await expect(page.locator('.controls__confirm')).toBeVisible();
-    await resign.click();
+    await tapControl(page, 'Resign');
 
     await expect(page.locator('.gameover')).toBeVisible();
     await expect(page.locator('.gameover')).toContainText('resign', { ignoreCase: true });
   });
 
   test('resume after a reload', async ({ page }) => {
-    coveredByPanelsAt390();
     await bootBoard(page);
     await startGame(page);
 
@@ -110,7 +89,7 @@ test.describe('the six journeys', () => {
     await bootBoard(page);
     await startGame(page);
 
-    await page.getByRole('button', { name: 'Choose a place on the map' }).click();
+    await tapControl(page, 'Choose a place on the map');
 
     const picker = page.locator('.area-picker');
     await expect(picker).toBeVisible();

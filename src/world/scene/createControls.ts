@@ -32,7 +32,10 @@ export function createControls(
   controls.enablePan = true;
   controls.screenSpacePanning = false;
   controls.minDistance = width * 0.25;
-  controls.maxDistance = width * 3;
+  // A portrait screen starts further back so the board fits across it; the
+  // ceiling has to clear wherever createCamera actually put the camera, or the
+  // first frame is already clamped and the board jumps.
+  controls.maxDistance = Math.max(width * 3, camera.position.distanceTo(controls.target) * 1.25);
   // ~85°: shallow enough to read relief, never below the platform tops.
   controls.maxPolarAngle = Math.PI * 0.47;
   controls.update();

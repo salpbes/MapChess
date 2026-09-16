@@ -1,0 +1,161 @@
+// WHAT: The drawer the panels live in on a narrow screen, and the bar that is
+//       always on top of the board: menu, tips, and the two tabs.
+// HOW:  Wraps the existing panels in two slots — the briefing in one, the left
+//       column in the other — and keeps `open` and `tab` on its own element
+//       for the stylesheet to read. Above the breakpoint every box here is
+//       `display: contents`, so the panels position themselves against #ui
+//       exactly as they always have and the desktop layout is untouched.
+// WHY:  BUILD_PLAN §13.3. Two fixed 230px columns cover a 390px board, and the
+//       board is the subject — the gazetteer is something you ask for. The
+//       panels were written against a fixed column, so this moves where they
+//       sit and nothing about what they contain; that is the difference
+//       between a breakpoint and a rewrite, and the phase is worth less than
+//       the panels working.
+//
+//       Menu and tips sit in the bar rather than the drawer because both have
+//       to be reachable while the drawer is shut: one is the way out of the
+//       game, and the other is the reason a beginner can play it at all.
+
+import { icon, iconButton } from './icons';
+
+export type SheetTab = 'field' | 'game';
+
+export interface PanelSheetDeps {
+  readonly onMenu: () => void;
+  /** The same hint the dock's own button asks for, at full engine strength. */
+  readonly onTips: () => void;
+  /** Called whenever a tab is opened, so its panel can unfold itself. */
+  readonly onShow?: (tab: SheetTab) => void;
+}
+
+export class PanelSheet {
+  private readonly root: HTMLDivElement;
+  /** The gazetteer entry for the place being fought over. */
+  public readonly fieldSlot: HTMLDivElement;
+  /** The controls, the coaching note and the move record. */
+  public readonly gameSlot: HTMLDivElement;
+
+  private readonly tabs: Readonly<Record<SheetTab, HTMLButtonElement>>;
+  private open = false;
+  private tab: SheetTab = 'game';
+
+  public constructor(
+    container: HTMLElement,
+    private readonly deps: PanelSheetDeps,
+  ) {
+    this.root = document.createElement('div');
+    this.root.className = 'sheet';
+
+    const chrome = document.createElement('div');
+    chrome.className = 'sheet__chrome';
+
+    // A grab bar reads as "this pulls up" in a way a chevron does not, and it
+    // doubles as the dismiss target once the drawer is open.
+    const handle = document.createElement('button');
+    handle.type = 'button';
+    handle.className = 'sheet__handle';
+    handle.setAttribute('aria-label', 'Show or hide the notes');
+    handle.appendChild(span('sheet__grip'));
+    handle.addEventListener('click', () => {
+      this.setOpen(!this.open);
+    });
+
+    const bar = document.createElement('div');
+    bar.className = 'sheet__bar';
+
+    const menu = iconButton('menu', 'Menu — new game, resume, change area', 'sheet__button', () => {
+      deps.onMenu();
+    });
+
+    // Deliberately labelled, not an icon alone: the one button a new player
+    // must find without being taught is the one that teaches them.
+    const tips = document.createElement('button');
+    tips.type = 'button';
+    tips.className = 'sheet__button sheet__button--tips';
+    tips.setAttribute('aria-label', 'Tips — a move worth considering, and why');
+    tips.append(icon('hint'), text('sheet__button-label', 'Tips'));
+    tips.addEventListener('click', () => {
+      deps.onTips();
+    });
+
+    this.tabs = {
+      field: this.tabButton('field', 'The field'),
+      game: this.tabButton('game', 'The game'),
+    };
+
+    bar.append(menu, tips, this.tabs.field, this.tabs.game);
+    chrome.append(handle, bar);
+
+    const body = document.createElement('div');
+    body.className = 'sheet__body';
+    this.fieldSlot = slot('sheet__slot sheet__slot--field');
+    this.gameSlot = slot('sheet__slot sheet__slot--game');
+    body.append(this.fieldSlot, this.gameSlot);
+
+    this.root.append(chrome, body);
+    container.appendChild(this.root);
+
+    this.refresh();
+  }
+
+  /** Opens the drawer on a given tab; used by anything that wants to be read. */
+  public show(tab: SheetTab): void {
+    this.tab = tab;
+    this.setOpen(true);
+  }
+
+  public dispose(): void {
+    this.root.remove();
+  }
+
+  private tabButton(tab: SheetTab, label: string): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'sheet__tab';
+    button.textContent = label;
+    button.addEventListener('click', () => {
+      // Tapping the tab you are already reading puts the board back.
+      if (this.open && this.tab === tab) {
+        this.setOpen(false);
+        return;
+      }
+      this.tab = tab;
+      this.setOpen(true);
+    });
+    return button;
+  }
+
+  private setOpen(open: boolean): void {
+    this.open = open;
+    this.refresh();
+    if (open) this.deps.onShow?.(this.tab);
+  }
+
+  private refresh(): void {
+    this.root.dataset.open = this.open ? 'open' : 'closed';
+    this.root.dataset.tab = this.tab;
+    for (const [name, button] of Object.entries(this.tabs)) {
+      const active = this.open && name === this.tab;
+      button.classList.toggle('sheet__tab--on', active);
+      button.setAttribute('aria-expanded', active ? 'true' : 'false');
+    }
+  }
+}
+
+function slot(className: string): HTMLDivElement {
+  const el = document.createElement('div');
+  el.className = className;
+  return el;
+}
+
+function span(className: string): HTMLSpanElement {
+  const el = document.createElement('span');
+  el.className = className;
+  return el;
+}
+
+function text(className: string, content: string): HTMLSpanElement {
+  const el = span(className);
+  el.textContent = content;
+  return el;
+}

@@ -92,6 +92,23 @@ export async function clickSquare(page: Page, square: Square): Promise<void> {
   await page.mouse.click(point.x, point.y);
 }
 
+/**
+ * Presses one of the game's controls, opening the notes drawer first if the
+ * screen is narrow enough that the control lives inside it.
+ *
+ * This is what a player does, so it is what the journey does: on a phone the
+ * dock is in the drawer behind "The game", and on a desktop the same button is
+ * simply already on screen. One path, no viewport branch in the test.
+ */
+export async function tapControl(page: Page, label: string): Promise<void> {
+  const button = page.getByRole('button', { name: label, exact: true });
+  if (!(await button.isVisible())) {
+    await page.locator('.sheet__tab', { hasText: 'The game' }).click();
+    await expect(button).toBeVisible();
+  }
+  await button.click();
+}
+
 /** The algebraic moves currently listed in the record panel, in order. */
 export async function movesPlayed(page: Page): Promise<string[]> {
   return page.locator('.movelist__row > *:not(:first-child)').allInnerTexts();
