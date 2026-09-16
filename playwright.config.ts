@@ -66,7 +66,14 @@ export default defineConfig({
     // journey with a confusing error.
     command: `npm run build && npm run preview -- --port ${PORT} --strictPort`,
     url: ORIGIN,
-    reuseExistingServer: process.env.CI === undefined,
+    /*
+      Never reuse. A preview server left running from an earlier run serves the
+      build that was current when it started, so `reuseExistingServer` silently
+      tests stale code — which it did, during this phase's own development, and
+      the failure looked like a broken app rather than a stale one. Rebuilding
+      costs a few seconds and is the entire point of testing `preview`.
+    */
+    reuseExistingServer: false,
     timeout: 180_000,
     stdout: 'pipe',
     stderr: 'pipe',
