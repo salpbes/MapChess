@@ -209,6 +209,127 @@ Main menu, new game, side choice, difficulty, algebraic move list, captured piec
 Performance pass, mobile check if wanted, **OSM attribution (required by the ODbL licence)** and terrain data credit, README with screenshots, deploy to static hosting.
 **Done when:** a stranger can open a URL and play.
 
+### Phase 13 — Who can actually play it → **beyond the plan**
+
+The percentages stopped at Phase 12 because the plan did. This phase is not more
+game; it is the game reaching the people who are sent a link to it. Phase 12's
+own report named the two things standing in the way, and neither is a feature:
+there is not one width media query in the stylesheet, and of thirty-two test
+files exactly one covers `ui/` — the layer where all three shipped bugs lived.
+
+**The order below is deliberate, for the same reason §6's order was.** The net
+is built before the DOM layer is rearranged, not after. Phase 12's lesson was
+that four CSS regressions, the resume bug and the icon row reached a built site
+past 399 passing tests, and that what actually caught them was driving the real
+page in a headless browser. Rewriting the layout for narrow screens is the
+largest change `ui/` has ever taken. Doing that without a net repeats the
+phase we just wrote the lesson down in.
+
+#### 13.1 — A harness that drives the built site
+
+Playwright against `vite preview`, not against `dev` — the thing shipped is the
+thing tested, including the relative asset paths and the WASM MIME type. One
+config, two projects: a desktop viewport and a phone one. Fixtures only: the
+run must not touch Overpass, Terrarium, Nominatim or Wikidata, so it is honest
+about what it proves and it cannot be broken by someone else's outage.
+**Done when:** `npm run test:e2e` builds, serves, drives and tears down on a
+clean checkout, and `npm run test` still finishes in under two seconds because
+the two suites are separate commands.
+
+#### 13.2 — Six journeys, recorded before anything moves
+
+Start a game · play a move · undo it · resign · resume after a reload · open
+the picker. Written against the **current** desktop layout and passing on
+`main` before a line of CSS changes, so they are a regression net rather than a
+description of the new thing. Each of the three bugs that reached a shipped
+build gets a journey, since a bug that escaped once is the cheapest test to
+justify.
+**Done when:** all six pass at desktop viewport on today's `main`, and each of
+them fails for the right reason when its feature is deliberately broken.
+
+#### 13.3 — The HUD stops being two fixed columns
+
+The left column and the briefing are a hard 230 px each; on a 390 px screen
+the two of them plus their gutters come to 484 px and cover the board they
+are describing. Below a breakpoint the panels become
+one dismissable sheet over a full-width board — the board is the subject, the
+gazetteer is something you ask for. `PanelColumn` is the seam, so this is a
+layout change and not a rewrite of ten panels. The status bar stays: Phase 11
+found it is the line players read most.
+**Done when:** the six journeys pass at phone viewport, and at 390 px no panel
+overlaps the board and the page does not scroll sideways.
+
+#### 13.4 — The board accepts fingers
+
+`touch-action: none` on the canvas, or every orbit gesture fights the browser's
+own pan and zoom. One finger orbits, two slide and pinch. Tap-a-piece then
+tap-a-destination is already the right gesture — D-041 turned down drag-and-drop
+for chess reasons, which turns out to have been the touch decision all along —
+but a fingertip is not a cursor, and cells near the horizon on a tilted board
+are a few pixels tall. Raise the minimum tap target, and confirm the promotion
+prompt and the castling-on-the-rook gesture survive a thumb.
+**Done when:** a full game can be played on a real phone, with no gesture that
+scrolls the page instead of moving the board, and no tap that selects the cell
+behind the one aimed at.
+
+#### 13.5 — The area picker under a thumb
+
+The one genuinely touch-hostile screen in the app: a 2 km square that is
+dragged _and_ rotated, over a map that also pans. Rotation needs a handle it
+can keep, since a two-finger twist is already MapLibre's. Search, drag, rotate,
+confirm — the whole flow, or the phone player is stuck on whichever area the
+game happened to start on.
+**Done when:** an area can be searched for, placed, turned and confirmed on a
+phone, and the picker journey passes at phone viewport.
+
+#### 13.6 — Highlights that survive colour blindness
+
+Green for a move and red for a capture is the most-confused pair there is, and
+it is currently the only thing separating them. Add a second channel that is
+not hue — shape, ring weight, or a mark — so the distinction survives
+deuteranopia and a bright screen outdoors. Offered during Phase 12 and never
+built.
+**Done when:** move and capture highlights are distinguishable in a greyscale
+screenshot of a real board.
+
+#### 13.7 — Play without a mouse
+
+Arrow keys or file/rank letters to move a cursor, Enter to select and to
+confirm, Escape to cancel — the same state machine `GameLoop` already runs for
+clicks, driven from a different input. Focus order and `aria-live` on the
+status bar so the move just played is announced rather than only drawn.
+**Done when:** a full game is playable from the keyboard alone, and tabbing
+through the HUD never lands somewhere invisible.
+
+#### 13.8 — Ship it again
+
+The ODbL credit must be legible at 390 px, not merely present — D-053 is about
+a required credit being readable, and a strip that wraps into the board fails
+that. README screenshots are all desktop and should gain a phone one, because
+the README is now claiming something it has not shown. Then the same deploy
+workflow, with `test:e2e` in it.
+**Done when:** the workflow runs unit tests, types, lint, format and the six
+journeys at both viewports, and refuses to publish if any of them is red.
+
+**Phase done when:** a stranger sent the link on a phone can choose a place,
+play a game on it and resume it the next day — and the suite would have caught
+it if they could not.
+
+**Risks, stated up front:**
+
+- **A responsive HUD is where this phase can quietly become a rewrite.** Ten
+  panels were written against a fixed 230 px column. If the sheet turns into a
+  second layout engine, stop and make the panels narrower instead — the phase
+  is worth less than the panels working.
+- **A headless browser proves the page renders, not that it reads.** Nothing in
+  13.1 will tell you a thumb covers the piece it is moving. Phase 12's actual
+  lesson was that a person looking at the screen found everything; the harness
+  stops regressions, it does not replace the looking.
+- **Touch gesture work has no seam.** `PointerInput` is one file and the rest of
+  the project is insulated from it, which is the good news; the bad news is that
+  there is no fixture for "a finger", so this topic is verified by hand on real
+  hardware or it is not verified.
+
 ## 7. Progress report template
 
 ```markdown

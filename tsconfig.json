@@ -40,5 +40,5 @@
       "@shared/*": ["./src/shared/*"]
     }
   },
-  "include": ["src", "tests", "scripts", "vite.config.ts"]
+  "include": ["src", "tests", "scripts", "vite.config.ts", "playwright.config.ts"]
 }

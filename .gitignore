@@ -5,6 +5,11 @@ node_modules/
 dist/
 coverage/
 
+# Playwright: traces and screenshots of failed journeys, and its HTML report
+test-results/
+playwright-report/
+.playwright/
+
 # Copied from node_modules/stockfish by scripts/copy-engine.mjs
 public/engine/
 
