@@ -8,7 +8,7 @@
 //       a behaviour test would have walked straight past.
 
 import { test, expect } from './fixtures';
-import { bootBoard, startGame } from './board';
+import { bootBoard, startGame, tapControl } from './board';
 
 test.describe('the shape of the page', () => {
   test('never scrolls sideways', async ({ page }) => {
@@ -54,6 +54,43 @@ test.describe('the shape of the page', () => {
     // The way out of the game, and the reason a beginner can play it at all.
     await expect(menu).toBeVisible();
     await expect(page.getByRole('button', { name: /^Tips/ })).toBeVisible();
+  });
+
+  test('the picker is mostly map', async ({ page }) => {
+    await bootBoard(page);
+    await startGame(page);
+    await tapControl(page, 'Choose a place on the map');
+
+    // The panel was a fixed 340px beside the map, so on a phone the one screen
+    // whose whole job is choosing a place on a map showed 62px of map.
+    const map = await page.locator('.area-picker__map').boundingBox();
+    const panel = await page.locator('.area-picker__panel').boundingBox();
+    const mapArea = (map?.width ?? 0) * (map?.height ?? 0);
+    const panelArea = (panel?.width ?? 0) * (panel?.height ?? 0);
+
+    expect(mapArea).toBeGreaterThan(panelArea);
+    expect(map?.width ?? 0).toBeGreaterThan(280);
+    expect(map?.height ?? 0).toBeGreaterThan(200);
+  });
+
+  test('every overlay fits a phone lying on its side', async ({ page }) => {
+    // A landscape phone is not narrow, it is short — about 400px tall. The
+    // menu ran past both edges there, putting "Back to the board", the one
+    // control that gets you out, below the fold.
+    await page.setViewportSize({ width: 844, height: 390 });
+    await bootBoard(page);
+
+    const menu = page.getByRole('dialog', { name: 'MapChess menu' });
+    const exit = menu.getByRole('button', { name: 'Back to the board' });
+    await expect(exit).toBeVisible();
+
+    const box = await exit.boundingBox();
+    expect(box).not.toBeNull();
+    expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(390);
+
+    // And it really does dismiss, rather than merely being on screen.
+    await exit.click();
+    await expect(menu).toBeHidden();
   });
 
   test('opens the gazetteer already unfolded', async ({ page }) => {

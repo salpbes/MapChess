@@ -1562,7 +1562,7 @@ body {
   display: none;
 }
 
-@media (max-width: 880px) {
+@media (max-width: 880px), (max-height: 520px) {
   /*
     Below it the board is the subject and the gazetteer is something you ask
     for. The panels become one drawer under a bar that is always on the board:
@@ -1583,9 +1583,15 @@ body {
     right: 0;
     bottom: 0;
     left: 0;
-    z-index: 40;
+    /*
+      Part of the HUD, so it sits UNDER the menu and the game-over card (20)
+      rather than over them. At 40 the bar was drawn across the bottom of the
+      menu in landscape, covering "Back to the board" — the one control that
+      gets a player out — and swallowing the taps meant for it.
+    */
+    z-index: 10;
     display: flex;
-    max-height: 78vh;
+    max-height: 78dvh;
     flex-direction: column;
     /* The bar is thumb-height above the bottom edge of the phone. */
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -1817,5 +1823,54 @@ body {
   .area-picker__button,
   .area-picker__result-button {
     min-height: 44px;
+  }
+}
+
+/* ---- Phase 13, from a real iPhone: four things a headless browser cannot see ---- */
+
+/*
+  Any overlay that is centred in the viewport has to survive a viewport shorter
+  than itself. In landscape a phone is about 400px tall, and the menu simply
+  ran past both edges — with "Back to the board" below the fold, which is the
+  one control that gets you out. `dvh` rather than `vh` because iOS Safari's
+  address bar changes the viewport height as you scroll, and `vh` is the taller
+  of the two measurements.
+*/
+.menu,
+.gameover {
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 880px), (max-height: 520px) {
+  /*
+    The picker is a map with a panel beside it, and the panel was a fixed
+    340px: on a 402px phone that left 62px of map, so the one screen whose
+    whole job is choosing a place on a map showed almost no map. Below the
+    breakpoint they stack — map above, controls below — and the map keeps the
+    larger share.
+  */
+  .area-picker {
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .area-picker__panel {
+    max-height: 46dvh;
+    border-top: 1px solid #2f333a;
+    border-left: 0;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /*
+    The credit was wrapping to two rows and taking a bar's worth of board with
+    it. Smaller and tighter fits it back into one on a phone in portrait, and
+    it stays well above the 9px floor the ODbL's "legible" asks for.
+  */
+  .attribution {
+    gap: 4px;
+    font-size: 9.5px;
+    line-height: 1.25;
   }
 }

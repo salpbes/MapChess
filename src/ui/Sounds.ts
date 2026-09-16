@@ -69,7 +69,11 @@ export class Sounds {
     this.enabled = enabled;
     if (!enabled) return;
     this.context ??= makeContext();
+    claimPlayback();
     this.wake();
+    // Usually called straight from the switch's own click, which is the only
+    // moment iOS will unlock a context in.
+    this.unlock();
   }
 
   /** Resumes the context, and if it will not resume yet, waits for a gesture. */
@@ -84,6 +88,7 @@ export class Sounds {
 
     const onGesture = (): void => {
       void context.resume().catch(() => undefined);
+      this.unlock();
       this.stopWaiting();
     };
     this.waking = () => {
@@ -92,6 +97,27 @@ export class Sounds {
     };
     window.addEventListener('pointerdown', onGesture, true);
     window.addEventListener('keydown', onGesture, true);
+  }
+
+  /**
+   * Plays one silent sample, from inside a gesture.
+   *
+   * iOS does not consider a context usable just because `resume()` resolved:
+   * until something has actually been played through it during a user gesture
+   * it stays mute, and every later note is scheduled into silence with no
+   * error to notice. A one-frame buffer is the smallest thing that counts.
+   */
+  private unlock(): void {
+    const context = this.context;
+    if (context === null || context.state === 'closed') return;
+    try {
+      const source = context.createBufferSource();
+      source.buffer = context.createBuffer(1, 1, context.sampleRate);
+      source.connect(context.destination);
+      source.start(0);
+    } catch (error: unknown) {
+      console.warn('Could not prime audio; the game may stay quiet.', error);
+    }
   }
 
   private stopWaiting(): void {
@@ -150,6 +176,28 @@ export class Sounds {
       oscillator.start(start);
       oscillator.stop(start + note.seconds + 0.02);
     }
+  }
+}
+
+/** Safari 16.4+ only; absent everywhere else, where the switch does not exist. */
+interface AudioSessionNavigator {
+  audioSession?: { type: string };
+}
+
+/**
+ * Asks iOS to treat this as playback rather than an incidental page noise.
+ *
+ * Without it Web Audio obeys the ring/silent switch, so a player who has
+ * turned sound on in the game still hears nothing and has no way to find out
+ * why — the switch is on the side of the phone, not in the app.
+ */
+function claimPlayback(): void {
+  const nav: Navigator & AudioSessionNavigator = navigator;
+  if (nav.audioSession === undefined) return;
+  try {
+    nav.audioSession.type = 'playback';
+  } catch (error: unknown) {
+    console.warn('Could not claim playback audio; the silent switch will mute the game.', error);
   }
 }
 
