@@ -80,6 +80,34 @@ test.describe('the board under a finger', () => {
     await expect(tips).toHaveClass(/sheet__button--waiting/);
   });
 
+  test('never offers the same control twice at once', async ({ page }) => {
+    await bootBoard(page);
+    await startGame(page);
+    await notesTab(page, 'game').click();
+
+    /*
+      The drawer opens on top of the bar, so anything the bar already carries
+      appeared a centimetre below itself doing the same job. Written as a rule
+      about the whole screen rather than about the four buttons that happened
+      to clash, because the next control added to the bar will clash too.
+    */
+    const labels = await page
+      .locator('button:visible')
+      .evaluateAll((nodes) =>
+        nodes.map((n) => n.getAttribute('aria-label') ?? n.textContent.trim()),
+      );
+
+    const seen = new Set<string>();
+    const duplicated = labels.filter((label) => {
+      if (label === '') return false;
+      if (seen.has(label)) return true;
+      seen.add(label);
+      return false;
+    });
+
+    expect(duplicated, `offered twice: ${duplicated.join(', ')}`).toEqual([]);
+  });
+
   test('what a thumb has to hit is big enough to hit', async ({ page }) => {
     await bootBoard(page);
     await startGame(page);

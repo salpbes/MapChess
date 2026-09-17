@@ -93,6 +93,8 @@ export function iconButton(
   const button = document.createElement('button');
   button.type = 'button';
   button.className = className;
+  // A stable hook for "which button is this", independent of its label text.
+  button.dataset.icon = name;
   button.dataset.tip = label;
   button.setAttribute('aria-label', label);
   button.appendChild(icon(name));

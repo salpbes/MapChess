@@ -1781,6 +1781,18 @@ body {
   }
 
   /*
+    The bar already carries these four, and the drawer opens on top of it — so
+    a second copy of each was sitting a centimetre below the first, doing the
+    same thing. The dock keeps everything the bar has no room for.
+  */
+  .sheet .dock [data-icon='menu'],
+  .sheet .dock [data-icon='hint'],
+  .sheet .dock [data-icon='undo'],
+  .sheet .dock [data-icon='topDown'] {
+    display: none;
+  }
+
+  /*
     One sheet of paper, not a stack of them: the drawer carries the ground and
     the panels inside it contribute only their content. Their own borders and
     drop shadows read as slabs piled on a slab.
