@@ -69,6 +69,8 @@ import { HeightmapDebugPanel } from '@ui/HeightmapDebugPanel';
 import { HintCard } from '@ui/HintCard';
 import { IdentityCard } from '@ui/IdentityCard';
 import { identityLine } from '@ui/identityLine';
+import { KeyboardPlay } from '@ui/KeyboardPlay';
+import { Announcer } from '@ui/Announcer';
 import { MainMenu } from '@ui/MainMenu';
 import { PanelColumn } from '@ui/PanelColumn';
 import { PanelSheet } from '@ui/PanelSheet';
@@ -177,6 +179,8 @@ export function bootstrap(
   // Required by the ODbL for as long as the board is on screen.
   const attribution = new Attribution(uiContainer);
   const themeTracker = new ThemeTracker(bus);
+  // Everything else the game says, it says by drawing; this says it in words.
+  const announcer = new Announcer(uiContainer, bus);
   /*
     The panels mount into the sheet rather than straight into #ui. Above the
     breakpoint every box it adds is `display: contents`, so they go on
@@ -375,6 +379,25 @@ export function bootstrap(
     boardScene.setHoveredSquare(ndc === null || menu.isOpen ? null : picker.pick(ndc));
   });
 
+  /*
+    The same board, named rather than pointed at. Enter goes through the very
+    same entry point a click does, so selecting, moving, capturing, castling on
+    the rook and the promotion prompt need no second implementation.
+  */
+  const keyboard = new KeyboardPlay({
+    onActivate: (square) => {
+      void game.handleSquareClick(square);
+    },
+    onCancel: () => {
+      game.clearSelection();
+    },
+    onCursorMoved: (square) => {
+      highlights.setCursor(square);
+      boardScene.setHoveredSquare(square);
+    },
+    isBlocked: () => menu.isOpen || areaBar.isPickerOpen,
+  });
+
   // --- board: flat until terrain arrives, then warped (Phase 8) ---
   const boardScene = new BoardScene({ stage, pieces, highlights, picker });
   const composer = new BoardComposer(config.boardSizeMeters, ({ model, mode }) => {
@@ -514,6 +537,8 @@ export function bootstrap(
       dock.dispose();
       column.dispose();
       stopPeek();
+      keyboard.dispose();
+      announcer.dispose();
       sheet.dispose();
       briefing.dispose();
       saves.dispose();

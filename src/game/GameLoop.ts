@@ -375,6 +375,20 @@ export class GameLoop {
       });
   }
 
+  /**
+   * Puts down whatever piece was picked up, playing nothing.
+   *
+   * A click does this by clicking the same square again; there is no "same
+   * square" to press on a keyboard, so Escape needs a way to say it.
+   */
+  public clearSelection(): void {
+    if (this.selected === null) return;
+    this.selected = null;
+    this.deps.view.clearHighlights();
+    this.deps.bus.emit('selection-changed', { square: null, targets: [] });
+    this.refreshHighlights();
+  }
+
   /** Ends the game as a loss for `color`. Ignored once the game is already over. */
   public resign(color: Color): boolean {
     if (this.outcome !== null) return false;

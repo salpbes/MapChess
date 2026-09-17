@@ -1981,3 +1981,41 @@ body {
     display: none;
   }
 }
+
+/* ---- Phase 13.7: playing without a mouse ---- */
+
+/*
+  Read aloud, never drawn. Not `display: none` and not `hidden`, either of
+  which takes it out of the accessibility tree along with the screen — the
+  point is to be available to a reader and to nothing else.
+*/
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+  Every focusable thing says so. The board is a canvas, which has no focus ring
+  of its own and no shape to put one on, so it takes an inset one; the panels
+  are paper, so violet reads against them where the browser's blue does not.
+
+  §13.7's "tabbing through the HUD never lands somewhere invisible" is this
+  rule — without it the tab order runs through ten panels of buttons showing
+  nothing at all about where it has got to.
+*/
+:focus-visible {
+  outline: 2px solid #b45cff;
+  outline-offset: 2px;
+}
+
+#world canvas:focus-visible {
+  outline: 2px solid #b45cff;
+  outline-offset: -4px;
+}

@@ -47,6 +47,11 @@ const MARK: Readonly<Record<MarkRole, { color: number; opacity: number }>> = {
   captureRing: { color: 0xffd9c9, opacity: 0.95 },
 };
 
+/** The keyboard cursor: a thin outline at the cell's edge, no fill. */
+const CURSOR = { color: 0xffffff, opacity: 0.85 };
+/** Thin, so it is never mistaken for a capture's heavy band. */
+const CURSOR_FRACTION = 0.07;
+
 /** Disc radius, as a fraction of the cell's own radius. */
 const DOT_FRACTION = 0.34;
 /** Ring band width, as a fraction of the cell's own radius. */
@@ -86,8 +91,18 @@ const PULSE_SECONDS = 1.6;
 
 export class HighlightLayer {
   public readonly group = new Group();
+  /**
+   * Where the keyboard is pointing, drawn separately from everything else.
+   *
+   * `show()` rebuilds the whole set on every selection change, and the cursor
+   * belongs to the input rather than to the position — it has to survive a
+   * move being played, a selection being cleared, and the board being rebuilt.
+   */
+  private readonly cursorGroup = new Group();
   private readonly materials: Readonly<Record<HighlightRole, MeshBasicMaterial>>;
   private readonly marks: Readonly<Record<MarkRole, MeshBasicMaterial>>;
+  private readonly cursorMaterial: MeshBasicMaterial;
+  private cursorSquare: Square | null = null;
   private layout: IBoardLayout;
   private lift: number;
   private pulseTime = 0;
@@ -96,6 +111,8 @@ export class HighlightLayer {
   public constructor(layout: IBoardLayout) {
     this.layout = layout;
     this.group.name = 'highlights';
+    this.cursorGroup.name = 'keyboard-cursor';
+    this.group.add(this.cursorGroup);
     this.lift = liftFor(layout);
     this.materials = {
       selected: makeMaterial('selected'),
@@ -105,6 +122,16 @@ export class HighlightLayer {
       hint: makeMaterial('hint'),
       last: makeMaterial('last'),
     };
+    this.cursorMaterial = new MeshBasicMaterial({
+      color: CURSOR.color,
+      opacity: CURSOR.opacity,
+      transparent: true,
+      depthWrite: false,
+      side: DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: -3,
+      polygonOffsetUnits: -3,
+    });
     this.marks = {
       moveDot: makeMarkMaterial('moveDot'),
       captureRing: makeMarkMaterial('captureRing'),
@@ -115,6 +142,8 @@ export class HighlightLayer {
     this.layout = layout;
     this.lift = liftFor(layout);
     this.clear();
+    // The cell it sat on is a different shape now; redraw it on the new one.
+    this.setCursor(this.cursorSquare);
   }
 
   /** Drives the hint pulse. Cheap enough to call every frame; a no-op with no hint. */
@@ -140,8 +169,26 @@ export class HighlightLayer {
     if (set.selected !== undefined) this.add(set.selected, 'selected');
   }
 
+  /** Moves the keyboard cursor, or takes it off the board with null. */
+  public setCursor(square: Square | null): void {
+    this.cursorSquare = square;
+    for (const child of [...this.cursorGroup.children]) {
+      if (child instanceof Mesh) (child.geometry as BufferGeometry).dispose();
+      this.cursorGroup.remove(child);
+    }
+    if (square === null) return;
+
+    const cell = this.layout.cell(square);
+    const y = cell.platformY + this.lift * 2;
+    const mesh = new Mesh(ringGeometry(cell, y, CURSOR_FRACTION), this.cursorMaterial);
+    mesh.name = `cursor-${square}`;
+    this.cursorGroup.add(mesh);
+  }
+
   public clear(): void {
     for (const child of [...this.group.children]) {
+      // The cursor is the input's, not the position's: it outlives a rebuild.
+      if (child === this.cursorGroup) continue;
       if (child instanceof Mesh) {
         (child.geometry as BufferGeometry).dispose();
       }
@@ -153,6 +200,7 @@ export class HighlightLayer {
     this.clear();
     for (const m of Object.values(this.materials)) m.dispose();
     for (const m of Object.values(this.marks)) m.dispose();
+    this.cursorMaterial.dispose();
   }
 
   private add(square: Square, role: HighlightRole): void {

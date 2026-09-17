@@ -96,6 +96,11 @@ export class AreaBar {
   }
 
   /** Opens the map picker, as the map button does. */
+  /** True while the picker is up and owns the keyboard. */
+  public get isPickerOpen(): boolean {
+    return this.picker !== null;
+  }
+
   public open(): void {
     void this.openPicker();
   }

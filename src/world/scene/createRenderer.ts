@@ -15,6 +15,17 @@ export function createRenderer(container: HTMLElement): WebGLRenderer {
   renderer.shadowMap.enabled = true;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
   resizeRenderer(renderer, container);
+  /*
+    The board is reachable by keyboard: without a tabindex a canvas is a
+    picture, and the game inside it cannot be tabbed to at all. The label is
+    what a screen reader announces on arrival, since there is nothing to read.
+  */
+  renderer.domElement.tabIndex = 0;
+  renderer.domElement.setAttribute('role', 'application');
+  renderer.domElement.setAttribute(
+    'aria-label',
+    'The board. Arrow keys move the cursor, or type a square such as e4. Enter picks up and puts down a piece; Escape puts it back.',
+  );
   container.appendChild(renderer.domElement);
   return renderer;
 }
