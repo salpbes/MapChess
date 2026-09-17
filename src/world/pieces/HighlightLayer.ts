@@ -13,7 +13,7 @@
 //       so it is the one that moves. Nothing else does, which is what makes it
 //       findable.
 
-import { BufferAttribute, BufferGeometry, Group, Mesh, MeshBasicMaterial } from 'three';
+import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial } from 'three';
 
 import type { IBoardLayout } from '@domain/board/IBoardLayout';
 import type { Square } from '@domain/board/Square';
@@ -31,10 +31,38 @@ export interface HighlightSet {
   readonly last?: readonly Square[];
 }
 
+/**
+ * The marks that carry the move/capture distinction without using hue.
+ *
+ * Green against red is the pair deuteranopia confuses most, and until now it
+ * was the ONLY thing separating "you may go here" from "you may take this".
+ * A filled centre against an outlined edge survives any colour vision, a
+ * greyscale screenshot and a bright screen outdoors — and it is the pairing
+ * players already know from every online board, so it costs no learning.
+ */
+type MarkRole = 'moveDot' | 'captureRing';
+
+const MARK: Readonly<Record<MarkRole, { color: number; opacity: number }>> = {
+  moveDot: { color: 0xecffe9, opacity: 0.92 },
+  captureRing: { color: 0xffd9c9, opacity: 0.95 },
+};
+
+/** Disc radius, as a fraction of the cell's own radius. */
+const DOT_FRACTION = 0.34;
+/** Ring band width, as a fraction of the cell's own radius. */
+const RING_FRACTION = 0.2;
+/** Facets in a highlight disc. Twenty reads as round at every zoom the camera allows. */
+const DISC_SEGMENTS = 20;
+
 const STYLE: Readonly<Record<HighlightRole, { color: number; opacity: number }>> = {
   selected: { color: 0xffd447, opacity: 0.6 },
-  move: { color: 0x4fd37a, opacity: 0.5 },
-  capture: { color: 0xe05a4f, opacity: 0.6 },
+  /*
+    Lighter than the ground, where capture is darker: the second channel is
+    shape, but value backs it up, so the two never rely on hue alone even where
+    the mark itself is hidden under a piece.
+  */
+  move: { color: 0x8ff0b0, opacity: 0.34 },
+  capture: { color: 0x7a1f16, opacity: 0.5 },
   check: { color: 0xff3b30, opacity: 0.65 },
   /*
     Violet. Every other hue on screen is claimed: the rules speak in amber,
@@ -59,6 +87,7 @@ const PULSE_SECONDS = 1.6;
 export class HighlightLayer {
   public readonly group = new Group();
   private readonly materials: Readonly<Record<HighlightRole, MeshBasicMaterial>>;
+  private readonly marks: Readonly<Record<MarkRole, MeshBasicMaterial>>;
   private layout: IBoardLayout;
   private lift: number;
   private pulseTime = 0;
@@ -75,6 +104,10 @@ export class HighlightLayer {
       check: makeMaterial('check'),
       hint: makeMaterial('hint'),
       last: makeMaterial('last'),
+    };
+    this.marks = {
+      moveDot: makeMarkMaterial('moveDot'),
+      captureRing: makeMarkMaterial('captureRing'),
     };
   }
 
@@ -119,13 +152,27 @@ export class HighlightLayer {
   public dispose(): void {
     this.clear();
     for (const m of Object.values(this.materials)) m.dispose();
+    for (const m of Object.values(this.marks)) m.dispose();
   }
 
   private add(square: Square, role: HighlightRole): void {
     const cell = this.layout.cell(square);
-    const mesh = new Mesh(fanGeometry(cell, cell.platformY + this.lift), this.materials[role]);
+    const y = cell.platformY + this.lift;
+    const mesh = new Mesh(fanGeometry(cell, y), this.materials[role]);
     mesh.name = `highlight-${role}-${square}`;
     this.group.add(mesh);
+
+    // The mark sits a hair above its own tint so the two never z-fight.
+    const markY = y + this.lift * 0.5;
+    if (role === 'move') {
+      const dot = new Mesh(discGeometry(cell, markY, DOT_FRACTION), this.marks.moveDot);
+      dot.name = `highlight-move-dot-${square}`;
+      this.group.add(dot);
+    } else if (role === 'capture') {
+      const ring = new Mesh(ringGeometry(cell, markY, RING_FRACTION), this.marks.captureRing);
+      ring.name = `highlight-capture-ring-${square}`;
+      this.group.add(ring);
+    }
   }
 }
 
@@ -145,6 +192,92 @@ function makeMaterial(role: HighlightRole): MeshBasicMaterial {
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -1,
   });
+}
+
+function makeMarkMaterial(role: MarkRole): MeshBasicMaterial {
+  const { color, opacity } = MARK[role];
+  return new MeshBasicMaterial({
+    color,
+    opacity,
+    transparent: true,
+    depthWrite: false,
+    // Flat overlays with no inside: drawing both faces saves caring which way
+    // a generated ring or disc happens to wind.
+    side: DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+  });
+}
+
+/** Mean distance from the centroid to the corners: a warped cell's "size". */
+function cellRadius(cell: Cell): number {
+  const { polygon, centroid } = cell;
+  if (polygon.length === 0) return 0;
+  let total = 0;
+  for (const p of polygon) total += Math.hypot(p.x - centroid.x, p.z - centroid.z);
+  return total / polygon.length;
+}
+
+/** A filled disc at the cell's centre: "you may move here". */
+function discGeometry(cell: Cell, y: number, fraction: number): BufferGeometry {
+  const { centroid } = cell;
+  const r = cellRadius(cell) * fraction;
+  const positions = new Float32Array(DISC_SEGMENTS * 9);
+  let o = 0;
+  for (let i = 0; i < DISC_SEGMENTS; i += 1) {
+    const a = (i / DISC_SEGMENTS) * Math.PI * 2;
+    const b = ((i + 1) / DISC_SEGMENTS) * Math.PI * 2;
+    positions.set(
+      [
+        centroid.x,
+        y,
+        centroid.z,
+        centroid.x + Math.cos(a) * r,
+        y,
+        centroid.z + Math.sin(a) * r,
+        centroid.x + Math.cos(b) * r,
+        y,
+        centroid.z + Math.sin(b) * r,
+      ],
+      o,
+    );
+    o += 9;
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(positions, 3));
+  return g;
+}
+
+/**
+ * A band just inside the cell's own edge: "you may take this".
+ *
+ * The inner edge is the polygon scaled toward its centroid, which is a valid
+ * simple polygon because Phase 8 guarantees every cell is convex.
+ */
+function ringGeometry(cell: Cell, y: number, fraction: number): BufferGeometry {
+  const { polygon, centroid } = cell;
+  const n = polygon.length;
+  const k = 1 - fraction;
+  const positions = new Float32Array(n * 18);
+  let o = 0;
+  for (let i = 0; i < n; i += 1) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % n];
+    if (a === undefined || b === undefined) continue;
+    const aix = centroid.x + (a.x - centroid.x) * k;
+    const aiz = centroid.z + (a.z - centroid.z) * k;
+    const bix = centroid.x + (b.x - centroid.x) * k;
+    const biz = centroid.z + (b.z - centroid.z) * k;
+    positions.set(
+      [a.x, y, a.z, b.x, y, b.z, bix, y, biz, a.x, y, a.z, bix, y, biz, aix, y, aiz],
+      o,
+    );
+    o += 18;
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(positions, 3));
+  return g;
 }
 
 function fanGeometry(cell: Cell, y: number): BufferGeometry {

@@ -109,6 +109,35 @@ export async function tapControl(page: Page, label: string): Promise<void> {
   await button.click();
 }
 
+/** How many half-moves the record is showing. */
+export async function plyCount(page: Page): Promise<number> {
+  return page.locator('.movelist__ply').count();
+}
+
+/**
+ * Plays a sequence of from/to pairs by clicking the board, waiting for each
+ * move to be recorded before starting the next.
+ *
+ * The wait is the whole point: a move is animated, and clicks that arrive
+ * mid-flight are ignored. Without it the second move of a sequence is silently
+ * dropped, the third is then illegal for the side to move, and the position
+ * you end up testing is not the one you wrote down.
+ */
+export async function playMoves(
+  page: Page,
+  moves: readonly (readonly [Square, Square])[],
+): Promise<void> {
+  let played = await plyCount(page);
+  for (const [from, to] of moves) {
+    await clickSquare(page, from);
+    await clickSquare(page, to);
+    played += 1;
+    await expect
+      .poll(async () => plyCount(page), { message: `${from}${to} was not played` })
+      .toBe(played);
+  }
+}
+
 /** The algebraic moves currently listed in the record panel, in order. */
 export async function movesPlayed(page: Page): Promise<string[]> {
   return page.locator('.movelist__row > *:not(:first-child)').allInnerTexts();
