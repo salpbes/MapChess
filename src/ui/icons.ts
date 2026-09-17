@@ -50,6 +50,8 @@ const PATHS: Readonly<Record<string, readonly string[]>> = {
   ],
   // The tag, struck through: nothing on the board.
   tagOff: ['M20 4h-7.2L4 12.8 11.2 20 20 11.2V4Z', 'M3.5 3.5l17 17'],
+  // A board seen square on, which is what the button gives you.
+  topDown: ['M4 4h16v16H4Z', 'M12 4v16', 'M4 12h16'],
 };
 
 export type IconName = keyof typeof PATHS;

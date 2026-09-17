@@ -4,7 +4,7 @@
 // HOW:  A full-screen veil that blurs the half-built board behind it, with a
 //       card in the middle: a row of chess pieces hopping in sequence, what is
 //       being fetched, and a chess tip. The veil ignores the pointer so the
-//       menu and the HUD stay usable; only Retry takes a click. Exposes two
+//       menu and the HUD stay usable; only the two buttons take a click. Exposes two
 //       adapter objects —
 //       `terrain` (an IElevationView) and `features` (an IFeaturesView) — so
 //       the two loaders report separately and an error names the right one.
@@ -42,6 +42,7 @@ export class DataStatus {
   private readonly text: HTMLSpanElement;
   private readonly tip: HTMLDivElement;
   private readonly retry: HTMLButtonElement;
+  private readonly elsewhere: HTMLButtonElement;
   private tipTimer: ReturnType<typeof setInterval> | null = null;
   private shownTip: string | null = null;
   private readonly state: Record<Channel, State> = {
@@ -78,7 +79,7 @@ export class DataStatus {
     },
   };
 
-  public constructor(container: HTMLElement, onRetry: () => void) {
+  public constructor(container: HTMLElement, onRetry: () => void, onChooseArea: () => void) {
     this.root = document.createElement('div');
     this.root.className = 'datastatus';
     this.root.hidden = true;
@@ -100,7 +101,21 @@ export class DataStatus {
     this.retry.hidden = true;
     this.retry.addEventListener('click', onRetry);
 
-    line.append(this.text, this.retry);
+    /*
+      The way out. Some failures are not transient: an area dense enough to
+      time the query out will do it again, and "Try again" on its own is then a
+      loop with no exit — the player is stuck on a board that will never build,
+      with the one control that might help hidden behind a menu they cannot
+      reach past the veil.
+    */
+    this.elsewhere = document.createElement('button');
+    this.elsewhere.type = 'button';
+    this.elsewhere.className = 'datastatus__retry datastatus__elsewhere';
+    this.elsewhere.textContent = 'Choose another area';
+    this.elsewhere.hidden = true;
+    this.elsewhere.addEventListener('click', onChooseArea);
+
+    line.append(this.text, this.retry, this.elsewhere);
     card.append(hoppingPieces(), line, this.tip);
     this.root.appendChild(card);
     container.appendChild(this.root);
@@ -143,6 +158,7 @@ export class DataStatus {
       this.stopTips();
       this.root.classList.add('datastatus--error');
       this.retry.hidden = false;
+      this.elsewhere.hidden = false;
       this.root.hidden = false;
       this.text.textContent = failed
         .map((c) => {
@@ -156,6 +172,7 @@ export class DataStatus {
     const loading = channels().filter((c) => this.state[c].kind === 'loading');
     this.root.classList.remove('datastatus--error');
     this.retry.hidden = true;
+    this.elsewhere.hidden = true;
     if (loading.length === 0) {
       this.stopTips();
       this.root.hidden = true;

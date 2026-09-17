@@ -8,7 +8,7 @@
 //       a behaviour test would have walked straight past.
 
 import { test, expect } from './fixtures';
-import { bootBoard, startGame, tapControl } from './board';
+import { bootBoard, notesTab, startGame, tapControl } from './board';
 
 test.describe('the shape of the page', () => {
   test('never scrolls sideways', async ({ page }) => {
@@ -115,13 +115,38 @@ test.describe('the shape of the page', () => {
     await expect(menu).toBeHidden();
   });
 
+  test('looks straight down when asked', async ({ page }) => {
+    await bootBoard(page);
+    await startGame(page);
+
+    await tapControl(page, 'Look straight down at the board');
+
+    const view = await page.evaluate(() => {
+      const app = window.__mapchess;
+      if (app === undefined) throw new Error('no handle');
+      const b = app.layout().bounds;
+      const p = app.stage.camera.position;
+      const centreX = (b.minX + b.maxX) / 2;
+      const centreZ = (b.minZ + b.maxZ) / 2;
+      return {
+        // How far off vertical the camera sits, as a fraction of its height.
+        lean: Math.hypot(p.x - centreX, p.z - centreZ) / Math.max(p.y - b.maxY, 1),
+        aboveBoard: p.y > b.maxY,
+      };
+    });
+
+    expect(view.aboveBoard).toBe(true);
+    // Effectively overhead: a tilted default sits at roughly 0.5 or more.
+    expect(view.lean).toBeLessThan(0.05);
+  });
+
   test('opens the gazetteer already unfolded', async ({ page }) => {
     test.skip(test.info().project.name !== 'phone', 'The drawer only exists below the breakpoint.');
 
     await bootBoard(page);
     await startGame(page);
 
-    await page.locator('.sheet__tab', { hasText: 'The field' }).click();
+    await notesTab(page, 'field').click();
 
     // Arriving at a collapsed panel would make the reader ask twice for one
     // thing: the tab IS the request to read it.

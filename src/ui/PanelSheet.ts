@@ -16,7 +16,8 @@
 //       to be reachable while the drawer is shut: one is the way out of the
 //       game, and the other is the reason a beginner can play it at all.
 
-import { icon, iconButton } from './icons';
+import { iconButton } from './icons';
+import type { IconName } from './icons';
 
 export type SheetTab = 'field' | 'game';
 
@@ -24,6 +25,10 @@ export interface PanelSheetDeps {
   readonly onMenu: () => void;
   /** The same hint the dock's own button asks for, at full engine strength. */
   readonly onTips: () => void;
+  /** Take back the last move — too common to be worth opening a drawer for. */
+  readonly onUndo: () => void;
+  /** Straight down at the whole board. */
+  readonly onTopDown: () => void;
   /** Called whenever a tab is opened, so its panel can unfold itself. */
   readonly onShow?: (tab: SheetTab) => void;
 }
@@ -68,20 +73,37 @@ export class PanelSheet {
       deps.onMenu();
     });
 
-    // Deliberately labelled, not an icon alone: the one button a new player
-    // must find without being taught is the one that teaches them.
-    const tips = document.createElement('button');
-    tips.type = 'button';
-    tips.className = 'sheet__button sheet__button--tips';
-    tips.setAttribute('aria-label', 'Tips — a move worth considering, and why');
-    tips.append(icon('hint'), text('sheet__button-label', 'Tips'));
-    tips.addEventListener('click', () => {
-      deps.onTips();
+    /*
+      Tips keeps the accent rather than a word: six controls only fit across a
+      phone as icons, and a label on one of them would set the width for all
+      six. It is the only coloured button in the bar, which is now what makes
+      it the one you find first.
+    */
+    const tips = iconButton(
+      'hint',
+      'Tips — a move worth considering, and why',
+      'sheet__button sheet__button--tips',
+      () => {
+        deps.onTips();
+      },
+    );
+
+    const undo = iconButton('undo', 'Take back your last move', 'sheet__button', () => {
+      deps.onUndo();
     });
 
+    const topDown = iconButton(
+      'topDown',
+      'Look straight down at the board',
+      'sheet__button',
+      () => {
+        deps.onTopDown();
+      },
+    );
+
     this.tabs = {
-      field: this.tabButton('field', 'The field'),
-      game: this.tabButton('game', 'The game'),
+      field: this.tabButton('field', 'map', 'The field — what this place is'),
+      game: this.tabButton('game', 'book', 'The game — moves, coaching and controls'),
     };
 
     /*
@@ -94,7 +116,7 @@ export class PanelSheet {
     this.peek.className = 'sheet__peek';
     this.peek.hidden = true;
 
-    bar.append(menu, tips, this.tabs.field, this.tabs.game);
+    bar.append(menu, tips, undo, topDown, this.tabs.field, this.tabs.game);
     chrome.append(handle, this.peek, bar);
 
     const body = document.createElement('div');
@@ -125,12 +147,8 @@ export class PanelSheet {
     this.root.remove();
   }
 
-  private tabButton(tab: SheetTab, label: string): HTMLButtonElement {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'sheet__tab';
-    button.textContent = label;
-    button.addEventListener('click', () => {
+  private tabButton(tab: SheetTab, glyph: IconName, label: string): HTMLButtonElement {
+    const button = iconButton(glyph, label, 'sheet__button sheet__tab', () => {
       // Tapping the tab you are already reading puts the board back.
       if (this.open && this.tab === tab) {
         this.setOpen(false);
@@ -168,11 +186,5 @@ function slot(className: string): HTMLDivElement {
 function span(className: string): HTMLSpanElement {
   const el = document.createElement('span');
   el.className = className;
-  return el;
-}
-
-function text(className: string, content: string): HTMLSpanElement {
-  const el = span(className);
-  el.textContent = content;
   return el;
 }

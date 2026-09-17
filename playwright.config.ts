@@ -30,9 +30,13 @@ export default defineConfig({
   // you to re-run. Retries stay off locally so flake is visible immediately.
   retries: process.env.CI === undefined ? 0 : 1,
   forbidOnly: process.env.CI !== undefined,
-  // One worker on CI, where a parallel WebGL build is the flakiest thing here;
-  // spread rather than `undefined`, which exactOptionalPropertyTypes refuses.
-  ...(process.env.CI === undefined ? {} : { workers: 1 }),
+  /*
+    Three at most. Every test boots a WebGL context and a Stockfish worker, so
+    the usual "half the cores" default starves them: clicks arrive late enough
+    that a four-second confirm window can lapse between two presses. One on CI,
+    where the machine is smaller again.
+  */
+  workers: process.env.CI === undefined ? 3 : 1,
 
   reporter: process.env.CI === undefined ? [['list']] : [['list'], ['html', { open: 'never' }]],
 

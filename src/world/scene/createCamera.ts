@@ -39,6 +39,19 @@ export function widthFitScale(aspect: number): number {
   return Math.max(1, needed / current);
 }
 
+/**
+ * How far above the board the camera must sit to see all of it straight down.
+ *
+ * Both fits matter and the binding one changes with the screen: a wide window
+ * runs out of height first, a phone held upright runs out of width.
+ */
+export function topDownDistance(width: number, aspect: number): number {
+  const halfVertical = ((FOV_DEGREES / 2) * Math.PI) / 180;
+  const halfHorizontal = Math.atan(Math.tan(halfVertical) * aspect);
+  const reach = (width / 2) * FIT_MARGIN;
+  return Math.max(reach / Math.tan(halfVertical), reach / Math.tan(halfHorizontal));
+}
+
 export function createCamera(bounds: BoardBounds, aspect: number): PerspectiveCamera {
   const width = bounds.maxX - bounds.minX;
   const camera = new PerspectiveCamera(FOV_DEGREES, aspect, width * 0.01, width * 20);

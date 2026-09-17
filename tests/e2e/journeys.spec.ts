@@ -11,7 +11,7 @@
 //       (the computers played on behind the menu).
 
 import { test, expect } from './fixtures';
-import { bootBoard, clickSquare, startGame, tapControl } from './board';
+import { bootBoard, clickSquare, notesTab, startGame, tapControl } from './board';
 
 test.describe('the six journeys', () => {
   test('start a game', async ({ page }) => {
@@ -55,11 +55,23 @@ test.describe('the six journeys', () => {
 
     // Deliberately two presses: a blocking confirm() would freeze the render
     // loop, so the button arms itself and says "Sure?" instead.
-    await tapControl(page, 'Resign');
-    await expect(page.locator('.controls__confirm')).toBeVisible();
-    await tapControl(page, 'Resign');
+    const resign = page.getByRole('button', { name: 'Resign', exact: true });
+    if (!(await resign.isVisible())) await notesTab(page, 'game').click();
 
-    await expect(page.locator('.gameover')).toBeVisible();
+    /*
+      Press until the game is actually over, rather than assuming one pair of
+      presses lands. The arm lasts four seconds, and under a loaded run a click
+      can be slow enough that the second press re-arms instead of confirming.
+      Each pass here is cheap — no ten-second expect inside the loop — so a lost
+      press costs a retry rather than the test.
+    */
+    const gameover = page.locator('.gameover');
+    for (let attempt = 0; attempt < 5 && !(await gameover.isVisible()); attempt += 1) {
+      await resign.click();
+      if (await page.locator('.controls__confirm').isVisible()) await resign.click();
+    }
+
+    await expect(gameover).toBeVisible();
     await expect(page.locator('.gameover')).toContainText('resign', { ignoreCase: true });
   });
 

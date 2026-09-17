@@ -1020,6 +1020,8 @@ body {
 
 .datastatus__line {
   display: flex;
+  /* A failure carries a message and two ways out; on a phone that is two rows. */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -1647,29 +1649,27 @@ body {
     gap: 8px;
   }
 
-  /* 44px: a fingertip, not a cursor. §13.4 raises the board's targets too. */
+  /*
+    Six controls, all icons, all at least 44px: a fingertip is not a cursor, and
+    a word on any one of them would set the width for all six. They share the
+    bar evenly rather than sitting at a fixed size, so a wider phone gets
+    bigger targets rather than a gap on the right.
+  */
   .sheet__button,
   .sheet__tab {
     display: inline-flex;
+    flex: 1 1 0;
     min-width: 44px;
+    max-width: 72px;
     height: 44px;
     align-items: center;
     justify-content: center;
-    padding: 0 12px;
+    padding: 0;
     border: 1px solid var(--paper-edge);
     border-radius: 3px;
     background: rgba(255, 255, 255, 0.34);
     color: var(--paper-ink-strong);
-    font-family: var(--paper-serif);
-    font-size: 13px;
-    gap: 6px;
     cursor: pointer;
-  }
-
-  .sheet__tab {
-    flex: 1 1 auto;
-    min-width: 0;
-    font-weight: 700;
   }
 
   .sheet__tab--on {
@@ -1678,13 +1678,12 @@ body {
   }
 
   /*
-    Tips is the one button a new player has to find without being taught, so it
-    carries a word as well as a glyph and does not share the quiet treatment.
+    The only coloured button in the bar, which is now what makes it the one a
+    new player finds first — it used to be the only one carrying a word.
   */
   .sheet__button--tips {
     border-color: #7a6a3a;
-    background: rgba(255, 255, 255, 0.62);
-    font-weight: 700;
+    background: rgba(183, 138, 42, 0.26);
   }
 
   .sheet__body {
@@ -1821,7 +1820,8 @@ body {
   }
 
   .area-picker__button,
-  .area-picker__result-button {
+  .area-picker__result-button,
+  .datastatus__retry {
     min-height: 44px;
   }
 

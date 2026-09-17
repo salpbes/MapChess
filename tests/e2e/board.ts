@@ -7,7 +7,7 @@
 //       teaches people to ignore a suite. Asking the running app where e2 is
 //       keeps the journeys about behaviour.
 
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 import type { Square } from '@domain/board/Square';
 
@@ -101,12 +101,36 @@ export async function clickSquare(page: Page, square: Square): Promise<void> {
  * simply already on screen. One path, no viewport branch in the test.
  */
 export async function tapControl(page: Page, label: string): Promise<void> {
-  const button = page.getByRole('button', { name: label, exact: true });
-  if (!(await button.isVisible())) {
-    await page.locator('.sheet__tab', { hasText: 'The game' }).click();
-    await expect(button).toBeVisible();
+  const all = page.getByRole('button', { name: label, exact: true });
+  if (await clickFirstVisible(all)) return;
+
+  // Not in the bar, so it is in the drawer, behind "The game".
+  await notesTab(page, 'game').click();
+  await expect(all.first()).toBeVisible();
+  if (!(await clickFirstVisible(all))) throw new Error(`no visible control named ${label}`);
+}
+
+/**
+ * The drawer's two tabs, by their labels rather than their glyphs.
+ *
+ * Several controls appear twice below the breakpoint — once in the always-on
+ * bar and once in the dock inside the drawer — so a test has to press the one
+ * that is actually on screen rather than the first in the DOM.
+ */
+export function notesTab(page: Page, tab: 'field' | 'game'): Locator {
+  return page.getByRole('button', { name: tab === 'field' ? /^The field/ : /^The game/ });
+}
+
+async function clickFirstVisible(locator: Locator): Promise<boolean> {
+  const count = await locator.count();
+  for (let i = 0; i < count; i += 1) {
+    const candidate = locator.nth(i);
+    if (await candidate.isVisible()) {
+      await candidate.click();
+      return true;
+    }
   }
-  await button.click();
+  return false;
 }
 
 /** How many half-moves the record is showing. */

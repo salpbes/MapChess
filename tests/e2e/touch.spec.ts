@@ -12,7 +12,7 @@
 //       path is caught by the suite rather than by a player.
 
 import { test, expect } from './fixtures';
-import { bootBoard, squarePoint, startGame } from './board';
+import { bootBoard, notesTab, squarePoint, startGame } from './board';
 
 test.describe('the board under a finger', () => {
   test.skip(
@@ -47,7 +47,7 @@ test.describe('the board under a finger', () => {
     const to = await squarePoint(page, 'e4');
     await page.touchscreen.tap(to.x, to.y);
 
-    await page.locator('.sheet__tab', { hasText: 'The game' }).click();
+    await notesTab(page, 'game').click();
     await expect(page.locator('.record')).toContainText('e4');
   });
 
@@ -63,7 +63,7 @@ test.describe('the board under a finger', () => {
     await page.touchscreen.tap(from.x + 4, from.y + 4);
     await page.touchscreen.tap(to.x - 4, to.y + 4);
 
-    await page.locator('.sheet__tab', { hasText: 'The game' }).click();
+    await notesTab(page, 'game').click();
     await expect(page.locator('.record')).toContainText('d4');
   });
 
@@ -71,7 +71,7 @@ test.describe('the board under a finger', () => {
     await bootBoard(page);
     await startGame(page);
 
-    await page.locator('.sheet__tab', { hasText: 'The game' }).click();
+    await notesTab(page, 'game').click();
 
     // Every control on screen, not a sample: the icon row is where Phase 12's
     // last bug lived, and it is exactly the row that was sized for a mouse.

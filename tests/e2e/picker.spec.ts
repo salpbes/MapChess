@@ -78,6 +78,36 @@ test.describe('choosing a place', () => {
       .not.toBe(before);
   });
 
+  test('a failure offers a way out, not just a retry', async ({ page }) => {
+    test.skip(test.info().project.name !== 'desktop', 'One viewport is enough for a dead end.');
+
+    // Move the square off the fixture areas, so the app has to ask Overpass —
+    // which the fence refuses, exactly as a timeout or an outage would.
+    const map = await page.locator('.area-picker__map').boundingBox();
+    const x = (map?.x ?? 0) + (map?.width ?? 0) / 2;
+    const y = (map?.y ?? 0) + (map?.height ?? 0) / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 90, y - 60, { steps: 8 });
+    await page.mouse.up();
+    await page.getByRole('button', { name: 'Use this area' }).click();
+
+    const status = page.locator('.datastatus');
+    await expect(status).toContainText('Could not load', { timeout: 30_000 });
+
+    /*
+      "Try again" alone is a loop: an area that failed because it is too dense
+      for the query will fail the same way next time, and the player is stuck
+      on a board that will never build.
+    */
+    await expect(status.getByRole('button', { name: 'Try again' })).toBeVisible();
+    const elsewhere = status.getByRole('button', { name: 'Choose another area' });
+    await expect(elsewhere).toBeVisible();
+
+    await elsewhere.click();
+    await expect(page.locator('.area-picker')).toBeVisible();
+  });
+
   test('rotation is a slider, not a twist', async ({ page }) => {
     // Two fingers already mean pinch-and-rotate to MapLibre, so the square's
     // own rotation gets a control it can keep rather than a gesture it would

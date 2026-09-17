@@ -41,6 +41,8 @@ export interface ViewControlsDeps {
   readonly onCoachingChanged: (on: boolean) => void;
   readonly onSoundChanged: (on: boolean) => void;
   readonly onRecenter: () => void;
+  /** Straight down at the whole board, for reading it as a chessboard. */
+  readonly onTopDown: () => void;
 }
 
 export class ViewControls {
@@ -92,7 +94,14 @@ export class ViewControls {
       deps.onRecenter,
     );
 
-    this.root.append(this.labels, this.coach, this.assess, this.sound, recenter);
+    const topDown = iconButton(
+      'topDown',
+      'Look straight down at the board',
+      'view-controls__button',
+      deps.onTopDown,
+    );
+
+    this.root.append(this.labels, this.coach, this.assess, this.sound, topDown, recenter);
     container.appendChild(this.root);
 
     this.render();

@@ -190,6 +190,12 @@ export function bootstrap(
     onTips: () => {
       void game.requestHint();
     },
+    onUndo: () => {
+      game.undo();
+    },
+    onTopDown: () => {
+      stage.lookDown();
+    },
     onShow: (tab) => {
       // Asking for the field is already the request to read it.
       if (tab === 'field') briefing.expand();
@@ -286,9 +292,15 @@ export function bootstrap(
     browserBase64,
   );
   // Loading and failure are visible to every player; the debug panels add the detail.
-  const dataStatus = new DataStatus(uiContainer, () => {
-    loadArea(areaBar.current);
-  });
+  const dataStatus = new DataStatus(
+    uiContainer,
+    () => {
+      loadArea(areaBar.current);
+    },
+    () => {
+      areaBar.open();
+    },
+  );
   const heightmapPanel = debug ? new HeightmapDebugPanel(uiContainer) : null;
   const elevationView: IElevationView = {
     showLoading: (done, total) => {
@@ -456,6 +468,9 @@ export function bootstrap(
     },
     onRecenter: () => {
       stage.reframe(boardScene.layout?.bounds ?? initialLayout.bounds);
+    },
+    onTopDown: () => {
+      stage.lookDown();
     },
   });
 

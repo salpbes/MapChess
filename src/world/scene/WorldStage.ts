@@ -14,7 +14,7 @@ import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 import type { BoardBounds } from '@domain/board/types';
 
-import { createCamera } from './createCamera';
+import { boardCentre, createCamera, topDownDistance } from './createCamera';
 import { createControls } from './createControls';
 import { createLights } from './createLights';
 import { createRenderer } from './createRenderer';
@@ -97,6 +97,31 @@ export class WorldStage {
     this.lights = createLights(bounds);
     this.scene.add(this.lights);
     this.bounds = bounds;
+  }
+
+  /**
+   * Looks straight down at the whole board.
+   *
+   * A tilted view is what makes the terrain readable, and it is also what makes
+   * a chessboard hard to read: ranks foreshorten and the far side is the part
+   * you are worst at judging. This is the other view, one press away — the
+   * board as a board, with the landscape flattened into a map of itself.
+   */
+  public lookDown(): void {
+    const b = this.bounds;
+    const centre = boardCentre(b);
+    const height = topDownDistance(b.maxX - b.minX, this.camera.aspect);
+
+    this.controls.target.copy(centre);
+    /*
+      A hair to the south rather than exactly overhead: straight down leaves
+      OrbitControls with no azimuth to keep, and the first drag afterwards
+      snaps the board round to an arbitrary heading.
+    */
+    this.camera.position.set(centre.x, centre.y + height, centre.z + height * 0.002);
+    this.camera.lookAt(centre);
+    this.controls.maxDistance = Math.max(this.controls.maxDistance, height * 1.25);
+    this.controls.update();
   }
 
   /**
