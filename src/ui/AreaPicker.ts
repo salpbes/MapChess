@@ -4,8 +4,10 @@
 //       polygon rebuilt from `describeArea()` on every change, so what you see
 //       is exactly the board footprint the rest of the app will use; its
 //       south edge (White's back rank) is drawn heavier and lighter. Dragging
-//       inside the square moves it; dragging outside pans the map; a slider
-//       rotates it. Search goes through IGeocoder.
+//       inside the square moves it — with one finger or the mouse, since
+//       MapLibre raises `mousedown` for a mouse only; dragging outside pans
+//       the map; a slider rotates it, because two fingers already mean
+//       pinch-and-rotate to the map underneath. Search goes through IGeocoder.
 // WHY:  BUILD_PLAN Phase 5. Reusing describeArea() for the overlay guarantees
 //       the picker and the game agree on where the board is — there is no
 //       second copy of the geometry to drift.
@@ -19,7 +21,9 @@ import {
   setWorkerUrl,
   type GeoJSONSource,
   type MapLayerMouseEvent,
+  type MapLayerTouchEvent,
   type MapMouseEvent,
+  type MapTouchEvent,
 } from 'maplibre-gl';
 // Vite bundles the worker (and its shared chunk) and returns a stable URL. MapLibre's
 // own `new URL('./maplibre-gl-worker.mjs', import.meta.url)` lookup breaks under both
@@ -126,7 +130,7 @@ export class AreaPicker {
 
     const hint = el('div', 'area-picker__hint');
     hint.textContent =
-      'Drag the square to move it, drag the map to pan, scroll to zoom. The bright edge is White’s side.';
+      'Drag the square to move it, drag the map to pan, pinch or scroll to zoom. The bright edge is White’s side.';
 
     panel.append(searchRow, this.results, rotRow, this.readout, hint, actions);
     this.root.append(mapEl, panel);
@@ -201,26 +205,49 @@ export class AreaPicker {
       paint: { 'line-color': '#ffffff', 'line-width': 6 },
     });
 
-    // Drag the square by its fill; pan the map everywhere else.
+    /*
+      Drag the square by its fill; pan the map everywhere else.
+
+      Bound for touch as well as for the mouse. MapLibre raises `mousedown`
+      only for a mouse, so on a phone the square could not be picked up at all
+      — every drag fell through to the map and panned it, which looks exactly
+      like a square that refuses to move.
+
+      One finger only. Two is MapLibre's own pinch-and-rotate, and a square
+      that hijacked the second finger would take the map's zoom with it.
+    */
     let grabOffset: { dLon: number; dLat: number } | null = null;
-    const onMove = (e: MapMouseEvent): void => {
+    const onMove = (e: MapMouseEvent | MapTouchEvent): void => {
       if (grabOffset === null) return;
       this.center = { lat: e.lngLat.lat + grabOffset.dLat, lon: e.lngLat.lng + grabOffset.dLon };
       this.redraw();
     };
-    const onUp = (): void => {
+    const endDrag = (): void => {
       grabOffset = null;
       this.map.dragPan.enable();
       this.map.off('mousemove', onMove);
+      this.map.off('touchmove', onMove);
       this.map.getCanvas().style.cursor = '';
     };
-    this.map.on('mousedown', FILL_LAYER, (e: MapLayerMouseEvent) => {
+    const beginDrag = (e: MapLayerMouseEvent | MapLayerTouchEvent): void => {
+      // Stops the same gesture also panning the map underneath.
       e.preventDefault();
       grabOffset = { dLon: this.center.lon - e.lngLat.lng, dLat: this.center.lat - e.lngLat.lat };
       this.map.dragPan.disable();
+    };
+
+    this.map.on('mousedown', FILL_LAYER, (e: MapLayerMouseEvent) => {
+      beginDrag(e);
       this.map.getCanvas().style.cursor = 'grabbing';
       this.map.on('mousemove', onMove);
-      this.map.once('mouseup', onUp);
+      this.map.once('mouseup', endDrag);
+    });
+    this.map.on('touchstart', FILL_LAYER, (e: MapLayerTouchEvent) => {
+      if (e.points.length !== 1) return;
+      beginDrag(e);
+      this.map.on('touchmove', onMove);
+      this.map.once('touchend', endDrag);
+      this.map.once('touchcancel', endDrag);
     });
     this.map.on('mouseenter', FILL_LAYER, () => {
       if (grabOffset === null) this.map.getCanvas().style.cursor = 'move';

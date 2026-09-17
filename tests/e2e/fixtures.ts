@@ -31,6 +31,34 @@ export const test = base.extend<FenceFixtures>({
           await route.continue();
           return;
         }
+
+        /*
+          The basemap is answered from a fixture rather than aborted. Without a
+          style MapLibre never finishes loading, so the square the picker
+          exists to drag is never added to the map and the whole screen is
+          untestable — which is how a mouse-only drag handler reached a phone.
+          A background colour is the smallest style that loads; the picker's
+          own layers are drawn on top of it and are what the tests drive.
+        */
+        if (url.includes('openfreemap.org') || url.includes('/styles/')) {
+          attempts.push(url);
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              version: 8,
+              sources: {},
+              layers: [
+                {
+                  id: 'fixture-ground',
+                  type: 'background',
+                  paint: { 'background-color': '#2b3038' },
+                },
+              ],
+            }),
+          });
+          return;
+        }
         attempts.push(url);
         // The same failure a plane-mode phone gives, so the app's own error
         // states are what the journeys exercise.

@@ -1824,6 +1824,26 @@ body {
   .area-picker__result-button {
     min-height: 44px;
   }
+
+  /*
+    Rotation keeps a control rather than taking a gesture: two fingers already
+    mean pinch-and-rotate to MapLibre, and a square that stole the second
+    finger would take the map's zoom with it. A slider only works if the thumb
+    is catchable, though — the browser default is about 12px.
+  */
+  .area-picker__rotation {
+    height: 44px;
+  }
+
+  .area-picker__rotation::-webkit-slider-thumb {
+    width: 28px;
+    height: 28px;
+  }
+
+  .area-picker__rotation::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+  }
 }
 
 /* ---- Phase 13, from a real iPhone: four things a headless browser cannot see ---- */
