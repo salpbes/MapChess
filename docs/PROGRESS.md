@@ -910,3 +910,102 @@ the one that decides who can actually play it:
   documented, and removed within days. They were cheap to remove because they
   sat behind seams — but the pattern says features aimed at "helping" should be
   played before they are polished.
+
+## Phase 13 — Who can actually play it
+
+**Date:** 2026-09-17
+**Beyond the plan's 100%**
+
+### In plain English
+
+The game was finished; it just could not be played by most of the people who
+would be sent the link. It now fits a phone, takes fingers, tells a move from a
+capture without relying on colour, and can be played start to finish from the
+keyboard with the moves read out loud.
+
+It also has a net under it. Forty-five journeys drive the real built page in a
+browser at two screen widths, so the things that broke last time break the
+build instead of the game.
+
+### What I built
+
+- `playwright.config.ts`, `tests/e2e/fixtures.ts` — the harness, against
+  `vite preview` rather than `dev`, with every off-origin request refused so
+  the run cannot be broken by someone else's outage.
+- `tests/e2e/journeys.spec.ts` — start, move, undo, resign, resume, picker, at
+  both viewports.
+- `tests/e2e/layout.spec.ts`, `touch.spec.ts`, `picker.spec.ts`,
+  `highlights.spec.ts`, `keyboard.spec.ts` — the things a behaviour test walks
+  straight past: what the page scrolls, what covers the board, what a thumb can
+  hit, what two buttons look alike, what a greyscale screenshot shows.
+- `src/ui/PanelSheet.ts` — the drawer and the bar that is always on the board.
+- `src/ui/KeyboardPlay.ts` — a cursor, arrow keys, "e4", Enter, Escape.
+- `src/ui/Announcer.ts` — one live region, saying the move and the turn it
+  hands over as one sentence.
+- `src/ui/identityLine.ts` — the piece's one-line name, shared by the card and
+  the bar.
+- `scripts/probe-area.ts` — runs the whole board build against real data for
+  one place, so "this area will not load" is reproducible without a browser.
+
+### Why it was done this way
+
+**The net came first.** Phase 12 shipped four CSS regressions, a resume bug and
+an icon row that ran off the paper, all past 399 passing unit tests. Rewriting
+the DOM layer without a net would have repeated the phase whose lesson was
+exactly that.
+
+**The breakpoint is not a rewrite.** Above 880px every box `PanelSheet` adds is
+`display: contents`, so the panels position themselves against `#ui` exactly as
+before and the desktop layout is what it was. The panels moved; nothing inside
+them did.
+
+**The second input is not a second game.** Enter hands its square to
+`handleSquareClick`, the same entry point a click uses, so castling on the rook
+and the promotion prompt needed no new rules code.
+
+### How to check it yourself
+
+1. `npm run test:e2e` — builds, serves, drives and tears down.
+2. `npm run dev`, then narrow the window under 880px: the panels become a
+   drawer under a bar, and the desktop layout returns when you widen it.
+3. Press `e`, `4`, Enter without touching the mouse.
+4. Take a screenshot of a selected piece and desaturate it: the move dot and
+   the capture ring are still different.
+
+### What's left
+
+Nothing in Phase 13. Outside it, one decision is open: a failed Overpass fetch
+still blocks the board, and it could instead degrade to a playable board built
+from terrain alone with generated names. The plan says naming is a bonus, never
+a requirement — but the cost is a board with no rivers, woods or real names,
+which is quietly less of what MapChess is. That is a product decision, not a
+technical one.
+
+### Risks / things I'm unsure about
+
+- **Five rounds of testing on a real phone found things the harness could not,
+  every single time.** The picker's drag was bound to `mousedown`, which
+  MapLibre never raises for a finger. The drawer was drawn over the menu in
+  landscape, hiding the one control that gets a player out. Web Audio obeys the
+  iPhone's silent switch unless the page claims `audioSession`. Two buttons wore
+  the same glyph. None of these were visible to 40 passing journeys. The harness
+  stops regressions; it does not replace somebody looking at the screen, which
+  is exactly what §13.4 predicted and is worth believing next time.
+
+- **"A bridge stops the map loading" was not what it looked like.** The probe
+  builds Ironbridge, Tower Bridge and the Bosphorus without complaint; Venice
+  came back Overpass 504 and then built fine on a retry. The variable is the
+  public instance's load, not the objects in the square. The app now stops
+  implying a retry will help after the second failure, which is the honest
+  answer to a cause it cannot see.
+
+- **The suite is slow enough to notice.** Two and a half minutes against under
+  two seconds for the unit tests, and it starves itself above three workers
+  because every test boots a WebGL context and a Stockfish worker. It is in the
+  deploy gate, so a slow suite is a slow deploy — worth watching if it grows.
+
+- **`window.__mapchess` ships in the production bundle.** Seventeen lines of
+  app code exist so a test can ask where e2 is on screen; the alternative was
+  hard-coded pixels that die the first time the camera moves. It is a read-only
+  handle to things already public, but it is still test scaffolding in the
+  shipped page.

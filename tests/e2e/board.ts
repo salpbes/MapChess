@@ -118,7 +118,10 @@ export async function tapControl(page: Page, label: string): Promise<void> {
  * that is actually on screen rather than the first in the DOM.
  */
 export function notesTab(page: Page, tab: 'field' | 'game'): Locator {
-  return page.getByRole('button', { name: tab === 'field' ? /^The field/ : /^The game/ });
+  // Scoped to the bar: the record panel's own heading is also a button called
+  // "The game", and it is on screen exactly when the drawer is open.
+  const name = tab === 'field' ? 'The field' : 'The game';
+  return page.locator(`.sheet__tab[aria-label^="${name}"]`);
 }
 
 async function clickFirstVisible(locator: Locator): Promise<boolean> {

@@ -12,7 +12,7 @@ Every piece is somebody. Click White's rook at Rievaulx and a card names it — 
 
 ## Status
 
-**Phase 12 of 12, deployed.** Playable end to end: choose a place, play the computer on its terrain, take back, resign, resume. See [docs/PROGRESS.md](docs/PROGRESS.md) for the report on each phase.
+**Phase 13, deployed.** Playable end to end on a phone or a desktop: choose a place, play the computer on its terrain, take back, resign, resume. Phase 12 finished the game; Phase 13 was about who can actually play it — a layout that fits a phone, a board that accepts fingers, highlights that survive colour blindness, and a full game playable from the keyboard alone. See [docs/PROGRESS.md](docs/PROGRESS.md) for the report on each phase.
 
 ## Screenshots
 
@@ -32,12 +32,17 @@ Every piece is somebody. Click White's rook at Rievaulx and a card names it — 
 
 ![The hint card, with the suggested move lit on the board](docs/screenshots/04-hint.png)
 
+**On a phone.** The board takes the whole screen and the panels become one drawer under a bar that is always there: the way out, the way to learn, take back, look straight down, and the two things worth reading. A selected piece names itself in the bar, so the reveal reaches a player who has not opened anything.
+
+<img src="docs/screenshots/05-phone.png" alt="MapChess on a phone, a bishop selected on the fields of Rievaulx" width="320">
+
 ## Run
 
 ```sh
 npm install
 npm run dev        # http://localhost:5173
-npm run test       # Vitest — domain, game and map data
+npm run test       # Vitest — domain, game and map data, in under two seconds
+npm run test:e2e   # Playwright — builds, serves and drives the real page
 npm run lint
 npm run typecheck
 npm run build      # typecheck, then a production build into dist/
@@ -48,10 +53,11 @@ Three offline example areas ship with the project — Rievaulx, Lindisfarne and 
 
 ## How to play
 
-- **Click a piece, then its destination.** Legal moves are lit; captures are lit differently.
-- **Castle** by clicking your king and then the rook you want to castle with.
-- **Drag** to orbit, **right-drag** or two fingers to slide the board, **scroll** to zoom.
-- **Hint** shows a strong move and says why, whatever difficulty you are playing.
+- **Click or tap a piece, then its destination.** A legal move is marked with a dot in the middle of the square and a capture with a ring round its edge — shape, not only colour, so the two are still different in greyscale or to a colour-blind player.
+- **Castle** by choosing your king and then the rook you want to castle with.
+- **Drag** to orbit, **right-drag** or two fingers to slide the board, **scroll** or pinch to zoom. **Look straight down** reads the board as a board when the terrain gets in the way.
+- **Hint** shows a strong move and says why, whatever difficulty you are playing. On a phone it is the **Tips** button, which breathes whenever there is advice to be had.
+- **Without a mouse:** arrow keys move a cursor, or type a square outright — `e` then `4`. Enter picks a piece up and puts it down, Escape puts it back. The move just played is announced for a screen reader rather than only drawn.
 - Five levels, from _Learner_ — which will hang pieces — to the unrestricted engine.
 
 ## Deploying
