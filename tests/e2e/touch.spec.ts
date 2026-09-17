@@ -108,6 +108,31 @@ test.describe('the board under a finger', () => {
     expect(duplicated, `offered twice: ${duplicated.join(', ')}`).toEqual([]);
   });
 
+  test('never wears the same glyph twice at once', async ({ page }) => {
+    await bootBoard(page);
+    await startGame(page);
+    await notesTab(page, 'game').click();
+
+    /*
+      The same rule one level down. Two buttons can carry different labels and
+      still be indistinguishable to look at, which is how "choose a place" and
+      "the field" both ended up as a map, and the record and the coaching notes
+      both as a book — a label test cannot see either.
+    */
+    const glyphs = await page
+      .locator('button[data-icon]:visible')
+      .evaluateAll((nodes) => nodes.map((n) => n.getAttribute('data-icon') ?? ''));
+
+    const seen = new Set<string>();
+    const repeated = glyphs.filter((g) => {
+      if (seen.has(g)) return true;
+      seen.add(g);
+      return false;
+    });
+
+    expect(repeated, `drawn twice: ${repeated.join(', ')}`).toEqual([]);
+  });
+
   test('what a thumb has to hit is big enough to hit', async ({ page }) => {
     await bootBoard(page);
     await startGame(page);

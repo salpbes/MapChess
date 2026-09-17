@@ -103,8 +103,8 @@ export class PanelSheet {
     );
 
     this.tabs = {
-      field: this.tabButton('field', 'map', 'The field — what this place is'),
-      game: this.tabButton('game', 'book', 'The game — moves, coaching and controls'),
+      field: this.tabButton('field', 'terrain', 'The field — what this place is'),
+      game: this.tabButton('game', 'pawn', 'The game — moves, coaching and controls'),
     };
 
     /*

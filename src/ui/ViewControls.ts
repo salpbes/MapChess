@@ -15,7 +15,7 @@
 
 import type { LabelMode } from '@world/builders/LabelBuilder';
 
-import { icon, iconButton } from './icons';
+import { iconButton, setIcon } from './icons';
 import type { IconName } from './icons';
 
 const STORAGE_KEY = 'mapchess.labelMode';
@@ -168,12 +168,12 @@ export class ViewControls {
     this.coach.setAttribute('aria-label', coachLabel);
     this.coach.classList.toggle('view-controls__button--off', !this.coaching);
 
-    this.sound.replaceChildren(icon(this.sounding ? 'sound' : 'soundOff'));
+    setIcon(this.sound, this.sounding ? 'sound' : 'soundOff');
     const soundLabel = this.sounding ? 'Turn the sound off' : 'Turn the sound on';
     this.sound.dataset.tip = soundLabel;
     this.sound.setAttribute('aria-label', soundLabel);
     this.sound.classList.toggle('view-controls__button--off', !this.sounding);
-    this.labels.replaceChildren(icon(MODE_ICON[this.mode]));
+    setIcon(this.labels, MODE_ICON[this.mode]);
     this.labels.dataset.tip = MODE_HINT[this.mode];
     this.labels.setAttribute('aria-label', MODE_HINT[this.mode]);
     this.labels.classList.toggle('view-controls__button--off', this.mode === 'off');

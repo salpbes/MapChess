@@ -12,7 +12,7 @@
 
 import type { GameBus } from '@game/GameEvents';
 
-import { icon, iconButton } from './icons';
+import { iconButton, setIcon } from './icons';
 
 const CONFIRM_MS = 4000;
 const BUTTON = 'controls__button';
@@ -146,7 +146,7 @@ export class GameControls {
     this.pause.hidden = !watching;
     if (watching) {
       const paused = this.deps.isPaused();
-      this.pause.replaceChildren(icon(paused ? 'play' : 'pause'));
+      setIcon(this.pause, paused ? 'play' : 'pause');
       const label = paused ? 'Let the game carry on' : 'Pause the game';
       this.pause.dataset.tip = label;
       this.pause.setAttribute('aria-label', label);

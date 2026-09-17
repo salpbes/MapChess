@@ -52,6 +52,24 @@ const PATHS: Readonly<Record<string, readonly string[]>> = {
   tagOff: ['M20 4h-7.2L4 12.8 11.2 20 20 11.2V4Z', 'M3.5 3.5l17 17'],
   // A board seen square on, which is what the button gives you.
   topDown: ['M4 4h16v16H4Z', 'M12 4v16', 'M4 12h16'],
+  /*
+    The drawer's two tabs. Deliberately not `map` and `book`: both were already
+    on screen beside them — `map` on "choose a place" and `book` on the
+    coaching notes — and two buttons wearing the same glyph a centimetre apart
+    is the same bug as two buttons wearing the same label.
+  */
+  terrain: ['M3 19h18', 'M6 19l4-6 2.5 3.5L16 10l5 9'],
+  /*
+    A pawn, not a list of lines: a list read too much like the menu's three
+    bars at the other end of the same row. The land and the game is a pairing
+    you can tell apart at a glance; two sets of horizontal rules is not.
+  */
+  pawn: [
+    'M12 5.2a2.4 2.4 0 1 1 0 4.8 2.4 2.4 0 0 1 0-4.8Z',
+    'M9.4 10.6h5.2',
+    'M10.2 10.8c.1 2.4-.7 4.2-1.7 5.6h7c-1-1.4-1.8-3.2-1.7-5.6',
+    'M7.2 19.4h9.6l-1-3H8.2z',
+  ],
 };
 
 export type IconName = keyof typeof PATHS;
@@ -84,6 +102,18 @@ export function icon(name: IconName, sizePx = 18): SVGSVGElement {
  * arrives in the operating system's colours, and cannot be styled to match
  * paper. Setting both would show two.
  */
+/**
+ * Swaps a button's glyph, keeping `data-icon` in step with what is drawn.
+ *
+ * Three buttons change icon as their state changes; without this the attribute
+ * still claims whatever they were built with, and anything reading it — a
+ * stylesheet, a test — is quietly told the wrong thing.
+ */
+export function setIcon(button: HTMLButtonElement, name: IconName): void {
+  button.dataset.icon = name;
+  button.replaceChildren(icon(name));
+}
+
 export function iconButton(
   name: IconName,
   label: string,
