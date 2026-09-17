@@ -263,6 +263,9 @@ export function bootstrap(
     canHint: () => game.canHint(),
     canUndo: () => game.canUndo(),
     canResign: () => game.outcome === null && seating.humanColor !== 'none',
+    onWaitingChanged: (waiting) => {
+      sheet.setTipsWaiting(waiting);
+    },
   });
   const gameOver = new GameOverScreen(uiContainer, bus, themeTracker, () => {
     menu.open();

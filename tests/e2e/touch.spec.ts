@@ -67,6 +67,19 @@ test.describe('the board under a finger', () => {
     await expect(page.locator('.record')).toContainText('d4');
   });
 
+  test('the tips button breathes while there is advice to be had', async ({ page }) => {
+    await bootBoard(page);
+    await startGame(page);
+
+    /*
+      The dock's hint button has pulsed since Phase 11, but below the
+      breakpoint the dock is in the drawer and the button a player sees is the
+      bar's. Nothing else in the bar moves, which is what makes this findable.
+    */
+    const tips = page.getByRole('button', { name: /^Tips/ });
+    await expect(tips).toHaveClass(/sheet__button--waiting/);
+  });
+
   test('what a thumb has to hit is big enough to hit', async ({ page }) => {
     await bootBoard(page);
     await startGame(page);

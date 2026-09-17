@@ -1,6 +1,6 @@
 // WHAT: What the map data is doing right now, for a player who is not in
-//       debug mode: loading terrain, loading features, or a failure with a way
-//       to try again.
+//       debug mode: loading terrain, loading features, or a failure with two
+//       ways forward.
 // HOW:  A full-screen veil that blurs the half-built board behind it, with a
 //       card in the middle: a row of chess pieces hopping in sequence, what is
 //       being fetched, and a chess tip. The veil ignores the pointer so the
@@ -43,6 +43,10 @@ export class DataStatus {
   private readonly tip: HTMLDivElement;
   private readonly retry: HTMLButtonElement;
   private readonly elsewhere: HTMLButtonElement;
+  private readonly advice: HTMLDivElement;
+  /** Failed attempts in a row on the current area; reset when one succeeds. */
+  private failures = 0;
+  private showingError = false;
   private tipTimer: ReturnType<typeof setInterval> | null = null;
   private shownTip: string | null = null;
   private readonly state: Record<Channel, State> = {
@@ -115,8 +119,20 @@ export class DataStatus {
     this.elsewhere.hidden = true;
     this.elsewhere.addEventListener('click', onChooseArea);
 
+    /*
+      Said only after the second failure. Once is bad luck — the map service is
+      shared, free and often busy, and a retry usually works. Twice is a
+      pattern, and at that point the honest thing is to stop implying the next
+      press will be different and let the player decide.
+    */
+    this.advice = document.createElement('div');
+    this.advice.className = 'datastatus__advice';
+    this.advice.hidden = true;
+    this.advice.textContent =
+      'That is twice. The map service may be busy, or this square may hold more detail than it will answer for. Another area usually loads straight away.';
+
     line.append(this.text, this.retry, this.elsewhere);
-    card.append(hoppingPieces(), line, this.tip);
+    card.append(hoppingPieces(), line, this.advice, this.tip);
     this.root.appendChild(card);
     container.appendChild(this.root);
   }
@@ -154,11 +170,19 @@ export class DataStatus {
   private render(): void {
     const failed = channels().filter((c) => this.state[c].kind === 'error');
     if (failed.length > 0) {
+      // Both channels failing is still one failed attempt, not two.
+      if (!this.showingError) {
+        this.showingError = true;
+        this.failures += 1;
+      }
       // A failure is something to act on, not something to read a joke under.
       this.stopTips();
       this.root.classList.add('datastatus--error');
       this.retry.hidden = false;
       this.elsewhere.hidden = false;
+      this.advice.hidden = this.failures < 2;
+      // Past the second try, moving on is the likelier answer of the two.
+      this.elsewhere.classList.toggle('datastatus__retry--primary', this.failures >= 2);
       this.root.hidden = false;
       this.text.textContent = failed
         .map((c) => {
@@ -170,10 +194,14 @@ export class DataStatus {
     }
 
     const loading = channels().filter((c) => this.state[c].kind === 'loading');
+    this.showingError = false;
     this.root.classList.remove('datastatus--error');
     this.retry.hidden = true;
     this.elsewhere.hidden = true;
+    this.advice.hidden = true;
     if (loading.length === 0) {
+      // Everything arrived: whatever went wrong before is no longer a pattern.
+      this.failures = 0;
       this.stopTips();
       this.root.hidden = true;
       return;

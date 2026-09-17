@@ -42,6 +42,7 @@ export class PanelSheet {
 
   private readonly tabs: Readonly<Record<SheetTab, HTMLButtonElement>>;
   private readonly peek: HTMLDivElement;
+  private readonly tips: HTMLButtonElement;
   private open = false;
   private tab: SheetTab = 'game';
 
@@ -79,7 +80,7 @@ export class PanelSheet {
       six. It is the only coloured button in the bar, which is now what makes
       it the one you find first.
     */
-    const tips = iconButton(
+    this.tips = iconButton(
       'hint',
       'Tips — a move worth considering, and why',
       'sheet__button sheet__button--tips',
@@ -116,7 +117,7 @@ export class PanelSheet {
     this.peek.className = 'sheet__peek';
     this.peek.hidden = true;
 
-    bar.append(menu, tips, undo, topDown, this.tabs.field, this.tabs.game);
+    bar.append(menu, this.tips, undo, topDown, this.tabs.field, this.tabs.game);
     chrome.append(handle, this.peek, bar);
 
     const body = document.createElement('div');
@@ -129,6 +130,18 @@ export class PanelSheet {
     container.appendChild(this.root);
 
     this.refresh();
+  }
+
+  /**
+   * Breathes the Tips button while there is advice to be had.
+   *
+   * It is the one control here a player is looking FOR rather than at, and a
+   * still button on a busy board is easy to miss — the dock's hint button has
+   * pulsed since Phase 11 for exactly that reason, and below the breakpoint
+   * that button is inside the drawer where nobody sees it.
+   */
+  public setTipsWaiting(waiting: boolean): void {
+    this.tips.classList.toggle('sheet__button--waiting', waiting);
   }
 
   /** Names what is standing on the selected square; null clears the line. */

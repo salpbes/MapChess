@@ -38,6 +38,14 @@ export interface GameControlsDeps {
   readonly canHint: () => boolean;
   readonly canUndo: () => boolean;
   readonly canResign: () => boolean;
+  /**
+   * Called whenever "there is a hint to be had" changes.
+   *
+   * The dock's own hint button lights itself, but below the breakpoint the
+   * dock is inside the drawer and the button a player actually sees is the
+   * bar's. One source of truth for the state, two buttons wearing it.
+   */
+  readonly onWaitingChanged?: (waiting: boolean) => void;
 }
 
 export class GameControls {
@@ -146,6 +154,7 @@ export class GameControls {
 
     const waiting = this.deps.canHint();
     this.hint.disabled = !waiting;
+    this.deps.onWaitingChanged?.(waiting);
     // Lit while the board is waiting on the player: the one button that is
     // worth noticing when you do not know what to do next.
     this.hint.classList.toggle('controls__button--waiting', waiting);

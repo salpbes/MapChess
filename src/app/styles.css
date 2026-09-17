@@ -1063,6 +1063,29 @@ body {
   background: #4a4f59;
 }
 
+/* After the second failure, the likelier of the two answers leads. */
+.datastatus__retry--primary {
+  border-color: #b9a074;
+  background: var(--paper);
+  color: var(--paper-ink-strong);
+  font-weight: 700;
+}
+
+.datastatus__retry--primary:hover {
+  background: #f3ebd8;
+}
+
+.datastatus__advice {
+  max-width: 44ch;
+  margin: 0 auto;
+  padding-top: 8px;
+  color: #c9b48a;
+  font-family: var(--paper-serif);
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
 /* The menu and the result card share the same dimmed full-screen treatment. */
 .menu-backdrop,
 .gameover-backdrop {
@@ -1684,6 +1707,35 @@ body {
   .sheet__button--tips {
     border-color: #7a6a3a;
     background: rgba(183, 138, 42, 0.26);
+  }
+
+  /*
+    And it breathes while there is advice to be had, the same violet the dock's
+    hint button has used since Phase 11. This is the one control a player is
+    looking FOR rather than at; nothing else in the bar moves, which is what
+    makes it findable.
+  */
+  .sheet__button--tips.sheet__button--waiting {
+    animation: tips-breathe 2s ease-in-out infinite;
+  }
+
+  @keyframes tips-breathe {
+    0%,
+    100% {
+      border-color: #7a6a3a;
+      box-shadow: none;
+    }
+    50% {
+      border-color: #b45cff;
+      box-shadow: 0 0 0 3px rgba(180, 92, 255, 0.28);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sheet__button--tips.sheet__button--waiting {
+      animation: none;
+      border-color: #b45cff;
+    }
   }
 
   .sheet__body {

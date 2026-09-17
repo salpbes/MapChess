@@ -104,6 +104,19 @@ test.describe('choosing a place', () => {
     const elsewhere = status.getByRole('button', { name: 'Choose another area' });
     await expect(elsewhere).toBeVisible();
 
+    /*
+      Once is bad luck: the service is shared and busy, and the message still
+      reads as "try again". Twice is a pattern, and the app should stop
+      implying the next press will be different.
+    */
+    const advice = page.locator('.datastatus__advice');
+    await expect(advice).toBeHidden();
+
+    await status.getByRole('button', { name: 'Try again' }).click();
+    await expect(advice).toBeVisible({ timeout: 30_000 });
+    await expect(advice).toContainText('twice');
+    await expect(elsewhere).toHaveClass(/datastatus__retry--primary/);
+
     await elsewhere.click();
     await expect(page.locator('.area-picker')).toBeVisible();
   });
