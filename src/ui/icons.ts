@@ -58,17 +58,21 @@ const PATHS: Readonly<Record<string, readonly string[]>> = {
     coaching notes — and two buttons wearing the same glyph a centimetre apart
     is the same bug as two buttons wearing the same label.
   */
-  terrain: ['M3 19h18', 'M6 19l4-6 2.5 3.5L16 10l5 9'],
+  terrain: ['M2.5 20.5h19', 'M4.5 20.5l5-10 3.5 6L17 4l4.5 16.5'],
   /*
     A pawn, not a list of lines: a list read too much like the menu's three
     bars at the other end of the same row. The land and the game is a pairing
     you can tell apart at a glance; two sets of horizontal rules is not.
+
+    Both of these are drawn to fill the 24-unit box rather than sit inside it.
+    Rendering them larger instead would have scaled the stroke with them and
+    left the pair looking heavier than every other glyph in the row.
   */
   pawn: [
-    'M12 5.2a2.4 2.4 0 1 1 0 4.8 2.4 2.4 0 0 1 0-4.8Z',
-    'M9.4 10.6h5.2',
-    'M10.2 10.8c.1 2.4-.7 4.2-1.7 5.6h7c-1-1.4-1.8-3.2-1.7-5.6',
-    'M7.2 19.4h9.6l-1-3H8.2z',
+    'M12 3.2a3.2 3.2 0 1 1 0 6.4 3.2 3.2 0 0 1 0-6.4Z',
+    'M8.2 10.4h7.6',
+    'M9.3 10.6c.1 3.1-1 5.4-2.3 7.1h10c-1.3-1.7-2.4-4-2.3-7.1',
+    'M4.6 21h14.8l-1.5-3.4H6.1z',
   ],
 };
 

@@ -1701,6 +1701,18 @@ body {
   }
 
   /*
+    The two tabs are drawn larger than the rest of the row. A ridge line and a
+    pawn are sparse outlines next to a filled grid or three solid bars, so at a
+    matched size they read as the smaller buttons even though their boxes are
+    the same. Size here rather than in the paths, which were already pushed out
+    as far as the viewBox allows.
+  */
+  .sheet__tab svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  /*
     The only coloured button in the bar, which is now what makes it the one a
     new player finds first — it used to be the only one carrying a word.
   */
