@@ -1,7 +1,8 @@
 // WHAT: Procedural low-poly geometry for the six piece types.
 // HOW:  Each piece is a lathe (turned) profile in "cell units" where 1 = the
-//       width of a nominal cell; the king adds a cross, and the knight and the
-//       bishop add an extruded silhouette on top. Everything is scaled by
+//       width of a nominal cell; the king adds a cross, the rook a ring of
+//       merlons, the queen a coronet of points, and the knight and the bishop
+//       an extruded silhouette on top. Everything is scaled by
 //       `unit` metres and
 //       merged into one non-indexed geometry so flat shading gives hard facets.
 //       Every profile starts with the same plinth disc, wider than the body.
@@ -149,11 +150,36 @@ const BISHOP_MITRE: readonly [number, number][] = [
 /** Wider than the knight's head: the mitre must read as solid, not as a plate. */
 const BISHOP_THICKNESS = 0.19;
 
+/*
+  The rook's battlements and the queen's coronet, for the same reason the
+  bishop got a mitre: a turned profile is a blob at playing distance, and the
+  two pieces players actually confuse are the ones still made only on a lathe.
+  A rook is named after its notched top and a queen after her points — put
+  those back and the silhouette does the telling, at any size, from any angle,
+  in any colour.
+
+  Both rings keep four-fold symmetry (four merlons, eight points), so the
+  pieces stay square-footed and still read the same whichever way the board is
+  turned. Neither has a facing; only the knight and the bishop do.
+*/
+const ROOK_MERLONS = { count: 4, radius: 0.185, size: 0.1, y: 0.72 };
+const QUEEN_POINTS = { count: 8, radius: 0.175, width: 0.055, height: 0.11, y: 0.855 };
+
 export function createPieceGeometry(type: PieceType, unit: number): BufferGeometry {
   const parts: BufferGeometry[] = [lathe([...PLINTH, ...BODY[type]], unit)];
 
   if (type === 'king') {
-    parts.push(box(0.05, 0.16, 0.05, 0, 0.98, unit), box(0.14, 0.05, 0.05, 0, 1.0, unit));
+    // Bolder than it was: the cross is the whole of what separates him from
+    // the queen, and at a board's length the old one was a speck.
+    parts.push(box(0.07, 0.22, 0.07, 0, 1.0, unit), box(0.2, 0.07, 0.07, 0, 1.03, unit));
+  }
+  if (type === 'rook') {
+    const m = ROOK_MERLONS;
+    parts.push(...ring(m.count, m.radius, m.size, m.size, m.size, m.y, unit));
+  }
+  if (type === 'queen') {
+    const q = QUEEN_POINTS;
+    parts.push(...ring(q.count, q.radius, q.width, q.height, q.width, q.y, unit));
   }
   if (type === 'knight') {
     parts.push(upright(KNIGHT_HEAD, KNIGHT_THICKNESS, unit));
@@ -177,6 +203,32 @@ function box(w: number, h: number, d: number, x: number, y: number, unit: number
   const g = new BoxGeometry(w * unit, h * unit, d * unit).toNonIndexed();
   g.translate(x * unit, y * unit, 0);
   return g;
+}
+
+/**
+ * `count` boxes stood evenly around the axis at `radius`.
+ *
+ * Translate-then-rotate, so each box keeps its own edges square to the radius
+ * it sits on — a battlement whose blocks are all turned the same way reads as
+ * a cog rather than a tower.
+ */
+function ring(
+  count: number,
+  radius: number,
+  w: number,
+  h: number,
+  d: number,
+  y: number,
+  unit: number,
+): BufferGeometry[] {
+  const out: BufferGeometry[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const g = new BoxGeometry(w * unit, h * unit, d * unit).toNonIndexed();
+    g.translate(radius * unit, y * unit, 0);
+    g.rotateY((i / count) * Math.PI * 2);
+    out.push(g);
+  }
+  return out;
 }
 
 /** A flat silhouette stood upright and centred on the axis, facing forward. */

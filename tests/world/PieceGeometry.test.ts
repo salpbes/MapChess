@@ -90,6 +90,72 @@ describe('createPieceGeometry', () => {
     expect(heightOf('bishop')).toBeLessThan(heightOf('queen'));
   });
 
+  it('notches the rook and points the queen, so neither is a turned blob', () => {
+    /*
+      Players told each other apart badly exactly where the piece was still
+      only a lathe: a rook read as a fat pawn, a queen as the king. The two
+      fixes fail differently and so are measured differently — a battlement is
+      a GAP in the outline, a coronet is material standing PROUD of the stem.
+    */
+    const inBand = (type: PieceType, from: number, to: number): Vector3[] => {
+      const { positions: position, box } = build(type);
+      const out: Vector3[] = [];
+      for (let i = 0; i < position.count; i += 1) {
+        const vertex = new Vector3().fromBufferAttribute(position, i);
+        const height = vertex.y / box.max.y;
+        if (height >= from && height <= to) out.push(vertex);
+      }
+      return out;
+    };
+    const widest = (points: Vector3[]): number =>
+      Math.max(...points.map((p) => Math.hypot(p.x, p.z)));
+
+    /*
+      The widest angular gap in the outline. A twelve-segment lathe leaves 30
+      degrees between vertices however round it looks, so anything past 40 is a
+      real notch rather than faceting — and measuring the gap avoids picking
+      sector boundaries that happen to land on the merlons.
+    */
+    const widestGap = (points: Vector3[]): number => {
+      const angles = points.map((p) => Math.atan2(p.z, p.x)).sort((a, b) => a - b);
+      let gap = 0;
+      for (let i = 0; i < angles.length; i += 1) {
+        const here = angles[i] ?? 0;
+        const next = i + 1 < angles.length ? (angles[i + 1] ?? 0) : (angles[0] ?? 0) + Math.PI * 2;
+        gap = Math.max(gap, next - here);
+      }
+      return (gap * 180) / Math.PI;
+    };
+
+    // Above the rim there is merlon at four points of the compass and nothing
+    // in between. A turned top would leave no gap wider than its faceting.
+    expect(widestGap(inBand('rook', 0.93, 1)), 'the rook has no gaps').toBeGreaterThan(40);
+
+    // The coronet stands out past the stem, which is inside 0.18 cells here.
+    expect(widest(inBand('queen', 0.85, 0.96)) / UNIT, 'the queen has no points').toBeGreaterThan(
+      0.19,
+    );
+
+    // And the pawn is still a turned blob, which is right for a pawn: a closed
+    // ring at the top, with nothing standing out of it.
+    const pawnTop = inBand('pawn', 0.8, 1);
+    expect(widestGap(pawnTop), 'the pawn is notched').toBeLessThan(35);
+    expect(widest(pawnTop) / UNIT, 'the pawn has grown a crown').toBeLessThan(0.19);
+  });
+
+  it('gives the king a cross broad enough to see from across the board', () => {
+    // It is the whole of what separates him from the queen.
+    const { positions: position, box } = build('king');
+    const vertex = new Vector3();
+    let widest = 0;
+    for (let i = 0; i < position.count; i += 1) {
+      vertex.fromBufferAttribute(position, i);
+      if (vertex.y > box.max.y * 0.93) widest = Math.max(widest, Math.abs(vertex.x));
+    }
+    // Wider than a fifth of a cell: the old cross was half this and read as a speck.
+    expect(widest / UNIT).toBeGreaterThan(0.09);
+  });
+
   it('gives the bishop and the knight a facing, and the turned pieces none', () => {
     // A solid of revolution is as deep as it is wide; an extruded silhouette is
     // not, and that asymmetry is what stops the bishop reading as another blob.
