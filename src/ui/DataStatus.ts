@@ -43,6 +43,7 @@ export class DataStatus {
   private readonly tip: HTMLDivElement;
   private readonly retry: HTMLButtonElement;
   private readonly elsewhere: HTMLButtonElement;
+  private readonly anyway: HTMLButtonElement;
   private readonly advice: HTMLDivElement;
   /** Failed attempts in a row on the current area; reset when one succeeds. */
   private failures = 0;
@@ -83,7 +84,12 @@ export class DataStatus {
     },
   };
 
-  public constructor(container: HTMLElement, onRetry: () => void, onChooseArea: () => void) {
+  public constructor(
+    container: HTMLElement,
+    onRetry: () => void,
+    onChooseArea: () => void,
+    onPlayAnyway: () => void,
+  ) {
     this.root = document.createElement('div');
     this.root.className = 'datastatus';
     this.root.hidden = true;
@@ -129,12 +135,40 @@ export class DataStatus {
     this.advice.className = 'datastatus__advice';
     this.advice.hidden = true;
     this.advice.textContent =
-      'That is twice. The map service may be busy, or this square may hold more detail than it will answer for. Another area usually loads straight away.';
+      'That is twice. The map service may be busy, or this square may hold more detail than it will answer for. Another area usually loads straight away — or play this ground as it is, with no rivers, woods or real names on it.';
 
-    line.append(this.text, this.retry, this.elsewhere);
+    /*
+      Offered only when the ground arrived and it was the map that did not:
+      terrain alone is a playable board, with names made from the shape of the
+      land instead of from what is on it. Offered rather than taken: a board
+      with the right hills and invented names is still less than this game is
+      meant to be, so it is the player's call and not a silent fallback.
+    */
+    this.anyway = document.createElement('button');
+    this.anyway.type = 'button';
+    this.anyway.className = 'datastatus__retry';
+    this.anyway.textContent = 'Play without the map details';
+    this.anyway.hidden = true;
+    this.anyway.addEventListener('click', onPlayAnyway);
+
+    line.append(this.text, this.retry, this.elsewhere, this.anyway);
     card.append(hoppingPieces(), line, this.advice, this.tip);
     this.root.appendChild(card);
     container.appendChild(this.root);
+  }
+
+  /**
+   * Stops reporting a failure the player has decided to go on without.
+   *
+   * Nothing is retried and nothing is pretended to have arrived; the veil just
+   * gets out of the way of the board that is about to be built.
+   */
+  public dismiss(): void {
+    this.state.terrain = { kind: 'ready' };
+    this.state.features = { kind: 'ready' };
+    this.failures = 0;
+    this.showingError = false;
+    this.render();
   }
 
   public dispose(): void {
@@ -181,6 +215,11 @@ export class DataStatus {
       this.retry.hidden = false;
       this.elsewhere.hidden = false;
       this.advice.hidden = this.failures < 2;
+      // Nothing to fall back on if it was the ground that failed to arrive.
+      this.anyway.hidden =
+        this.failures < 2 ||
+        this.state.terrain.kind !== 'ready' ||
+        this.state.features.kind !== 'error';
       // Past the second try, moving on is the likelier answer of the two.
       this.elsewhere.classList.toggle('datastatus__retry--primary', this.failures >= 2);
       this.root.hidden = false;
@@ -198,6 +237,7 @@ export class DataStatus {
     this.root.classList.remove('datastatus--error');
     this.retry.hidden = true;
     this.elsewhere.hidden = true;
+    this.anyway.hidden = true;
     this.advice.hidden = true;
     if (loading.length === 0) {
       // Everything arrived: whatever went wrong before is no longer a pattern.

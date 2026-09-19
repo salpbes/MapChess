@@ -289,6 +289,9 @@ export function bootstrap(
           fps.tick(dt);
         });
 
+  /** The area the board is currently being built for; see `loadArea`. */
+  let areaGeneration = 0;
+
   // --- map area + elevation (Phase 5/6: selected, fetched and shown; consumed by the board from Phase 8) ---
   // Fixtures first (offline), then IndexedDB-cached Terrarium tiles (D-022).
   const elevationProvider = new FixtureElevationProvider(
@@ -306,6 +309,16 @@ export function bootstrap(
     },
     () => {
       areaBar.open();
+    },
+    () => {
+      /*
+        The ground arrived and the map did not. Composing with no features at
+        all gives a board terraced to the real hills, with names made from the
+        shape of the land rather than from what stands on it — less than this
+        game is meant to be, which is why it is offered rather than taken.
+      */
+      composer.setFeatures(areaGeneration, []);
+      dataStatus.dismiss();
     },
   );
   const heightmapPanel = debug ? new HeightmapDebugPanel(uiContainer) : null;
@@ -433,6 +446,7 @@ export function bootstrap(
 
   function loadArea(area: SelectedArea): void {
     const generation = composer.beginArea();
+    areaGeneration = generation;
     void elevation.load(area).then((result) => {
       if (result !== null) composer.setHeights(generation, result.field);
     });

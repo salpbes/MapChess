@@ -12,7 +12,7 @@
 import type { Page } from '@playwright/test';
 
 import { test, expect } from './fixtures';
-import { bootBoard, startGame, tapControl } from './board';
+import { bootBoard, clickSquare, startGame, tapControl } from './board';
 
 /** Where the picker's readout says the square currently is. */
 async function readoutOf(page: Page): Promise<string> {
@@ -119,6 +119,44 @@ test.describe('choosing a place', () => {
 
     await elsewhere.click();
     await expect(page.locator('.area-picker')).toBeVisible();
+  });
+
+  test('offers the ground on its own, and it is playable', async ({ page }) => {
+    test.skip(test.info().project.name !== 'desktop', 'One viewport is enough.');
+
+    const map = await page.locator('.area-picker__map').boundingBox();
+    const x = (map?.x ?? 0) + (map?.width ?? 0) / 2;
+    const y = (map?.y ?? 0) + (map?.height ?? 0) / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 90, y - 60, { steps: 8 });
+    await page.mouse.up();
+    await page.getByRole('button', { name: 'Use this area' }).click();
+
+    const status = page.locator('.datastatus');
+    await expect(status).toContainText('Could not load', { timeout: 30_000 });
+
+    // The offer is a second failure's worth of bad luck away, not a first's.
+    const anyway = status.getByRole('button', { name: 'Play without the map details' });
+    await expect(anyway).toBeHidden();
+    await status.getByRole('button', { name: 'Try again' }).click();
+    await expect(anyway).toBeVisible({ timeout: 30_000 });
+
+    await anyway.click();
+
+    // The veil is gone and a real board is underneath it.
+    await expect(status).toBeHidden();
+    const cells = await page.evaluate(() => window.__mapchess?.layout().cells.length ?? 0);
+    expect(cells).toBe(64);
+
+    /*
+      And it plays. A board with the right hills and invented names is less
+      than this game means to be, which is why it is offered rather than taken
+      -- but "less" has to still be a game.
+    */
+    await clickSquare(page, 'e2');
+    await clickSquare(page, 'e4');
+    await expect(page.locator('.record')).toContainText('e4');
   });
 
   test('rotation is a slider, not a twist', async ({ page }) => {

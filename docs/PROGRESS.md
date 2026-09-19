@@ -974,12 +974,18 @@ and the promotion prompt needed no new rules code.
 
 ### What's left
 
-Nothing in Phase 13. Outside it, one decision is open: a failed Overpass fetch
-still blocks the board, and it could instead degrade to a playable board built
-from terrain alone with generated names. The plan says naming is a bonus, never
-a requirement — but the cost is a board with no rivers, woods or real names,
-which is quietly less of what MapChess is. That is a product decision, not a
-technical one.
+Nothing. The one decision left open at the end of the phase — what to do when
+Overpass will not answer — was settled afterwards, and settled by offering
+rather than choosing: after the second failure the card adds **Play without the
+map details**, which builds the board from the terrain alone. The ground is
+real, the hills are the real hills, and the names are made from the shape of
+the land instead of from what stands on it.
+
+Offered, not taken, and only after twice: a board with the right hills and
+invented names is quietly less than this game means to be, so it is the
+player's call rather than a silent fallback. It is also only offered when the
+terrain arrived and the map did not — there is nothing to fall back on if the
+ground itself is missing.
 
 ### Risks / things I'm unsure about
 
