@@ -36,7 +36,8 @@ export async function bootBoard(page: Page): Promise<void> {
       return app.heightField() !== null && app.features() !== null;
     },
     undefined,
-    { timeout: 30_000 },
+    // Terrain, features and the warped board, built in software on CI.
+    { timeout: process.env.CI === undefined ? 30_000 : 90_000 },
   );
 }
 

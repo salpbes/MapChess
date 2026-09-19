@@ -17,28 +17,40 @@ import { defineConfig, devices } from '@playwright/test';
 const PORT = '4173';
 const ORIGIN = `http://localhost:${PORT}`;
 
+/*
+  GitHub's runners are two cores with no GPU, so WebGL falls back to software
+  rendering — and every test here boots a three.js board on real terrain. The
+  same suite that takes under four minutes on a laptop takes seventeen there.
+
+  So the clocks are generous on CI and tight locally. Tight locally is the
+  point: a test that has genuinely become slow should be visible on the machine
+  where it can be investigated, rather than hidden under a limit set for the
+  slowest hardware it will ever meet.
+*/
+const ON_CI = process.env.CI !== undefined;
+
 export default defineConfig({
   testDir: './tests/e2e',
   // Vitest owns `tests/**/*.test.ts`; the two suites never see each other.
   testMatch: '**/*.spec.ts',
 
   // A board build is WebGL and a worker booting Stockfish: slower than a DOM test.
-  timeout: 60_000,
-  expect: { timeout: 10_000 },
+  timeout: ON_CI ? 150_000 : 60_000,
+  expect: { timeout: ON_CI ? 25_000 : 10_000 },
 
   // A journey that only passes sometimes is worse than no journey: it trains
   // you to re-run. Retries stay off locally so flake is visible immediately.
-  retries: process.env.CI === undefined ? 0 : 1,
-  forbidOnly: process.env.CI !== undefined,
+  retries: ON_CI ? 1 : 0,
+  forbidOnly: ON_CI,
   /*
     Three at most. Every test boots a WebGL context and a Stockfish worker, so
     the usual "half the cores" default starves them: clicks arrive late enough
     that a four-second confirm window can lapse between two presses. One on CI,
     where the machine is smaller again.
   */
-  workers: process.env.CI === undefined ? 3 : 1,
+  workers: ON_CI ? 1 : 3,
 
-  reporter: process.env.CI === undefined ? [['list']] : [['list'], ['html', { open: 'never' }]],
+  reporter: ON_CI ? [['list'], ['html', { open: 'never' }]] : [['list']],
 
   use: {
     baseURL: ORIGIN,
@@ -78,7 +90,8 @@ export default defineConfig({
       costs a few seconds and is the entire point of testing `preview`.
     */
     reuseExistingServer: false,
-    timeout: 180_000,
+    // The server has to build the site first, which is also slower there.
+    timeout: ON_CI ? 300_000 : 180_000,
     stdout: 'pipe',
     stderr: 'pipe',
   },
