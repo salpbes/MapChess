@@ -86,7 +86,9 @@ import { BoardView } from '@world/pieces/BoardView';
 import { HighlightLayer } from '@world/pieces/HighlightLayer';
 import { MoveAnimator } from '@world/pieces/MoveAnimator';
 import { PieceLayer } from '@world/pieces/PieceLayer';
+import { ModelPieceFactory } from '@world/pieces/ModelPieceFactory';
 import { ProceduralPieceFactory } from '@world/pieces/ProceduralPieceFactory';
+import type { PieceModels } from '@world/pieces/loadPieceModels';
 import { BoardPicker } from '@world/scene/BoardPicker';
 import { PointerInput } from '@world/scene/PointerInput';
 import { WorldStage } from '@world/scene/WorldStage';
@@ -108,6 +110,8 @@ export function bootstrap(
   config: AppConfig,
   worldContainer: HTMLElement,
   uiContainer: HTMLElement,
+  /** GLB pieces that loaded, if any. Missing ones stay procedural. */
+  models: PieceModels = new Map(),
 ): AppHandle {
   // The flat board is the starting point; BoardComposer replaces it once terrain arrives.
   const initialLayout: IBoardLayout = new FlatBoardLayout({
@@ -119,7 +123,10 @@ export function bootstrap(
   // --- world ---
   const stage = new WorldStage(worldContainer, initialLayout.bounds);
 
-  const pieceFactory = new ProceduralPieceFactory(cellUnit);
+  const procedural = new ProceduralPieceFactory(cellUnit);
+  // Mixes the two: a model where one loaded, the drawn piece everywhere else.
+  const modelled = new ModelPieceFactory(models, procedural);
+  const pieceFactory = modelled.hasModels ? modelled : procedural;
   const pieces = new PieceLayer(initialLayout, pieceFactory);
   const highlights = new HighlightLayer(initialLayout);
   const animator = new MoveAnimator({ unit: cellUnit });

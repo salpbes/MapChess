@@ -5,6 +5,8 @@
 // WHY:  Kept deliberately tiny. Everything with behaviour lives in a module
 //       with one responsibility; main.ts only locates the DOM and delegates.
 
+import { loadPieceModels } from '@world/pieces/loadPieceModels';
+
 import { bootstrap } from './bootstrap';
 import type { AppHandle } from './bootstrap';
 import { APP_CONFIG } from './config';
@@ -20,7 +22,14 @@ function requireElement(id: string): HTMLElement {
 const worldContainer = requireElement('world');
 const uiContainer = requireElement('ui');
 
-const app = bootstrap(APP_CONFIG, worldContainer, uiContainer);
+/*
+  Models first, so the board is built once with whatever arrived rather than
+  built procedurally and then rebuilt. A model that fails to load is simply
+  absent from the map and that piece stays procedural, so this never keeps the
+  game from starting.
+*/
+const models = await loadPieceModels(APP_CONFIG.boardSizeMeters / APP_CONFIG.filesAndRanks);
+const app = bootstrap(APP_CONFIG, worldContainer, uiContainer, models);
 
 /*
   The one seam the journeys need. A square's place on screen is a projection
