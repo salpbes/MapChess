@@ -27,6 +27,13 @@ const uiContainer = requireElement('ui');
   built procedurally and then rebuilt. A model that fails to load is simply
   absent from the map and that piece stays procedural, so this never keeps the
   game from starting.
+
+  KNOWN COST, parked deliberately: awaiting here means the page shows nothing
+  until every model has downloaded and parsed. At four files (~1 MB) that is
+  already a pause on a phone, and the set is heading for twelve. The fix is to
+  start on the procedural pieces and swap each model in as it arrives —
+  PieceLayer.sync already rebuilds from a position — and it is worth doing once
+  the set is complete rather than twice while it grows.
 */
 const models = await loadPieceModels(APP_CONFIG.boardSizeMeters / APP_CONFIG.filesAndRanks);
 const app = bootstrap(APP_CONFIG, worldContainer, uiContainer, models);

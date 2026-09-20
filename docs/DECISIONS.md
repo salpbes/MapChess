@@ -686,3 +686,25 @@ The name is now back on the feature point, expanding in place from the glyph, an
 **What made it safe:** `maybePlayAi` already re-reads the hold after its `await` — the same discipline used for `outcome` and `generation` — so a search in flight when the menu opens has its reply discarded rather than played.
 
 **Rejected:** not starting the game until the menu closes (the board behind the menu would be empty, and the menu is deliberately see-through); teaching `GameLoop` about the menu directly (the loop must not know what a menu is — the composition root wires the two together).
+
+## D-064 — GLB pieces, dropped into a folder, mixed with the drawn ones
+
+**Date:** 2026-09-19 · **Phase:** beyond 13
+
+**Decision:** `src/chesspieces/` holds GLB models named `<type>_<colour>.glb`. The folder is globbed at build time, so adding a piece is adding a file. Any piece without a model keeps the procedural one from `PieceGeometry.ts`.
+
+**Source and licence:** modelled in Blender by the project's author, driven through Claude's Blender MCP connection. Original work, covered by the repository's own MIT licence — nothing third-party, nothing to attribute. The first four are `rook_white`, `rook_black`, `pawn_white`, `pawn_black`.
+
+**Why it needed no new seam:** `IPieceMeshFactory` was written in Phase 3 against exactly this possibility, down to the comment naming the class that would implement it. `ModelPieceFactory` wraps the procedural one and answers only for the pieces it has. Two new files; four lines elsewhere.
+
+**Why the set shares one scale.** The obvious rule — scale every model so its footprint fills the 0.30 cell-widths the lattice reserves — hands the narrowest base the biggest multiplier. The pawns are 1.91 units tall on a 0.63 half-width and the rooks 2.67 on 0.98, so per-model normalising produced a pawn 0.91 cells tall against a rook of 0.82: a pawn towering over a castle. The models are a matched set and already carry the proportions they should have, so one scale is derived from the **widest** model and applied to all of them. A future piece wider than the rook shrinks the whole set together, which is right.
+
+**What the loader still does per model:** measures the bounding box and stands the model on its feet, per BUILD_PLAN §2 — "measure the bounding box in the loader and offset once, never per-piece magic numbers". A model may be any size with its origin anywhere.
+
+**Materials are the model's own.** Rejected overriding them with the board's two piece colours. The models carry stone, felt, iron and a flag, and flattening that to one colour would throw away most of why they are worth having. The cost is real and accepted: the board is flat-shaded low-poly, and `Stone_Black` is near-black where the procedural black is a lighter grey, so a black model reads closer to a silhouette against dark terrain.
+
+**Why a mixed board rather than all-or-nothing:** a set arrives a piece at a time, and each one is worth judging against the drawn piece it replaces, on the same board, before the next is made.
+
+**Rejected:** `public/models/`, which BUILD_PLAN §4 named. Vite copies `public/` verbatim, so the files could not be globbed or hashed and every new piece would have needed a line of code. The folder the models are actually saved into won.
+
+**The cost to watch:** nothing is decimated. The rooks are ~315 KB each and the pawns ~610 KB; a full set at that size is several megabytes in the bundle, which is felt on a phone long before it is felt on a desktop.

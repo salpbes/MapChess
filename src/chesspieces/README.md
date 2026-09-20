@@ -1,4 +1,4 @@
-# `src/models/` — piece meshes
+# `src/chesspieces/` — piece meshes
 
 Drop a `.glb` in here and it becomes that piece. There is nothing to wire up:
 `loadPieceModels.ts` globs this folder at build time, so adding a file is the
