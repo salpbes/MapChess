@@ -46,17 +46,30 @@ const MODEL_FACING = Math.PI;
  *
  * The set's own proportions are the modeller's and are followed by default —
  * that is the whole point of one shared scale. This is the exception: a piece
- * whose modelled height does not read right on the board next to the others,
+ * whose modelled size does not read right on the board next to the others,
  * adjusted deliberately rather than derived from anything.
  *
- * The bishop is modelled only 12% taller than the pawn, where a chess set
- * usually puts it closer to 40% above one, and it read as a tall pawn.
+ * `scale` grows the whole piece; `width` grows only its plan, leaving the
+ * height alone, for a piece that is tall enough but reads thin.
  *
- * Anything not listed is 1. Fix a model in Blender by preference; this is for
- * when the art is right and only its size on this board is not.
+ * The bishop and the knight are both modelled about 2.17 units tall against
+ * the pawn's 1.94 — 12% above it, where a set usually puts them nearer 40% —
+ * so both read as tall pawns and both are widened a little to carry the
+ * height.
+ *
+ * Anything not listed is left alone. Fix a model in Blender by preference;
+ * this is for when the art is right and only its size on this board is not.
  */
-const SIZE_ADJUST: Readonly<Partial<Record<PieceType, number>>> = {
-  bishop: 1.15,
+interface SizeAdjust {
+  /** Uniform multiplier on the shared scale. */
+  readonly scale?: number;
+  /** Extra multiplier on x and z only. */
+  readonly width?: number;
+}
+
+const SIZE_ADJUST: Readonly<Partial<Record<PieceType, SizeAdjust>>> = {
+  bishop: { scale: 1.15, width: 1.12 },
+  knight: { scale: 1.15, width: 1.12 },
 };
 
 /**
@@ -141,8 +154,9 @@ export async function loadPieceModels(unit: number): Promise<PieceModels> {
 
   const models = new Map<ModelKey, Object3D>();
   for (const { key, scene, box } of loaded) {
-    const type = key.split('-')[1] as PieceType;
-    models.set(key, stand(scene, box, scale * (SIZE_ADJUST[type] ?? 1)));
+    const adjust = SIZE_ADJUST[key.split('-')[1] as PieceType] ?? {};
+    const up = scale * (adjust.scale ?? 1);
+    models.set(key, stand(scene, box, up, up * (adjust.width ?? 1)));
   }
   return models;
 }
@@ -179,12 +193,14 @@ function faceForward(scene: Object3D, path: string): void {
  * Wrapped in a group so the returned object's origin IS the feet, whatever the
  * exporter did with the model's own.
  */
-function stand(scene: Object3D, box: Box3, scale: number): Object3D {
+function stand(scene: Object3D, box: Box3, up: number, across: number): Object3D {
   const centre = new Vector3();
   box.getCenter(centre);
 
-  scene.scale.setScalar(scale);
-  scene.position.set(-centre.x * scale, -box.min.y * scale, -centre.z * scale);
+  // Height and plan scale separately, so the offsets that centre the model and
+  // stand it on the ground have to use the axis they belong to.
+  scene.scale.set(across, up, across);
+  scene.position.set(-centre.x * across, -box.min.y * up, -centre.z * across);
   markShadows(scene);
 
   const root = new Group();
