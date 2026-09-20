@@ -42,6 +42,24 @@ const FOOTPRINT = 0.36;
 const MODEL_FACING = Math.PI;
 
 /**
+ * Per-type nudges to the shared scale, set by eye.
+ *
+ * The set's own proportions are the modeller's and are followed by default —
+ * that is the whole point of one shared scale. This is the exception: a piece
+ * whose modelled height does not read right on the board next to the others,
+ * adjusted deliberately rather than derived from anything.
+ *
+ * The bishop is modelled only 12% taller than the pawn, where a chess set
+ * usually puts it closer to 40% above one, and it read as a tall pawn.
+ *
+ * Anything not listed is 1. Fix a model in Blender by preference; this is for
+ * when the art is right and only its size on this board is not.
+ */
+const SIZE_ADJUST: Readonly<Partial<Record<PieceType, number>>> = {
+  bishop: 1.15,
+};
+
+/**
  * Every GLB in `src/chesspieces/`, found at build time by its filename.
  *
  * Vite resolves this glob when it bundles, so adding a piece is adding a file:
@@ -122,7 +140,10 @@ export async function loadPieceModels(unit: number): Promise<PieceModels> {
   const scale = (FOOTPRINT * unit) / widest;
 
   const models = new Map<ModelKey, Object3D>();
-  for (const { key, scene, box } of loaded) models.set(key, stand(scene, box, scale));
+  for (const { key, scene, box } of loaded) {
+    const type = key.split('-')[1] as PieceType;
+    models.set(key, stand(scene, box, scale * (SIZE_ADJUST[type] ?? 1)));
+  }
   return models;
 }
 
