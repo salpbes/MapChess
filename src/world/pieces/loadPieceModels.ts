@@ -11,8 +11,9 @@
 //       offset once, never per-piece magic numbers." This is that loader.
 
 import { Box3, Group, Mesh, Vector3 } from 'three';
-import type { Object3D } from 'three';
+import type { Object3D, WebGLRenderer } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 
 import type { Color, PieceType } from '@domain/chess/types';
 
@@ -90,18 +91,27 @@ const SIZE_ADJUST: Readonly<Partial<Record<PieceType, SizeAdjust>>> = {
 };
 
 /**
- * Every GLB in `src/chesspieces/`, found at build time by its filename.
+ * Every compressed GLB, found at build time by its filename.
  *
- * Vite resolves this glob when it bundles, so adding a piece is adding a file:
- * drop `knight_white.glb` in beside the rooks and it is loaded, hashed and
- * served with no code change here. A name that does not match the convention
- * is ignored rather than guessed at.
+ * Deliberately the `compressed/` folder and not the masters beside it. The
+ * masters carry a 2048x2048 JPEG each and come to 37 MB; what is served is the
+ * same geometry and the same 2048x2048 texture re-encoded as ETC1S, at about a
+ * third of the bytes and none of the decode. `npm run pieces` is what puts
+ * files here — see scripts/compress-pieces.mjs.
+ *
+ * Vite resolves this glob when it bundles, so adding a piece is adding a file
+ * and running that script: the result is loaded, hashed and served with no code
+ * change here. A name that does not match the convention is ignored rather than
+ * guessed at.
  */
-const FILES: Readonly<Record<string, string>> = import.meta.glob('../../chesspieces/*.glb', {
-  eager: true,
-  query: '?url',
-  import: 'default',
-});
+const FILES: Readonly<Record<string, string>> = import.meta.glob(
+  '../../chesspieces/compressed/*.glb',
+  {
+    eager: true,
+    query: '?url',
+    import: 'default',
+  },
+);
 
 const TYPES: readonly PieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
 const COLORS: readonly Color[] = ['white', 'black'];
@@ -128,8 +138,20 @@ export function modelKeyFor(path: string): ModelKey | null {
 
 export type PieceModels = ReadonlyMap<ModelKey, Object3D>;
 
-export async function loadPieceModels(unit: number): Promise<PieceModels> {
+export async function loadPieceModels(unit: number, renderer: WebGLRenderer): Promise<PieceModels> {
   const loader = new GLTFLoader();
+
+  /*
+    The textures are ETC1S inside KTX2, so the GPU is handed them compressed and
+    never decodes an image. detectSupport needs the live renderer to know which
+    compressed format this GPU actually takes — the transcoder targets several —
+    which is why this is called with the running app's renderer rather than
+    before there is one.
+  */
+  const ktx2 = new KTX2Loader()
+    .setTranscoderPath(`${import.meta.env.BASE_URL}basis/`)
+    .detectSupport(renderer);
+  loader.setKTX2Loader(ktx2);
 
   const found = Object.entries(FILES)
     .map(([path, url]) => ({ key: modelKeyFor(path), url, path }))
@@ -148,6 +170,9 @@ export async function loadPieceModels(unit: number): Promise<PieceModels> {
       }
     }),
   );
+
+  // The transcoder holds a worker open; nothing else is read through it.
+  ktx2.dispose();
 
   /*
     One scale for the whole set, taken from height.

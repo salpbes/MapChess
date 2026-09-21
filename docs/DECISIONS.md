@@ -738,3 +738,21 @@ That is the same coupling this decision took off the height axis, still sitting 
 **What the rooks became:** `{ scale: 1.2, width: 1.16 }` — measured on a live board at h 0.888 and w 0.718 cell widths, against h 0.829 and w 0.578 before. That is 31% broader than the next widest piece (the king, at 0.550) while staying under the knight in height, which is the proportion a Staunton set uses. The width figure is deliberately just under the ceiling: 0.359 against the 0.36 reserve, so no trimming occurs and the number in `SIZE_ADJUST` is the number that lands.
 
 **Heights are unchanged elsewhere:** pawn 0.740, rook 0.888, knight 0.903, bishop 0.962, queen 1.036, king 1.073.
+
+## D-066 — Piece textures ship as ETC1S/KTX2, at the resolution they were authored
+
+**Date:** 2026-09-21 · **Phase:** beyond 13
+
+**Decision:** `src/chesspieces/` holds the masters; `npm run pieces` writes the web set into `src/chesspieces/compressed/`, and that is what `loadPieceModels` globs. The 2048×2048 baked texture is re-encoded from JPEG to ETC1S inside a KTX2 container. The set goes from 40 MB to 11 MB.
+
+**The constraint this respects:** the author asked, explicitly, that the textures not go below 2048×2048. This decision does not touch the resolution — it changes the _encoding_. Every piece still carries a 2048×2048 texture. What changes is that the GPU reads it in its compressed form, so it costs a third of the bytes to fetch and skips both the JPEG decode and the runtime mipmap build. Mipmaps are generated during encoding instead, because three cannot build them for a compressed texture at runtime and the pieces alias badly without them.
+
+**Why ETC1S and not UASTC.** Both were measured on a real model. ETC1S at full quality (255) gave 0.97 MB; UASTC at level 2 with supercompression gave **5.05 MB — larger than the 3.39 MB JPEG it replaced**. UASTC is built to hold quality at the cost of size, which is the opposite of the trade wanted here. A cheaper ETC1S (quality 128) was also measured at 0.80 MB and rejected: a fifth less for visible banding on pieces the player looks at all game.
+
+**What it cost in quality:** rendering the same board with each set and differencing the pixels gives a mean absolute difference of 0.57/255, under a quarter of a percent, and part of that is anti-aliasing noise between two runs.
+
+**Why the output is committed rather than built.** The encoder is pure wasm (`ktx2-encoder`) and could run in CI, but encoding twelve 2048×2048 textures takes about 100 seconds, and the deploy gate is already the slowest thing in this project. Committing the result keeps CI to a plain build with no encoder dependency. The cost is a staleness footgun — change a master, forget the script, serve the old compression — which the folder's README names explicitly.
+
+**What it did not fix.** This is a bandwidth and decode win, not a rendering one, and headless CI gets less of it than a real player does: with software WebGL there may be no compressed format to transcode _to_, so the transcoder falls back to uncompressed RGBA. Running three browsers in parallel locally still fails two tests on contention. At one worker, which is how CI runs, the suite is green at 46 passed.
+
+**Rejected:** running the journeys against the procedural set to make the gate green. It would have hidden exactly the signal that led here.

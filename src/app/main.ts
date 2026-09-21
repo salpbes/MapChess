@@ -43,7 +43,7 @@ const uiContainer = requireElement('ui');
 */
 const app = bootstrap(APP_CONFIG, worldContainer, uiContainer);
 
-void loadPieceModels(APP_CONFIG.boardSizeMeters / APP_CONFIG.filesAndRanks)
+void loadPieceModels(APP_CONFIG.boardSizeMeters / APP_CONFIG.filesAndRanks, app.stage.renderer)
   .then((models) => {
     app.usePieceModels(models);
   })

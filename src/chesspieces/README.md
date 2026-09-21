@@ -1,8 +1,12 @@
 # `src/chesspieces/` — piece meshes
 
-Drop a `.glb` in here and it becomes that piece. There is nothing to wire up:
-`loadPieceModels.ts` globs this folder at build time, so adding a file is the
-whole of adding a piece.
+Drop a `.glb` in here, run `npm run pieces`, and it becomes that piece.
+
+The second step matters. This folder holds the **masters** — whatever came out
+of Blender, texture and all. What the game loads is `compressed/`, written by
+`npm run pieces`. Nothing runs it for you, so a master you add without running
+it is a master the game never sees, and a master you _change_ without running it
+leaves the previous version on the board. See `scripts/compress-pieces.mjs`.
 
 ## Naming
 
@@ -26,23 +30,43 @@ a piece at a time.
 
 ## What the loader does for you
 
-- **Scales** the model so its footprint fills the 0.30 cell-widths the warped
-  lattice guarantees every cell can hold. You do not need to model to a size.
+- **Scales** the set from a target height, then caps any piece broad enough to
+  foul the narrowest cell. You do not need to model to a size. What you cannot
+  get from modelling is _relative_ size — the current set is height-normalised,
+  every model exactly 2.00 units tall, so which piece outranks which is decided
+  by `SIZE_ADJUST` in `loadPieceModels.ts` and nowhere else.
 - **Stands it on its feet** — the bounding box is measured and the model is
   shifted so y = 0 is the ground and the centre is on the axis. An origin at
   the model's centre is fine.
+- **Turns it to face the enemy**, including stripping a yaw that was baked in
+  before export. A pawn that arrives rotated 45° on its root node is corrected.
 - **Turns on shadows** for every mesh inside it.
 
 ## What it does not do
 
-- **Orientation.** Upright along +Y, facing −Z (north, toward Black) at yaw 0.
-  The loader will not rotate a model that was exported lying down.
+- **Tip it upright.** Upright along +Y is assumed. A model exported lying on
+  its side is left as it is, with a warning — that rotation might mean
+  something, and guessing would be worse.
 - **Materials.** Yours are kept as they are, so a model brings its own look.
   That is deliberate — but note the board is flat-shaded low-poly, and a smooth
   model with very dark or very pale materials can lose its form against the
   terrain. Worth looking at on a real board before committing to a whole set.
-- **Budget.** Nothing is decimated. The two rooks are ~315 KB each and ship in
-  the bundle; a full set at that size is about 3.8 MB.
+- **Decimate.** Nothing is simplified. Geometry has never been the problem here;
+  the texture is.
+
+## Budget
+
+A master is ~3.4 MB, of which about 95% is one 2048×2048 baked JPEG. Twelve of
+them is 40 MB, which is too much to ship and was enough to time journeys out of
+the deploy gate.
+
+`npm run pieces` re-encodes that texture as ETC1S in a KTX2 container — **the
+same 2048×2048, a different encoding** — which the GPU reads compressed. The set
+ships at 11 MB, and a piece costs about 0.9 MB. Measured difference on a rendered
+board: 0.57/255 mean, which is under a quarter of one percent.
+
+Keep the masters. They are the source of truth and the compression is lossy, so
+re-compressing a compressed file would compound the loss.
 
 Every model added here needs its source and licence recorded in
 `docs/DECISIONS.md`.
