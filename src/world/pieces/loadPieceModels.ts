@@ -57,6 +57,12 @@ const MODEL_FACING = Math.PI;
  * so both read as tall pawns and both are widened a little to carry the
  * height.
  *
+ * The queen is the odd one: 2.00 tall on a 0.38 half-width, which makes her
+ * the shortest and by some way the slenderest model in the set. A robed figure
+ * is meant to be slighter than a castle, but she was standing barely above a
+ * pawn and half its width, where a set puts her at the top. She takes the
+ * largest lift of any piece here.
+ *
  * Anything not listed is left alone. Fix a model in Blender by preference;
  * this is for when the art is right and only its size on this board is not.
  */
@@ -70,6 +76,7 @@ interface SizeAdjust {
 const SIZE_ADJUST: Readonly<Partial<Record<PieceType, SizeAdjust>>> = {
   bishop: { scale: 1.15, width: 1.12 },
   knight: { scale: 1.15, width: 1.12 },
+  queen: { scale: 1.4, width: 1.25 },
 };
 
 /**
