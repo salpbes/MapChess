@@ -86,7 +86,9 @@ import { BoardView } from '@world/pieces/BoardView';
 import { HighlightLayer } from '@world/pieces/HighlightLayer';
 import { MoveAnimator } from '@world/pieces/MoveAnimator';
 import { PieceLayer } from '@world/pieces/PieceLayer';
+import { ModelPieceFactory } from '@world/pieces/ModelPieceFactory';
 import { ProceduralPieceFactory } from '@world/pieces/ProceduralPieceFactory';
+import type { PieceModels } from '@world/pieces/loadPieceModels';
 import { BoardPicker } from '@world/scene/BoardPicker';
 import { PointerInput } from '@world/scene/PointerInput';
 import { WorldStage } from '@world/scene/WorldStage';
@@ -101,6 +103,14 @@ export interface AppHandle {
   selectedArea(): SelectedArea;
   heightField(): HeightField | null;
   features(): readonly MapFeature[] | null;
+  /**
+   * Adopts piece models that finished downloading after the board was shown.
+   *
+   * The game does not wait for them — see main.ts — so this is how the drawn
+   * set is upgraded once the real one arrives. Safe at any point: it re-places
+   * the position from the engine, which is the authority on where pieces are.
+   */
+  usePieceModels(models: PieceModels): void;
   dispose(): void;
 }
 
@@ -108,6 +118,8 @@ export function bootstrap(
   config: AppConfig,
   worldContainer: HTMLElement,
   uiContainer: HTMLElement,
+  /** GLB pieces that loaded, if any. Missing ones stay procedural. */
+  models: PieceModels = new Map(),
 ): AppHandle {
   // The flat board is the starting point; BoardComposer replaces it once terrain arrives.
   const initialLayout: IBoardLayout = new FlatBoardLayout({
@@ -119,8 +131,17 @@ export function bootstrap(
   // --- world ---
   const stage = new WorldStage(worldContainer, initialLayout.bounds);
 
-  const pieceFactory = new ProceduralPieceFactory(cellUnit);
-  const pieces = new PieceLayer(initialLayout, pieceFactory);
+  const procedural = new ProceduralPieceFactory(cellUnit);
+  /*
+    Mixes the two: a model where one loaded, the drawn piece everywhere else.
+
+    Always the modelled factory, even when the map it is handed is empty. The
+    models are no longer required to be present before the board is built, and
+    an empty factory delegates every piece to the procedural set until
+    usePieceModels() fills it in.
+  */
+  const modelled = new ModelPieceFactory(models, procedural);
+  const pieces = new PieceLayer(initialLayout, modelled);
   const highlights = new HighlightLayer(initialLayout);
   const animator = new MoveAnimator({ unit: cellUnit });
   const view = new BoardView(pieces, highlights, animator);
@@ -528,6 +549,14 @@ export function bootstrap(
     selectedArea: () => areaBar.current,
     heightField: () => elevation.heightField,
     features: () => features.features,
+    usePieceModels: (loaded) => {
+      if (loaded.size === 0) return;
+      modelled.adopt(loaded);
+      // Rebuilds every piece from the engine's position, so anything already on
+      // the board is replaced by its model. A move animating at this moment is
+      // cut short rather than corrupted; the position it lands on is the same.
+      view.showPosition(engine.pieces());
+    },
     dispose: () => {
       input.dispose();
       boardDebug?.dispose();
@@ -565,7 +594,7 @@ export function bootstrap(
       ai.dispose();
       stopAnimator();
       highlights.dispose();
-      pieceFactory.dispose();
+      modelled.dispose();
       bus.clear();
       stage.dispose();
     },

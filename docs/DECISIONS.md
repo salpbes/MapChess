@@ -686,3 +686,73 @@ The name is now back on the feature point, expanding in place from the glyph, an
 **What made it safe:** `maybePlayAi` already re-reads the hold after its `await` — the same discipline used for `outcome` and `generation` — so a search in flight when the menu opens has its reply discarded rather than played.
 
 **Rejected:** not starting the game until the menu closes (the board behind the menu would be empty, and the menu is deliberately see-through); teaching `GameLoop` about the menu directly (the loop must not know what a menu is — the composition root wires the two together).
+
+## D-064 — GLB pieces, dropped into a folder, mixed with the drawn ones
+
+**Date:** 2026-09-19 · **Phase:** beyond 13
+
+**Decision:** `src/chesspieces/` holds GLB models named `<type>_<colour>.glb`. The folder is globbed at build time, so adding a piece is adding a file. Any piece without a model keeps the procedural one from `PieceGeometry.ts`.
+
+**Source and licence:** modelled in Blender by the project's author, driven through Claude's Blender MCP connection. Original work, covered by the repository's own MIT licence — nothing third-party, nothing to attribute. The first four are `rook_white`, `rook_black`, `pawn_white`, `pawn_black`.
+
+**Why it needed no new seam:** `IPieceMeshFactory` was written in Phase 3 against exactly this possibility, down to the comment naming the class that would implement it. `ModelPieceFactory` wraps the procedural one and answers only for the pieces it has. Two new files; four lines elsewhere.
+
+**Why the set shares one scale.** The obvious rule — scale every model so its footprint fills the 0.30 cell-widths the lattice reserves — hands the narrowest base the biggest multiplier. The pawns are 1.91 units tall on a 0.63 half-width and the rooks 2.67 on 0.98, so per-model normalising produced a pawn 0.91 cells tall against a rook of 0.82: a pawn towering over a castle. The models are a matched set and already carry the proportions they should have, so one scale is derived from the **widest** model and applied to all of them. A future piece wider than the rook shrinks the whole set together, which is right.
+
+**What the loader still does per model:** measures the bounding box and stands the model on its feet, per BUILD_PLAN §2 — "measure the bounding box in the loader and offset once, never per-piece magic numbers". A model may be any size with its origin anywhere.
+
+**Materials are the model's own.** Rejected overriding them with the board's two piece colours. The models carry stone, felt, iron and a flag, and flattening that to one colour would throw away most of why they are worth having. The cost is real and accepted: the board is flat-shaded low-poly, and `Stone_Black` is near-black where the procedural black is a lighter grey, so a black model reads closer to a silhouette against dark terrain.
+
+**Why a mixed board rather than all-or-nothing:** a set arrives a piece at a time, and each one is worth judging against the drawn piece it replaces, on the same board, before the next is made.
+
+**Rejected:** `public/models/`, which BUILD_PLAN §4 named. Vite copies `public/` verbatim, so the files could not be globbed or hashed and every new piece would have needed a line of code. The folder the models are actually saved into won.
+
+**The cost to watch:** nothing is decimated. The rooks are ~315 KB each and the pawns ~610 KB; a full set at that size is several megabytes in the bundle, which is felt on a phone long before it is felt on a desktop.
+
+## D-065 — The piece set is scaled by height, not by the widest model
+
+**Date:** 2026-09-21 · **Phase:** beyond 13
+
+**Supersedes:** the scaling half of D-064.
+
+**Decision:** the shared scale comes from a target height — `PIECE_HEIGHT`, which is the pawn — and the footprint reserve only caps it. `SIZE_ADJUST` now carries the whole of the set's proportions rather than correcting them.
+
+**Why it changed:** D-064 took the scale from the widest model, on the reasoning that the models were a matched set already carrying the proportions they should have. That was true of the first generation, where a rook was 2.70 units tall on a 0.98 base and a pawn 1.94 on 0.63. The remade set is **height-normalised**: every one of the twelve models is exactly 2.00 units tall, with half-widths from 0.38 to 0.70. There are no modelled proportions left to follow, and the old rule had two failures waiting in it — left alone the king would have stood level with a pawn, and taking the scale from the widest model meant the rook's waistline decided how big a king was, so remaking the rooks slimmer would have grown the whole set by 40% in one commit.
+
+**Why width still matters:** it is the one constraint here that is not taste. latticeWarp guarantees every cell an inradius of 0.30 cells; a model broad enough to foul the narrowest square pulls the whole set down to fit, its own adjustments included. Height decides the scale unless width forbids it.
+
+**What it produces:** pawn 0.74, rook 0.83, knight 0.90, bishop 0.96, queen 1.04, king 1.07 cell widths — a chess set's order, measured on the board rather than assumed.
+
+**Rejected:** per-model normalisation, for the reason D-064 already gives — it hands the narrowest base the biggest multiplier, and once made a pawn taller than a castle.
+
+**The cost this set carries:** each of the twelve models is ~3.4 MB, of which ~95% is a 2048×2048 baked JPEG. The set is 37 MB. That resolution is a deliberate choice by the author, recorded here so the consequence is not mistaken for an oversight: the app cannot ship this as a blocking load, and the browser suite has slowed from 2.9 to 7.6 minutes with it.
+
+### D-065 amendment — the footprint ceiling applies per piece
+
+**Date:** 2026-09-21
+
+D-065 left the footprint reserve as a ceiling on the _set_: one scale was chosen for everybody, and if the widest model overflowed its square, every piece shrank until it fitted. Asked to make the rooks broader — a castle reads by its mass — that rule bit immediately. The rook is the widest model in the set by a distance (half-width 0.697 against a pawn's 0.531), so widening it past ×1.25 would have pulled all twelve pieces down with it, and the only way to make a castle look like a castle would have been to shrink the board's whole set.
+
+That is the same coupling this decision took off the height axis, still sitting on the width axis. The ceiling is now applied to each piece on its own: height sets one shared scale, and a piece broad enough to foul its square has **its own plan** trimmed, with a warning naming it. `stand()` already scaled plan and height separately, so a trimmed piece stands slightly slimmer than its adjustment asked rather than shorter, and nobody else is touched.
+
+**What the rooks became:** `{ scale: 1.2, width: 1.16 }` — measured on a live board at h 0.888 and w 0.718 cell widths, against h 0.829 and w 0.578 before. That is 31% broader than the next widest piece (the king, at 0.550) while staying under the knight in height, which is the proportion a Staunton set uses. The width figure is deliberately just under the ceiling: 0.359 against the 0.36 reserve, so no trimming occurs and the number in `SIZE_ADJUST` is the number that lands.
+
+**Heights are unchanged elsewhere:** pawn 0.740, rook 0.888, knight 0.903, bishop 0.962, queen 1.036, king 1.073.
+
+## D-066 — Piece textures ship as ETC1S/KTX2, at the resolution they were authored
+
+**Date:** 2026-09-21 · **Phase:** beyond 13
+
+**Decision:** `src/chesspieces/` holds the masters; `npm run pieces` writes the web set into `src/chesspieces/compressed/`, and that is what `loadPieceModels` globs. The 2048×2048 baked texture is re-encoded from JPEG to ETC1S inside a KTX2 container. The set goes from 40 MB to 11 MB.
+
+**The constraint this respects:** the author asked, explicitly, that the textures not go below 2048×2048. This decision does not touch the resolution — it changes the _encoding_. Every piece still carries a 2048×2048 texture. What changes is that the GPU reads it in its compressed form, so it costs a third of the bytes to fetch and skips both the JPEG decode and the runtime mipmap build. Mipmaps are generated during encoding instead, because three cannot build them for a compressed texture at runtime and the pieces alias badly without them.
+
+**Why ETC1S and not UASTC.** Both were measured on a real model. ETC1S at full quality (255) gave 0.97 MB; UASTC at level 2 with supercompression gave **5.05 MB — larger than the 3.39 MB JPEG it replaced**. UASTC is built to hold quality at the cost of size, which is the opposite of the trade wanted here. A cheaper ETC1S (quality 128) was also measured at 0.80 MB and rejected: a fifth less for visible banding on pieces the player looks at all game.
+
+**What it cost in quality:** rendering the same board with each set and differencing the pixels gives a mean absolute difference of 0.57/255, under a quarter of a percent, and part of that is anti-aliasing noise between two runs.
+
+**Why the output is committed rather than built.** The encoder is pure wasm (`ktx2-encoder`) and could run in CI, but encoding twelve 2048×2048 textures takes about 100 seconds, and the deploy gate is already the slowest thing in this project. Committing the result keeps CI to a plain build with no encoder dependency. The cost is a staleness footgun — change a master, forget the script, serve the old compression — which the folder's README names explicitly.
+
+**What it did not fix.** This is a bandwidth and decode win, not a rendering one, and headless CI gets less of it than a real player does: with software WebGL there may be no compressed format to transcode _to_, so the transcoder falls back to uncompressed RGBA. Running three browsers in parallel locally still fails two tests on contention. At one worker, which is how CI runs, the suite is green at 46 passed.
+
+**Rejected:** running the journeys against the procedural set to make the gate green. It would have hidden exactly the signal that led here.
