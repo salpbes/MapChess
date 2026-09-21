@@ -23,20 +23,34 @@ const worldContainer = requireElement('world');
 const uiContainer = requireElement('ui');
 
 /*
-  Models first, so the board is built once with whatever arrived rather than
-  built procedurally and then rebuilt. A model that fails to load is simply
-  absent from the map and that piece stays procedural, so this never keeps the
-  game from starting.
+  The board opens on the drawn pieces and adopts the GLB set when it arrives.
 
-  KNOWN COST, parked deliberately: awaiting here means the page shows nothing
-  until every model has downloaded and parsed. At four files (~1 MB) that is
-  already a pause on a phone, and the set is heading for twelve. The fix is to
-  start on the procedural pieces and swap each model in as it arrives —
-  PieceLayer.sync already rebuilds from a position — and it is worth doing once
-  the set is complete rather than twice while it grows.
+  Awaiting the models here was simpler — the board was built once, with
+  everything already present — and it was right while the set was two small
+  files. It stopped being right at twelve: the set is 37 MB, about 95% of it
+  baked 2048x2048 texture, and every byte of it stood between the player and
+  their first frame. On a phone that is a long blank screen. In the browser
+  suite it was long enough to push four journeys past their timeouts, which is
+  how a rendering decision ended up blocking the deploy.
+
+  So the game starts on the procedural set, which needs no network at all, and
+  upgrades itself when the models land. A model that never arrives is a piece
+  that stays drawn — exactly what a failed load already meant.
+
+  Deliberately the whole set at once, not one piece at a time: the loader takes
+  a single scale from the tallest model it has, so adopting them piecemeal
+  would resize the pieces already standing every time another one landed.
 */
-const models = await loadPieceModels(APP_CONFIG.boardSizeMeters / APP_CONFIG.filesAndRanks);
-const app = bootstrap(APP_CONFIG, worldContainer, uiContainer, models);
+const app = bootstrap(APP_CONFIG, worldContainer, uiContainer);
+
+void loadPieceModels(APP_CONFIG.boardSizeMeters / APP_CONFIG.filesAndRanks)
+  .then((models) => {
+    app.usePieceModels(models);
+  })
+  .catch((error: unknown) => {
+    // The drawn pieces are already on the board; this only records why they stayed.
+    console.warn('Piece models could not be loaded; the drawn set stays.', error);
+  });
 
 /*
   The one seam the journeys need. A square's place on screen is a projection
