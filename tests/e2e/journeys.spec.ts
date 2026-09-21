@@ -59,16 +59,27 @@ test.describe('the six journeys', () => {
     if (!(await resign.isVisible())) await notesTab(page, 'game').click();
 
     /*
-      Press until the game is actually over, rather than assuming one pair of
-      presses lands. The arm lasts four seconds, and under a loaded run a click
-      can be slow enough that the second press re-arms instead of confirming.
-      Each pass here is cheap — no ten-second expect inside the loop — so a lost
-      press costs a retry rather than the test.
+      Both presses in one gesture, and here is why it matters.
+
+      The arm lasts four seconds (CONFIRM_MS). This used to press, ask the page
+      whether "Sure?" had appeared, and press again — but that question is a
+      round trip, and on a two-core runner with no GPU it can cost longer than
+      the window. Every second press then landed on a lapsed arm and re-armed
+      instead of confirming, so all five attempts armed and the game was never
+      over. That is what failed the deploy on 2026-09-21, having passed at every
+      worker count on a fast laptop.
+
+      dblclick sends both presses as one input sequence, milliseconds apart, so
+      the window cannot lapse between them. It is still two real presses through
+      real events — which is also, precisely, what a player double-clicking the
+      flag would send.
+
+      The loop remains for a press lost to something else, and checks the
+      outcome rather than the arm so it never asks a question mid-window.
     */
     const gameover = page.locator('.gameover');
     for (let attempt = 0; attempt < 5 && !(await gameover.isVisible()); attempt += 1) {
-      await resign.click();
-      if (await page.locator('.controls__confirm').isVisible()) await resign.click();
+      await resign.dblclick();
     }
 
     await expect(gameover).toBeVisible();
