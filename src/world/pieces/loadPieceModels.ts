@@ -63,9 +63,13 @@ const MODEL_FACING = Math.PI;
  * most, with the king a shade over the queen so the tallest piece on the board
  * is the one the game is about.
  *
- * The knight's numbers are the old build's and will want revisiting when it is
- * remade; the rook sets the shared scale by being much the widest thing here,
- * so replacing it moves the whole set.
+ * The knight keeps a smaller width multiplier than the bishop because a horse
+ * head starts broader than a robed figure — 0.52 against 0.40 — and wants no
+ * help to look it.
+ *
+ * Only the rook is still the old build. It also sets the shared scale by being
+ * much the widest thing here, so replacing it moves the whole set at once and
+ * every lift below will want a pass.
  *
  * Anything not listed is left alone. Fix a model in Blender by preference;
  * this is for when the art is right and only its size on this board is not.
@@ -79,7 +83,7 @@ interface SizeAdjust {
 
 const SIZE_ADJUST: Readonly<Partial<Record<PieceType, SizeAdjust>>> = {
   bishop: { scale: 1.3, width: 1.25 },
-  knight: { scale: 1.15, width: 1.12 },
+  knight: { scale: 1.22, width: 1.12 },
   queen: { scale: 1.4, width: 1.25 },
   king: { scale: 1.45, width: 1.25 },
 };
