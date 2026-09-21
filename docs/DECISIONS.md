@@ -708,3 +708,21 @@ The name is now back on the feature point, expanding in place from the glyph, an
 **Rejected:** `public/models/`, which BUILD_PLAN §4 named. Vite copies `public/` verbatim, so the files could not be globbed or hashed and every new piece would have needed a line of code. The folder the models are actually saved into won.
 
 **The cost to watch:** nothing is decimated. The rooks are ~315 KB each and the pawns ~610 KB; a full set at that size is several megabytes in the bundle, which is felt on a phone long before it is felt on a desktop.
+
+## D-065 — The piece set is scaled by height, not by the widest model
+
+**Date:** 2026-09-21 · **Phase:** beyond 13
+
+**Supersedes:** the scaling half of D-064.
+
+**Decision:** the shared scale comes from a target height — `PIECE_HEIGHT`, which is the pawn — and the footprint reserve only caps it. `SIZE_ADJUST` now carries the whole of the set's proportions rather than correcting them.
+
+**Why it changed:** D-064 took the scale from the widest model, on the reasoning that the models were a matched set already carrying the proportions they should have. That was true of the first generation, where a rook was 2.70 units tall on a 0.98 base and a pawn 1.94 on 0.63. The remade set is **height-normalised**: every one of the twelve models is exactly 2.00 units tall, with half-widths from 0.38 to 0.70. There are no modelled proportions left to follow, and the old rule had two failures waiting in it — left alone the king would have stood level with a pawn, and taking the scale from the widest model meant the rook's waistline decided how big a king was, so remaking the rooks slimmer would have grown the whole set by 40% in one commit.
+
+**Why width still matters:** it is the one constraint here that is not taste. latticeWarp guarantees every cell an inradius of 0.30 cells; a model broad enough to foul the narrowest square pulls the whole set down to fit, its own adjustments included. Height decides the scale unless width forbids it.
+
+**What it produces:** pawn 0.74, rook 0.83, knight 0.90, bishop 0.96, queen 1.04, king 1.07 cell widths — a chess set's order, measured on the board rather than assumed.
+
+**Rejected:** per-model normalisation, for the reason D-064 already gives — it hands the narrowest base the biggest multiplier, and once made a pawn taller than a castle.
+
+**The cost this set carries:** each of the twelve models is ~3.4 MB, of which ~95% is a 2048×2048 baked JPEG. The set is 37 MB. That resolution is a deliberate choice by the author, recorded here so the consequence is not mistaken for an oversight: the app cannot ship this as a blocking load, and the browser suite has slowed from 2.9 to 7.6 minutes with it.

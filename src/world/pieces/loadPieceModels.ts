@@ -20,13 +20,23 @@ import type { Color, PieceType } from '@domain/chess/types';
 export type ModelKey = `${Color}-${PieceType}`;
 
 /**
+ * How tall an unadjusted piece stands, in cell widths.
+ *
+ * The set is modelled height-normalised — every piece is exactly 2.00 units
+ * tall — so the models carry no proportions of their own and this is what
+ * decides the scale. A pawn takes no adjustment, so this is the pawn.
+ */
+const PIECE_HEIGHT = 0.74;
+
+/**
  * How much of a cell the widest piece may occupy, as a fraction of cell width.
  *
  * latticeWarp guarantees every cell an inradius of 0.30 cells, which is what
  * the procedural plinth is built to. This is deliberately a little over that:
  * pieces sized strictly to the guarantee read as small on a board whose cells
  * are mostly bigger than the tightest one, so the widest model is allowed to
- * overhang the very narrowest squares slightly. One number, tune it here.
+ * overhang the very narrowest squares slightly. Only a ceiling now — height
+ * decides the scale unless a model is wide enough to foul its square.
  */
 const FOOTPRINT = 0.36;
 
@@ -44,35 +54,20 @@ const MODEL_FACING = Math.PI;
 /**
  * Per-type nudges to the shared scale, set by eye.
  *
- * The set's own proportions are the modeller's and are followed by default —
- * that is the whole point of one shared scale. This is the exception: a piece
- * whose modelled size does not read right on the board next to the others,
- * adjusted deliberately rather than derived from anything.
+ * These carry the whole of the set's proportions, not a correction to them.
+ * Every model is exactly 2.00 units tall, so left alone the king would stand
+ * level with a pawn; the scale decides how big a piece is and this decides
+ * which piece.
  *
- * `scale` grows the whole piece; `width` grows only its plan, leaving the
- * height alone, for a piece that is tall enough but reads thin.
+ * `scale` grows the whole piece; `width` grows only its plan, for a piece that
+ * is tall enough but reads thin.
  *
- * The set is being remade a piece at a time, and the two generations have
- * different builds. The newer figures — pawn, bishop, queen, king — are all
- * 2.00 units tall on a half-width near 0.4, which leaves them slender and,
- * apart from the pawn, far too short for their rank. The older blockier
- * pieces — knight and rook — are 2.17 and 2.70 on much wider bases.
+ * The order they produce is a chess set's: pawn, rook, knight, bishop, queen,
+ * king. The pawn takes none by definition — PIECE_HEIGHT is the pawn.
  *
- * So the lifts here climb with rank rather than following any one rule: the
- * pawn wants none, the bishop enough to clear the knight, and the royals the
- * most, with the king a shade over the queen so the tallest piece on the board
- * is the one the game is about.
- *
- * The knight keeps a smaller width multiplier than the bishop because a horse
- * head starts broader than a robed figure — 0.52 against 0.40 — and wants no
- * help to look it.
- *
- * Only the rook is still the old build. It also sets the shared scale by being
- * much the widest thing here, so replacing it moves the whole set at once and
- * every lift below will want a pass.
- *
- * Anything not listed is left alone. Fix a model in Blender by preference;
- * this is for when the art is right and only its size on this board is not.
+ * Width multipliers do not climb with rank the way heights do, because the
+ * models do not start equally broad: a horse head and a castle are wider in
+ * the file than a robed figure, so they need less help.
  */
 interface SizeAdjust {
   /** Uniform multiplier on the shared scale. */
@@ -82,6 +77,7 @@ interface SizeAdjust {
 }
 
 const SIZE_ADJUST: Readonly<Partial<Record<PieceType, SizeAdjust>>> = {
+  rook: { scale: 1.12 },
   bishop: { scale: 1.3, width: 1.25 },
   knight: { scale: 1.22, width: 1.12 },
   queen: { scale: 1.4, width: 1.25 },
@@ -149,24 +145,36 @@ export async function loadPieceModels(unit: number): Promise<PieceModels> {
   );
 
   /*
-    One scale for the whole set, not one per model.
+    One scale for the whole set, taken from height.
 
-    Scaling each piece to fill the plinth would hand the narrowest base the
-    biggest multiplier: these pawns are 1.91 units tall on a 0.63 half-width
-    and the rooks 2.67 on 0.98, so per-model normalising made the pawn 0.91
-    cells tall against the rook's 0.82 — a pawn towering over a castle. The
-    models are a matched set and already carry the proportions they should,
-    so the only question is how much of a cell the WIDEST of them may fill.
+    The set arrived height-normalised: every model is exactly 2.00 units tall,
+    so there are no modelled proportions left to follow and every difference in
+    rank has to come from SIZE_ADJUST. Scaling from the widest model — which is
+    what this did while the rooks were 2.70 on a 0.98 base — now means the
+    rook's waistline decides how big a king is, and the day the rooks were
+    remade slimmer it would have grown the whole set by 40%.
+
+    So height sets the scale and width only caps it: a model broad enough to
+    foul the narrowest square still pulls the set down to fit, adjustments
+    included, which is the guarantee the lattice makes and the one thing here
+    that is not a matter of taste.
   */
+  const tallest = Math.max(...loaded.map(({ box }) => box.max.y - box.min.y), Number.EPSILON);
+  const byHeight = (PIECE_HEIGHT * unit) / tallest;
+
   const widest = Math.max(
-    ...loaded.map(({ box }) => {
+    ...loaded.map(({ key, box }) => {
+      const adjust = SIZE_ADJUST[key.split('-')[1] as PieceType] ?? {};
       const size = new Vector3();
       box.getSize(size);
-      return Math.max(size.x, size.z) / 2;
+      const half = Math.max(size.x, size.z) / 2;
+      return half * (adjust.scale ?? 1) * (adjust.width ?? 1);
     }),
     Number.EPSILON,
   );
-  const scale = (FOOTPRINT * unit) / widest;
+  const byWidth = (FOOTPRINT * unit) / widest;
+
+  const scale = Math.min(byHeight, byWidth);
 
   const models = new Map<ModelKey, Object3D>();
   for (const { key, scene, box } of loaded) {
