@@ -52,17 +52,20 @@ const MODEL_FACING = Math.PI;
  * `scale` grows the whole piece; `width` grows only its plan, leaving the
  * height alone, for a piece that is tall enough but reads thin.
  *
- * The bishop and the knight are both modelled about 2.17 units tall against
- * the pawn's 1.94 — 12% above it, where a set usually puts them nearer 40% —
- * so both read as tall pawns and both are widened a little to carry the
- * height.
+ * The set is being remade a piece at a time, and the two generations have
+ * different builds. The newer figures — pawn, bishop, queen, king — are all
+ * 2.00 units tall on a half-width near 0.4, which leaves them slender and,
+ * apart from the pawn, far too short for their rank. The older blockier
+ * pieces — knight and rook — are 2.17 and 2.70 on much wider bases.
  *
- * The queen and the king are the odd ones: both 2.00 tall on a 0.4 half-width,
- * which leaves them among the shortest and by some way the slenderest models
- * in the set. A robed figure is meant to be slighter than a castle, but they
- * were standing barely above a pawn and half its width, where a set puts them
- * at the top. They take the largest lifts here, and the king a shade more than
- * the queen, so the tallest piece on the board is the one the game is about.
+ * So the lifts here climb with rank rather than following any one rule: the
+ * pawn wants none, the bishop enough to clear the knight, and the royals the
+ * most, with the king a shade over the queen so the tallest piece on the board
+ * is the one the game is about.
+ *
+ * The knight's numbers are the old build's and will want revisiting when it is
+ * remade; the rook sets the shared scale by being much the widest thing here,
+ * so replacing it moves the whole set.
  *
  * Anything not listed is left alone. Fix a model in Blender by preference;
  * this is for when the art is right and only its size on this board is not.
@@ -75,7 +78,7 @@ interface SizeAdjust {
 }
 
 const SIZE_ADJUST: Readonly<Partial<Record<PieceType, SizeAdjust>>> = {
-  bishop: { scale: 1.15, width: 1.12 },
+  bishop: { scale: 1.3, width: 1.25 },
   knight: { scale: 1.15, width: 1.12 },
   queen: { scale: 1.4, width: 1.25 },
   king: { scale: 1.45, width: 1.25 },
