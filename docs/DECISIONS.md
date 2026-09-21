@@ -726,3 +726,15 @@ The name is now back on the feature point, expanding in place from the glyph, an
 **Rejected:** per-model normalisation, for the reason D-064 already gives — it hands the narrowest base the biggest multiplier, and once made a pawn taller than a castle.
 
 **The cost this set carries:** each of the twelve models is ~3.4 MB, of which ~95% is a 2048×2048 baked JPEG. The set is 37 MB. That resolution is a deliberate choice by the author, recorded here so the consequence is not mistaken for an oversight: the app cannot ship this as a blocking load, and the browser suite has slowed from 2.9 to 7.6 minutes with it.
+
+### D-065 amendment — the footprint ceiling applies per piece
+
+**Date:** 2026-09-21
+
+D-065 left the footprint reserve as a ceiling on the _set_: one scale was chosen for everybody, and if the widest model overflowed its square, every piece shrank until it fitted. Asked to make the rooks broader — a castle reads by its mass — that rule bit immediately. The rook is the widest model in the set by a distance (half-width 0.697 against a pawn's 0.531), so widening it past ×1.25 would have pulled all twelve pieces down with it, and the only way to make a castle look like a castle would have been to shrink the board's whole set.
+
+That is the same coupling this decision took off the height axis, still sitting on the width axis. The ceiling is now applied to each piece on its own: height sets one shared scale, and a piece broad enough to foul its square has **its own plan** trimmed, with a warning naming it. `stand()` already scaled plan and height separately, so a trimmed piece stands slightly slimmer than its adjustment asked rather than shorter, and nobody else is touched.
+
+**What the rooks became:** `{ scale: 1.2, width: 1.16 }` — measured on a live board at h 0.888 and w 0.718 cell widths, against h 0.829 and w 0.578 before. That is 31% broader than the next widest piece (the king, at 0.550) while staying under the knight in height, which is the proportion a Staunton set uses. The width figure is deliberately just under the ceiling: 0.359 against the 0.36 reserve, so no trimming occurs and the number in `SIZE_ADJUST` is the number that lands.
+
+**Heights are unchanged elsewhere:** pawn 0.740, rook 0.888, knight 0.903, bishop 0.962, queen 1.036, king 1.073.

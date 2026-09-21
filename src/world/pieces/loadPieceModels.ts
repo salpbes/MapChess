@@ -29,14 +29,17 @@ export type ModelKey = `${Color}-${PieceType}`;
 const PIECE_HEIGHT = 0.74;
 
 /**
- * How much of a cell the widest piece may occupy, as a fraction of cell width.
+ * How much of a cell any one piece may occupy, as a fraction of cell width.
  *
  * latticeWarp guarantees every cell an inradius of 0.30 cells, which is what
  * the procedural plinth is built to. This is deliberately a little over that:
  * pieces sized strictly to the guarantee read as small on a board whose cells
- * are mostly bigger than the tightest one, so the widest model is allowed to
- * overhang the very narrowest squares slightly. Only a ceiling now — height
- * decides the scale unless a model is wide enough to foul its square.
+ * are mostly bigger than the tightest one, so a model is allowed to overhang
+ * the very narrowest squares slightly.
+ *
+ * A ceiling on each piece separately, never on the set. Height decides how big
+ * everything is; this only stops one broad piece from fouling its square, and
+ * it stops it by trimming that piece.
  */
 const FOOTPRINT = 0.36;
 
@@ -65,9 +68,11 @@ const MODEL_FACING = Math.PI;
  * The order they produce is a chess set's: pawn, rook, knight, bishop, queen,
  * king. The pawn takes none by definition — PIECE_HEIGHT is the pawn.
  *
- * Width multipliers do not climb with rank the way heights do, because the
- * models do not start equally broad: a horse head and a castle are wider in
- * the file than a robed figure, so they need less help.
+ * Width multipliers do not climb with rank the way heights do, because breadth
+ * is not rank and the models do not start equally broad. The rook is the widest
+ * model in the set by a distance and is meant to stay that way on the board —
+ * a castle reads by its mass, not its height — while a robed queen starts
+ * narrow and needs help to fill the same square.
  */
 interface SizeAdjust {
   /** Uniform multiplier on the shared scale. */
@@ -77,7 +82,7 @@ interface SizeAdjust {
 }
 
 const SIZE_ADJUST: Readonly<Partial<Record<PieceType, SizeAdjust>>> = {
-  rook: { scale: 1.12 },
+  rook: { scale: 1.2, width: 1.16 },
   bishop: { scale: 1.3, width: 1.25 },
   knight: { scale: 1.22, width: 1.12 },
   queen: { scale: 1.4, width: 1.25 },
@@ -153,34 +158,40 @@ export async function loadPieceModels(unit: number): Promise<PieceModels> {
     what this did while the rooks were 2.70 on a 0.98 base — now means the
     rook's waistline decides how big a king is, and the day the rooks were
     remade slimmer it would have grown the whole set by 40%.
-
-    So height sets the scale and width only caps it: a model broad enough to
-    foul the narrowest square still pulls the set down to fit, adjustments
-    included, which is the guarantee the lattice makes and the one thing here
-    that is not a matter of taste.
   */
   const tallest = Math.max(...loaded.map(({ box }) => box.max.y - box.min.y), Number.EPSILON);
-  const byHeight = (PIECE_HEIGHT * unit) / tallest;
-
-  const widest = Math.max(
-    ...loaded.map(({ key, box }) => {
-      const adjust = SIZE_ADJUST[key.split('-')[1] as PieceType] ?? {};
-      const size = new Vector3();
-      box.getSize(size);
-      const half = Math.max(size.x, size.z) / 2;
-      return half * (adjust.scale ?? 1) * (adjust.width ?? 1);
-    }),
-    Number.EPSILON,
-  );
-  const byWidth = (FOOTPRINT * unit) / widest;
-
-  const scale = Math.min(byHeight, byWidth);
+  const scale = (PIECE_HEIGHT * unit) / tallest;
 
   const models = new Map<ModelKey, Object3D>();
   for (const { key, scene, box } of loaded) {
-    const adjust = SIZE_ADJUST[key.split('-')[1] as PieceType] ?? {};
+    const type = key.split('-')[1] as PieceType;
+    const adjust = SIZE_ADJUST[type] ?? {};
     const up = scale * (adjust.scale ?? 1);
-    models.set(key, stand(scene, box, up, up * (adjust.width ?? 1)));
+
+    /*
+      The footprint ceiling is applied per piece, not to the set.
+
+      It used to choose one scale for everybody from whichever model came out
+      widest, which is the same coupling D-065 took off the height axis: a rook
+      broad enough to fill its own square would have pulled all twelve pieces
+      down with it, so the only way to make a castle look like a castle was to
+      shrink the whole set. Clamping here costs the piece that is too wide and
+      nobody else. stand() already scales plan and height separately, so a
+      trimmed piece stands slightly slimmer than it asked for, not shorter.
+    */
+    const size = new Vector3();
+    box.getSize(size);
+    const half = Math.max(Math.max(size.x, size.z) / 2, Number.EPSILON);
+    const wanted = up * (adjust.width ?? 1);
+    const across = Math.min(wanted, (FOOTPRINT * unit) / half);
+    if (across < wanted - 1e-9) {
+      console.warn(
+        `${type} is broader than a cell allows; its plan was trimmed to fit. ` +
+          `Lower its width in SIZE_ADJUST if that is meant to be permanent.`,
+      );
+    }
+
+    models.set(key, stand(scene, box, up, across));
   }
   return models;
 }
