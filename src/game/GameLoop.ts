@@ -334,9 +334,12 @@ export class GameLoop {
   }
 
   /**
-   * Turns the running assessment on or off. Off by default and off by nature:
-   * it costs a search after every move, and a beginner does not need to be
-   * told continuously how badly it is going.
+   * Turns the running assessment on or off. On by default since the phone
+   * layout, where it was the answer to "am I winning" kept behind a drawer.
+   *
+   * It is not free — a search after every move — so it stays guarded: asked
+   * only when the engine is otherwise idle, never while a move is being
+   * searched, and never more than one at a time.
    */
   public setAssessing(on: boolean): void {
     this.assessing = on;

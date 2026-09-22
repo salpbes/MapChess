@@ -131,9 +131,9 @@ export class PanelSheet {
       wanted to look at. The bar is a quicker read than the sentence and needs
       no reading at all, so it comes first and the words follow it.
 
-      Shown on the same terms as the card — only once the player has asked to be
-      told — because being informed continuously that you are losing is not what
-      the easy levels are for.
+      Shown on the same terms as the card, which is to say unless the player has
+      turned it off. It waits for the first assessment to arrive, so it appears
+      a move-search late rather than empty.
     */
     this.standing = document.createElement('div');
     this.standing.className = 'sheet__standing';

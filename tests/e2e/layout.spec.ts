@@ -84,13 +84,15 @@ test.describe('the shape of the page', () => {
     await bootBoard(page);
     await startGame(page);
 
-    // Off by nature: the card this mirrors is hidden until asked for, and a
-    // beginner does not need to be told continuously how badly it is going.
-    const standing = page.locator('.sheet__standing');
-    await expect(standing).toBeHidden();
+    /*
+      There with no drawer opened and nothing switched on. That is the whole
+      point of it: the reading used to sit behind a drawer, behind a tab, behind
+      a button a new player had never met, which is a strange place to keep the
+      answer to "am I winning".
 
-    await tapControl(page, 'Show how the game stands');
-    await page.locator('.sheet__handle').click();
+      It appears a move-search late rather than empty, so this waits.
+    */
+    const standing = page.locator('.sheet__standing');
     await expect(standing).toBeVisible({ timeout: 30_000 });
 
     // Informative, not decorative: a verdict and the conventional number.
@@ -137,6 +139,15 @@ test.describe('the shape of the page', () => {
     const credits = await page.locator('.attribution').boundingBox();
     expect(credits).not.toBeNull();
     expect(credits?.y ?? 0).toBeLessThan(strip?.y ?? 0);
+
+    // And it still goes away when it is not wanted, giving the board back the
+    // height it borrowed. On by default is a default, not a fixture.
+    await tapControl(page, 'Show how the game stands');
+    await expect(standing).toBeHidden();
+    const reserve = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--sheet-bar').trim(),
+    );
+    expect(reserve).toBe('104px');
   });
 
   test('the picker is mostly map', async ({ page }) => {

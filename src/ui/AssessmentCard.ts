@@ -6,8 +6,8 @@
 //       the warning that it is a guess.
 // WHY:  The bar answers "who is winning" without being read, which is what a
 //       beginner wants; the number is there for whoever already knows what
-//       "+1.4" means. Hidden until asked for, because being told continuously
-//       that you are losing is not what the easy levels are for.
+//       "+1.4" means. Shown unless turned off: a player who does not know the
+//       reading exists cannot go looking for the switch that reveals it.
 
 import type { Assessment } from '@game/assessment';
 import type { GameBus } from '@game/GameEvents';

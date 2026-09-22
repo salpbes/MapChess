@@ -58,9 +58,17 @@ export class ViewControls {
 
   public constructor(container: HTMLElement, deps: ViewControlsDeps) {
     this.mode = readSetting();
-    this.assessing = readFlag(ASSESS_KEY);
-    // The only one of these that is on unless turned off: it is the panel that
-    // teaches, and a beginner will not go looking for a switch to find it.
+    /*
+      On unless turned off, both of these, for the same reason: they are what
+      teaches, and a player will not go looking for a switch to find something
+      they do not yet know exists. "How it stands" was off by default until a
+      phone made the cost of that obvious — the answer to "am I winning" sat
+      behind a drawer, behind a tab, behind a button nobody had met.
+
+      Anyone who turned it off keeps it off; this only changes what a player
+      who has never touched it is given.
+    */
+    this.assessing = readFlag(ASSESS_KEY, true);
     this.coaching = readFlag(COACH_KEY, true);
     this.sounding = readFlag(SOUND_KEY);
 
