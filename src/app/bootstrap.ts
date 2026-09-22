@@ -233,6 +233,12 @@ export function bootstrap(
   const stopPeek = bus.on('selection-changed', ({ square }) => {
     sheet.setPeek(square === null ? null : identityLine(themeTracker.describe(square)));
   });
+  // The same verdict the card carries, in the one place a phone can read it
+  // while the drawer is shut. Both listen to the event rather than to each
+  // other, so neither has to exist for the other to work.
+  const stopStanding = bus.on('assessment-changed', ({ assessment }) => {
+    sheet.setStanding(assessment);
+  });
   // Optional, CC0, and never allowed to hold the board up: the briefing is
   // shown at once from OSM alone, then re-shown if Wikidata answers.
   const historyProvider = new WikidataProvider(
@@ -580,6 +586,7 @@ export function bootstrap(
       dock.dispose();
       column.dispose();
       stopPeek();
+      stopStanding();
       keyboard.dispose();
       announcer.dispose();
       sheet.dispose();

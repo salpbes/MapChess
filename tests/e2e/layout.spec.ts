@@ -78,6 +78,40 @@ test.describe('the shape of the page', () => {
     expect(box?.height ?? 0).toBeLessThanOrEqual(lineHeight);
   });
 
+  test('says how the game stands without covering the credits', async ({ page }, info) => {
+    test.skip(info.project.name !== 'phone', "the strip is the phone's answer to a drawer");
+
+    await bootBoard(page);
+    await startGame(page);
+
+    // Off by nature: the card this mirrors is hidden until asked for, and a
+    // beginner does not need to be told continuously how badly it is going.
+    const standing = page.locator('.sheet__standing');
+    await expect(standing).toBeHidden();
+
+    await tapControl(page, 'Show how the game stands');
+    await page.locator('.sheet__handle').click();
+    await expect(standing).toBeVisible({ timeout: 30_000 });
+
+    // Informative, not decorative: a verdict and the conventional number.
+    await expect(page.locator('.sheet__standing-text')).not.toBeEmpty();
+
+    // One line. Two would push the six buttons off a phone lying on its side.
+    const strip = await standing.boundingBox();
+    expect(strip?.height ?? 0).toBeLessThanOrEqual(26);
+
+    /*
+      And the reserve grew with it. The drawer takes a fixed strip of the board
+      and anything anchored to the bottom clears exactly that, so a line added
+      here without widening the reserve draws the drawer's paper over the ODbL
+      credit — which is a licence fault, not a layout one, and has happened
+      once already.
+    */
+    const credits = await page.locator('.attribution').boundingBox();
+    expect(credits).not.toBeNull();
+    expect(credits?.y ?? 0).toBeLessThan(strip?.y ?? 0);
+  });
+
   test('the picker is mostly map', async ({ page }) => {
     await bootBoard(page);
     await startGame(page);

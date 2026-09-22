@@ -1603,6 +1603,15 @@ body {
     --sheet-bar: 104px;
   }
 
+  /*
+    How it stands adds a line, so the board's reserve grows with it. Set only
+    while that line is shown, so a player who never asks to be told keeps the
+    whole board.
+  */
+  :root[data-standing='on'] {
+    --sheet-bar: 126px;
+  }
+
   .sheet {
     position: fixed;
     right: 0;
@@ -1663,6 +1672,53 @@ body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /*
+    How it stands, on one line above the peek: a bar that answers "who is
+    winning" without being read, and the verdict after it for whoever wants the
+    words. Clipped rather than wrapped, like the peek — two lines here would
+    push the buttons off a short phone in landscape.
+  */
+  .sheet__standing {
+    display: flex;
+    align-items: center;
+    padding: 0 12px 6px;
+    gap: 8px;
+  }
+
+  .sheet__standing-bar {
+    display: flex;
+    overflow: hidden;
+    width: 54px;
+    height: 6px;
+    flex: 0 0 auto;
+    border: 1px solid var(--paper-edge);
+    border-radius: 3px;
+    /* Black's share is the groove; White's is the fill drawn over it. */
+    background: var(--paper-ink-strong);
+  }
+
+  .sheet__standing-fill {
+    height: 100%;
+    background: var(--paper);
+    transition: width 220ms ease;
+  }
+
+  .sheet__standing-text {
+    overflow: hidden;
+    color: var(--paper-ink-soft);
+    font-family: var(--paper-serif);
+    font-size: 12px;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sheet__standing-fill {
+      transition: none;
+    }
   }
 
   .sheet__bar {

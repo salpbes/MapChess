@@ -16,6 +16,8 @@
 //       to be reachable while the drawer is shut: one is the way out of the
 //       game, and the other is the reason a beginner can play it at all.
 
+import type { Assessment } from '@game/assessment';
+
 import { iconButton } from './icons';
 import type { IconName } from './icons';
 
@@ -42,6 +44,10 @@ export class PanelSheet {
 
   private readonly tabs: Readonly<Record<SheetTab, HTMLButtonElement>>;
   private readonly peek: HTMLDivElement;
+  /** How the game stands, while the drawer is shut. */
+  private readonly standing: HTMLDivElement;
+  private readonly standingFill: HTMLDivElement;
+  private readonly standingText: HTMLDivElement;
   private readonly tips: HTMLButtonElement;
   private open = false;
   private tab: SheetTab = 'game';
@@ -117,8 +123,32 @@ export class PanelSheet {
     this.peek.className = 'sheet__peek';
     this.peek.hidden = true;
 
+    /*
+      How it stands, in one line on the board.
+
+      The card this mirrors lives in the drawer, behind a tab, which on a phone
+      means the answer to "am I winning" costs a tap and covers the board you
+      wanted to look at. The bar is a quicker read than the sentence and needs
+      no reading at all, so it comes first and the words follow it.
+
+      Shown on the same terms as the card — only once the player has asked to be
+      told — because being informed continuously that you are losing is not what
+      the easy levels are for.
+    */
+    this.standing = document.createElement('div');
+    this.standing.className = 'sheet__standing';
+    this.standing.hidden = true;
+    const standingBar = document.createElement('div');
+    standingBar.className = 'sheet__standing-bar';
+    this.standingFill = document.createElement('div');
+    this.standingFill.className = 'sheet__standing-fill';
+    standingBar.appendChild(this.standingFill);
+    this.standingText = document.createElement('div');
+    this.standingText.className = 'sheet__standing-text';
+    this.standing.append(standingBar, this.standingText);
+
     bar.append(menu, this.tips, undo, topDown, this.tabs.field, this.tabs.game);
-    chrome.append(handle, this.peek, bar);
+    chrome.append(handle, this.standing, this.peek, bar);
 
     const body = document.createElement('div');
     body.className = 'sheet__body';
@@ -148,6 +178,26 @@ export class PanelSheet {
   public setPeek(line: string | null): void {
     this.peek.textContent = line ?? '';
     this.peek.hidden = line === null;
+  }
+
+  /**
+   * Shows how the game stands on the board itself; null hides the line.
+   *
+   * The drawer reserves a fixed strip of the board (`--sheet-bar`), and
+   * anything anchored to the bottom — the map credits, most visibly — clears
+   * exactly that. So the reserve has to grow by this line's height while it is
+   * shown and shrink back when it is not, which is what the attribute does. A
+   * fixed reserve would either crop the board for players who never turn this
+   * on, or let the drawer's paper cover the ODbL credit again.
+   */
+  public setStanding(assessment: Assessment | null): void {
+    this.standing.hidden = assessment === null;
+    document.documentElement.dataset.standing = assessment === null ? 'off' : 'on';
+    if (assessment === null) return;
+
+    this.standingFill.style.width = `${String(Math.round(assessment.whiteShare * 100))}%`;
+    this.standingText.textContent = `${assessment.verdict} · ${assessment.number}`;
+    this.standing.setAttribute('aria-label', `${assessment.verdict}, ${assessment.number}`);
   }
 
   /** Opens the drawer on a given tab; used by anything that wants to be read. */
