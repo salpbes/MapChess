@@ -57,6 +57,50 @@ export function makeTextSprite(text: string, options: TextSpriteOptions): Sprite
   return sprite;
 }
 
+/**
+ * The longest a label may be, in characters, before it is cut.
+ *
+ * A label's text is an OpenStreetMap `name` tag, which is to say a string any
+ * person on the internet can edit. The canvas below is sized from the measured
+ * text, so without a bound the name decides the allocation: a few thousand
+ * words wrap into a canvas thousands of pixels tall, and one very long word
+ * with no spaces in it skips the wrap entirely — `wrap` lets a single word
+ * overflow — and takes the width instead. Neither is an attack on anything
+ * except the browser tab of whoever chose that square of the map, which is why
+ * this is a bound and not a rejection; the name is still shown, just cut.
+ *
+ * Generous on purpose. The longest real place name in common use is Welsh and
+ * runs to 58 characters.
+ */
+const MAX_CHARS = 120;
+
+/** The most lines a label may wrap to before the rest is dropped. */
+const MAX_LINES = 3;
+
+/**
+ * The hard ceiling on either canvas dimension, in pixels.
+ *
+ * Belt and braces behind the two caps above: they bound the text, and this
+ * bounds the allocation whatever the text and the font metrics do together.
+ * Well clear of a real label, which wraps at 560px and stands three lines tall
+ * at most, so this never touches one.
+ */
+const MAX_CANVAS_PX = 2048;
+
+/** Cuts an over-long name to something a canvas can hold. Exported to be tested. */
+export function clampLabelText(text: string): string {
+  if (text.length <= MAX_CHARS) return text;
+  return `${text.slice(0, MAX_CHARS - 1).trimEnd()}…`;
+}
+
+/** Drops the lines past the limit, marking the last one kept. Exported to be tested. */
+export function clampLines(lines: readonly string[]): string[] {
+  if (lines.length <= MAX_LINES) return [...lines];
+  const kept = lines.slice(0, MAX_LINES);
+  kept[MAX_LINES - 1] = `${(kept[MAX_LINES - 1] ?? '').trimEnd()}…`;
+  return kept;
+}
+
 export function makeTextTexture(text: string, options: TextSpriteOptions): TextTexture {
   const fontPx = options.fontPx ?? 56;
   const outlined = options.outlined ?? false;
@@ -70,13 +114,13 @@ export function makeTextTexture(text: string, options: TextSpriteOptions): TextT
   const measure = document.createElement('canvas').getContext('2d');
   if (measure === null) throw new Error('2D canvas unavailable');
   measure.font = font;
-  const lines = wrap(text, measure, options.wrapPx);
+  const lines = clampLines(wrap(clampLabelText(text), measure, options.wrapPx));
   const textWidth = Math.ceil(Math.max(...lines.map((l) => measure.measureText(l).width)));
   const lineHeight = fontPx * 1.18;
 
   const canvas = document.createElement('canvas');
-  canvas.width = textWidth + pad * 2;
-  canvas.height = lineHeight * lines.length + pad * 1.2;
+  canvas.width = Math.min(textWidth + pad * 2, MAX_CANVAS_PX);
+  canvas.height = Math.min(lineHeight * lines.length + pad * 1.2, MAX_CANVAS_PX);
   const ctx = canvas.getContext('2d');
   if (ctx !== null) {
     if (!outlined) {

@@ -756,3 +756,27 @@ That is the same coupling this decision took off the height axis, still sitting 
 **What it did not fix.** This is a bandwidth and decode win, not a rendering one, and headless CI gets less of it than a real player does: with software WebGL there may be no compressed format to transcode _to_, so the transcoder falls back to uncompressed RGBA. Running three browsers in parallel locally still fails two tests on contention. At one worker, which is how CI runs, the suite is green at 46 passed.
 
 **Rejected:** running the journeys against the procedural set to make the gate green. It would have hidden exactly the signal that led here.
+
+## D-067 — A content security policy, and a bound on what a map label may allocate
+
+**Date:** 2026-09-22 · **Phase:** beyond 13
+
+**Context.** A security review of the whole app, not of a diff. The findings were mostly absences: no `innerHTML`, `outerHTML`, `insertAdjacentHTML` or `document.write` anywhere; no `eval` or `new Function` in our own code; every external name — Nominatim results, OSM `name` tags, Wikidata facts — reaching the DOM through `textContent`; URLs built with `encodeURIComponent` or `URLSearchParams`; the one outbound link list hardcoded and carrying `rel="noopener noreferrer"`; `localStorage` reads behind `try/catch` **and** a type guard; every endpoint HTTPS; `npm audit` clean including dev. With no backend, accounts, cookies or personal data, whole classes — injection, authz, session, CSRF — do not apply. Two things were worth changing.
+
+### The policy
+
+`index.html` now carries a CSP as a `<meta>` tag, because GitHub Pages serves no custom headers. That has a consequence worth stating: `frame-ancestors` is ignored in a meta tag, so clickjacking stays unmitigated. Accepted — there is no account and no action worth tricking somebody into clicking.
+
+`script-src` keeps the part that matters: with no `unsafe-inline`, an injected `<script>` or event handler does not run and no off-origin script loads.
+
+**`unsafe-eval` is in it, and that was a measurement rather than a guess.** three's `KTX2Loader` runs the basis transcoder in a Blob worker; the transcoder is Emscripten embind, which builds its invoker functions with `new Function` as the wasm module registers itself. Blob workers inherit the document's policy, so refusing eval kills the transcoder — probed on a running board, every piece came back `NO TEXTURE`. The worker is three's to construct, so there is no configuration out of it. The cost is narrower than the name suggests: an attacker still cannot get a first script to run, and this app evals nothing itself.
+
+`connect-src` and `img-src` are left at `https:` rather than a host list. The map draws on Overpass with a failover endpoint, Nominatim, Wikidata, openfreemap and an S3 bucket that redirects, and a host missed from that list would break the live map in a way the tests cannot catch, because they fence the network off. There are no secrets here to exfiltrate, and the directive still rules out plain `http:`.
+
+**What this cost to get right.** Two directives broke the game silently, and neither was visible from reading the policy. `connect-src` without `blob:` stopped `GLTFLoader` fetching a model's KTX2 texture back out of its own Blob URL. Refusing eval stopped the transcoder, as above. In both cases the pieces simply arrived grey and every existing test passed. `tests/e2e/csp.spec.ts` therefore guards the **texture**, not the policy text: it asserts no violation fires during boot and play, and that a piece still reports a 2048×2048 map. Tightening a directive is meant to fail there rather than in a player's browser.
+
+### The label bound
+
+`textSprite.makeTextTexture` sized its canvas from the measured text, and that text is an OpenStreetMap `name` tag — a string anyone on the internet can edit. Neither dimension was bounded. Height grew with the wrapped line count, and width was worse, because `wrap` documents that a single word longer than the limit is left to overflow: one space-free name took the width directly. A vandalised name was an allocation of the vandal's choosing in the browser of whoever picked that square.
+
+Now capped at 120 characters, three lines, and a hard 2048px ceiling on either dimension, with the two caps exported as pure functions so they are testable in the `node` test environment. Real names are untouched — the longest in common use is Welsh, at 58 characters — and a cut name is still shown, marked with an ellipsis, rather than dropped. Severity was low: no data at risk, self-inflicted per player. It is fixed because attacker-influenced input reaching an unbounded allocation is worth not having.

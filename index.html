@@ -9,6 +9,64 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      A seatbelt for a bug not yet written. There is no injection sink in this
+      app today — no innerHTML, no eval, every external name goes to
+      textContent — so nothing here is load-bearing. It is here so that the day
+      one appears, it does not also get to run.
+
+      GitHub Pages serves no custom headers, so this is a meta tag, which means
+      `frame-ancestors` is ignored and clickjacking stays unmitigated. That is
+      accepted: the page has no accounts, no cookies and no action worth
+      tricking somebody into clicking.
+
+      script-src is the directive doing the real work, and it keeps the part
+      that matters most: with no `unsafe-inline`, an injected <script> or event
+      handler does not run, and no off-origin script loads.
+
+      `unsafe-eval` is a concession, made with the measurement in hand rather
+      than pre-emptively. three's KTX2Loader runs the basis transcoder in a Blob
+      worker, and the transcoder is Emscripten embind, which builds its invoker
+      functions with `new Function` while the wasm module registers itself.
+      Blob workers inherit this policy, so refusing eval kills the transcoder:
+      probed on a real board, every piece came back `NO TEXTURE`. It is not
+      reachable through configuration — the worker is three's to construct — so
+      the choice was eval or untextured pieces.
+
+      What that costs is narrower than it looks. An attacker still cannot get a
+      script to run in the first place; eval only matters to somebody who
+      already has execution, or through a gadget that evals data, and this app
+      evals nothing itself.
+
+      `blob:` is there for that same worker, and `wasm-unsafe-eval` because
+      Stockfish and the transcoder are both WebAssembly.
+
+      `blob:` on connect-src is not optional: three's GLTFLoader fetches a
+      model's KTX2 texture back out of a Blob URL, and without it the pieces
+      arrive untextured. That was caught only by pointing this at the real
+      network — every fenced test passed while it was broken.
+
+      connect-src and img-src are deliberately left at `https:` rather than a
+      list of hosts. The map pulls from Overpass with a fallback endpoint,
+      Nominatim, Wikidata, openfreemap and an S3 bucket that redirects, and a
+      host missed from that list would break the live map in a way the tests
+      cannot catch — they fence the network off. The exchange is a fair one:
+      there are no secrets in this app to exfiltrate, and the directive still
+      rules out plain http and data: URLs.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               script-src 'self' blob: 'wasm-unsafe-eval' 'unsafe-eval';
+               worker-src 'self' blob:;
+               style-src 'self' 'unsafe-inline';
+               img-src 'self' data: blob: https:;
+               font-src 'self' data:;
+               connect-src 'self' blob: https:;
+               object-src 'none';
+               base-uri 'self';
+               form-action 'none'"
+    />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MapChess</title>
     <!-- Inline, so a tab icon costs no request and cannot 404 on a subpath. -->
