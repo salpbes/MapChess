@@ -94,7 +94,34 @@ test.describe('the shape of the page', () => {
     await expect(standing).toBeVisible({ timeout: 30_000 });
 
     // Informative, not decorative: a verdict and the conventional number.
-    await expect(page.locator('.sheet__standing-text')).not.toBeEmpty();
+    const text = (await page.locator('.sheet__standing-text').textContent()) ?? '';
+    expect(text).not.toBe('');
+
+    /*
+      The bar and the words have to agree, against a real engine on a real
+      position. The bar is White's share drawn from the left, and the number is
+      White-relative, so a plus means the fill passes halfway and a minus means
+      it does not. This is the one check that runs the whole chain — Stockfish's
+      UCI score, the turn it was spoken from, the maths, and the CSS — and it
+      catches an inverted bar whatever the position happens to be, which a
+      fixture cannot.
+    */
+    const share = await page.locator('.sheet__standing-fill').evaluate((fill) => {
+      const groove = fill.parentElement;
+      if (groove === null) return NaN;
+      return fill.getBoundingClientRect().width / groove.getBoundingClientRect().width;
+    });
+    const signed = /([+\u2212-])(\d+\.\d+)/.exec(text);
+    if (signed !== null) {
+      const white = signed[1] === '+';
+      // 0.0 sits on the line; anything else has to fall on the right side of it.
+      if (signed[2] !== '0.0') {
+        expect(
+          white ? share : 1 - share,
+          `"${text}" against a fill of ${String(share)}`,
+        ).toBeGreaterThan(0.5);
+      }
+    }
 
     // One line. Two would push the six buttons off a phone lying on its side.
     const strip = await standing.boundingBox();

@@ -522,6 +522,41 @@ describe('GameLoop assessment', () => {
     expect(assessment?.number).toBe('+1.2');
   });
 
+  /*
+    The one link in the chain nothing else covers.
+
+    `assess` is tested both ways round in assessment.test.ts, and the UCI parser
+    is tested for negative scores, but between them sits GameLoop deciding WHOSE
+    point of view the engine just spoke from. UCI reports from the side to move,
+    so the same +120 means White is better on White's turn and Black is better
+    on Black's. Every other assessment test here starts from the opening
+    position with White to move, where a lost flip and a correct one agree — so
+    the sign could be inverted, or the turn read after the move instead of
+    before it, and the suite would stay green while the bar told half of all
+    players the opposite of the truth.
+  */
+  it('reads the same engine score from the other side when it is Black to move', async () => {
+    const { bus, loop } = withRater();
+    const seen = vi.fn();
+    bus.on('assessment-changed', seen);
+    loop.start({ white: 'human', black: 'human' });
+
+    // One White move, so the engine's +120 now means Black is the better off.
+    await loop.handleSquareClick('e2');
+    await loop.handleSquareClick('e4');
+
+    loop.setAssessing(true);
+    await vi.waitFor(() => {
+      expect(seen).toHaveBeenCalled();
+    });
+    const [{ assessment }] = seen.mock.calls[seen.mock.calls.length - 1] as [
+      { assessment: { number: string; verdict: string; whiteShare: number } | null },
+    ];
+    expect(assessment?.number).toBe('−1.2');
+    expect(assessment?.verdict).toContain('Black');
+    expect(assessment?.whiteShare ?? 1).toBeLessThan(0.5);
+  });
+
   it('clears the card when switched off, without asking the engine again', async () => {
     const { bus, ai, loop } = withRater();
     loop.start({ white: 'human', black: 'human' });
