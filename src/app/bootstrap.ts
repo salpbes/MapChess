@@ -47,7 +47,6 @@ import type { HistoryFact } from '@mapdata/history/historyFacts';
 import { primaryPlaceName } from '@mapdata/features/primaryPlace';
 import { NominatimGeocoder } from '@mapdata/geocode/NominatimGeocoder';
 import type { HeightField } from '@mapdata/model/HeightField';
-import { FIXTURE_AREAS } from '@mapdata/model/fixtureAreas';
 import type { MapFeature } from '@mapdata/model/MapFeature';
 import type { SelectedArea } from '@mapdata/model/SelectedArea';
 import { browserBase64 } from '@shared/encoding/base64';
@@ -95,6 +94,7 @@ import { WorldStage } from '@world/scene/WorldStage';
 
 import { BoardComposer } from './BoardComposer';
 import type { AppConfig } from './config';
+import { CURATED_PLACES } from './curatedPlaces';
 
 export interface AppHandle {
   /** The board currently shown — flat until the area's terrain has loaded, then warped. */
@@ -264,6 +264,9 @@ export function bootstrap(
     onChooseArea: () => {
       areaBar.open();
     },
+    onChooseField: () => {
+      areaBar.openPresets();
+    },
     // The name if the map knows one; the coordinates are the fallback, not the point.
     areaLabel: () => placeName ?? areaBar.label,
     savedGame: () => summarise(resumable),
@@ -396,7 +399,7 @@ export function bootstrap(
       geocoder: new NominatimGeocoder(),
       styleUrl: config.mapStyleUrl,
       pickerHost: uiContainer,
-      presets: FIXTURE_AREAS,
+      presets: CURATED_PLACES,
       onAreaChanged: (area) => {
         placeName = null;
         loadArea(area);

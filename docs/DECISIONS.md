@@ -780,3 +780,29 @@ That is the same coupling this decision took off the height axis, still sitting 
 `textSprite.makeTextTexture` sized its canvas from the measured text, and that text is an OpenStreetMap `name` tag — a string anyone on the internet can edit. Neither dimension was bounded. Height grew with the wrapped line count, and width was worse, because `wrap` documents that a single word longer than the limit is left to overflow: one space-free name took the width directly. A vandalised name was an allocation of the vandal's choosing in the browser of whoever picked that square.
 
 Now capped at 120 characters, three lines, and a hard 2048px ceiling on either dimension, with the two caps exported as pure functions so they are testable in the `node` test environment. Real names are untouched — the longest in common use is Welsh, at 58 characters — and a cut name is still shown, marked with an ellipsis, rather than dropped. Severity was low: no data at risk, self-inflicted per player. It is fixed because attacker-influenced input reaching an unbounded allocation is worth not having.
+
+## D-068 — Places offered by name, chosen by measurement
+
+**Date:** 2026-09-23 · **Phase:** beyond 13
+
+**Decision:** the star beside the map button now opens a list of fifteen places offered by name, each with a line about its ground, and the main menu carries a second door onto the same list. The map button is untouched.
+
+**The problem.** The hardest moment in this game is the first one: a map, a search box and no idea where to go. That is a blank page in front of the one screen whose job is to make the player care about ground. And there is a trap behind it — most ground is flat, a flat board is indistinguishable from a chessboard, and famous battlefields are _especially_ likely to be flat, because flat is what a general wanted. A player left to pick at random may never see the point of the game at all.
+
+**The method.** `scripts/survey-places.ts` runs the real board build — real Terrarium tiles, real Overpass, `buildTerrainInputs` → `WarpedBoardLayout` → `classifyCellCover` → `buildCellFacts` → `buildBoardTheme` — over twenty-one candidates, and reports the relief across the 64 cells a player actually stands pieces on, how many named places the gazetteer will have, and how many kinds of ground appear. It carries the app's two-endpoint Overpass failover, because without it the first run measured the public instance's Tuesday rather than the ground: eight of the first twenty-one candidates came back 504.
+
+Three places went in as **controls**, chosen because they are proverbially flat. El Alamein measured 14 m of relief, 6 named places and a single kind of ground — last on every count. Agincourt measured 22 m. A method that could not tell those from Gettysburg would not have been worth trusting.
+
+**What the measurement settled.** Waterloo is not in the list. It is the most famous battlefield in Europe and it measured 22 m — the same as the Agincourt control. Arnhem measured 22 m as well, and Isandlwana, for all its crag, offered the gazetteer three names. None would make a good first board. All three remain one search away on the map, which is the point: **the list is a door, not a fence.**
+
+**What the measurement got wrong.** Culloden went in as a second flat control and came back at 67 m, above Hastings. The moor is flat; a 2 km box around it catches the ground falling away to the Nairn. The figure describes the box, not the fighting, and is worth reading that way.
+
+**The tension in the list.** Relief and named ground pull against each other. Thermopylae gives 257 m of relief and 14 names; Gettysburg gives 37 m and 290, so nearly every square there carries a real one. Both are good boards for opposite reasons, so the list holds some of each rather than ranking on relief alone.
+
+**Order.** Chronological, from Thermopylae to Stalingrad, so scrolling the list walks forward through two and a half thousand years. Ranking by relief would have read as a league table of other people's worst days.
+
+**Scope.** Battlefields only. Sites of civilian massacre and the camps are not places to play a game on, and the line is easy to hold — every place in the list is a field somebody has since put a monument and a car park on.
+
+**One list, two doors.** The menu does not build its own copy; it calls `AreaBar.openPresets()`. A phone layout in this project has already shipped the same control twice, and `tests/e2e/places.spec.ts` asserts both doors show the same number of rows.
+
+**Known quirk, deliberately left.** Choosing "Monte Cassino" produces a board headed _The field of San Silvestro_, because the field is named from the ground beneath it and the board's centre genuinely is San Silvestro. That is the gazetteer's convention working, not failing, so it stands rather than gaining an exception.

@@ -14,7 +14,7 @@
 import type { IGeocoder } from '@mapdata/geocode/NominatimGeocoder';
 import { describeArea } from '@mapdata/model/MapArea';
 import type { MapArea } from '@mapdata/model/MapArea';
-import type { FixtureAreaDef } from '@mapdata/model/fixtureAreas';
+import type { CuratedPlace } from '@app/curatedPlaces';
 import type { SelectedArea } from '@mapdata/model/SelectedArea';
 
 // Type-only: the value import is deferred, so MapLibre stays out of the
@@ -44,8 +44,8 @@ export interface AreaBarDeps {
    */
   readonly pickerHost: HTMLElement;
   readonly onAreaChanged: (area: SelectedArea) => void;
-  /** Offline areas offered in a dropdown for instant switching. */
-  readonly presets?: readonly FixtureAreaDef[];
+  /** Places offered by name, so a player never faces an empty map. */
+  readonly presets?: readonly CuratedPlace[];
 }
 
 export class AreaBar {
@@ -54,6 +54,7 @@ export class AreaBar {
   private picker: AreaPicker | null = null;
   private opening = false;
   private closePresets: (() => void) | null = null;
+  private showPresets: (() => void) | null = null;
 
   public constructor(
     slots: AreaBarSlots,
@@ -97,6 +98,18 @@ export class AreaBar {
 
   /** Opens the map picker, as the map button does. */
   /** True while the picker is up and owns the keyboard. */
+  /**
+   * Opens the list of places from somewhere else — the menu, which is where a
+   * player who has never seen this game actually is.
+   *
+   * The same list, not a second copy of it: this app has already shipped a
+   * phone layout that offered the same control twice, and one list with two
+   * doors is the lesson from it.
+   */
+  public openPresets(): void {
+    this.showPresets?.();
+  }
+
   public get isPickerOpen(): boolean {
     return this.picker !== null;
   }
@@ -158,7 +171,7 @@ export class AreaBar {
    * A star button and a short list under it. Closes on a choice, on Escape, or
    * on a click anywhere else — the three ways anyone expects a menu to close.
    */
-  private presetPicker(presets: readonly FixtureAreaDef[]): HTMLDivElement {
+  private presetPicker(presets: readonly CuratedPlace[]): HTMLDivElement {
     const wrap = document.createElement('div');
     wrap.className = 'area-bar__presets';
 
@@ -183,8 +196,22 @@ export class AreaBar {
       const row = document.createElement('button');
       row.type = 'button';
       row.className = 'area-bar__list-item';
-      row.textContent = preset.name.charAt(0).toUpperCase() + preset.name.slice(1);
-      row.title = preset.description;
+
+      /*
+        A name and the ground under it. This was one lowercase word per row,
+        which is fine for three test fixtures and useless for a list somebody
+        is meant to choose from: "morgarten" tells a player nothing, and the
+        reason to go there is the slope, not the spelling.
+      */
+      const name = document.createElement('span');
+      name.className = 'area-bar__list-name';
+      name.textContent = preset.name.charAt(0).toUpperCase() + preset.name.slice(1);
+      const blurb = document.createElement('span');
+      blurb.className = 'area-bar__list-blurb';
+      blurb.textContent =
+        preset.offline === true ? `${preset.blurb} · ready offline` : preset.blurb;
+      row.append(name, blurb);
+
       row.addEventListener('click', () => {
         close();
         this.area = preset.area;
@@ -194,14 +221,19 @@ export class AreaBar {
       list.appendChild(row);
     }
 
-    const open = iconButton('star', 'Example areas, ready offline', 'area-bar__button', () => {
+    const show = (): void => {
+      list.hidden = false;
+      document.addEventListener('pointerdown', onOutside, true);
+      document.addEventListener('keydown', onKey, true);
+    };
+    this.showPresets = show;
+
+    const open = iconButton('star', 'Famous fields', 'area-bar__button', () => {
       if (!list.hidden) {
         close();
         return;
       }
-      list.hidden = false;
-      document.addEventListener('pointerdown', onOutside, true);
-      document.addEventListener('keydown', onKey, true);
+      show();
     });
 
     wrap.append(open, list);

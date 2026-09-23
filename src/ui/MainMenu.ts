@@ -29,6 +29,8 @@ export interface MainMenuDeps {
   readonly onNewGame: (request: NewGameRequest) => void;
   readonly onResume: () => void;
   readonly onChooseArea: () => void;
+  /** Opens the list of places offered by name — the same list the star opens. */
+  readonly onChooseField: () => void;
   /** The name of the place being fought over, or its coordinates if unnamed. */
   readonly areaLabel: () => string;
   /** Null when there is nothing to resume. */
@@ -111,6 +113,16 @@ export class MainMenu {
       place(this.area, () => {
         this.close();
         deps.onChooseArea();
+      }),
+      /*
+        A second door to the same list, here because this is where a player who
+        has never seen the game is standing. The map above stays exactly as it
+        was: anywhere on Earth is the game, and this only helps somebody who
+        does not yet know where to point it.
+      */
+      button('Or start on famous ground', 'menu__button menu__button--quiet', () => {
+        this.close();
+        deps.onChooseField();
       }),
       button('New game', 'menu__button menu__button--primary', () => {
         this.close();
