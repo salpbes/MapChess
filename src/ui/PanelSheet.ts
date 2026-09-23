@@ -206,6 +206,15 @@ export class PanelSheet {
     this.setOpen(true);
   }
 
+  /**
+   * Shuts the drawer, for anything that has just changed the board and wants
+   * the player to see it. On a phone the list of places lives in here, so
+   * choosing one left the drawer covering the very ground they had chosen.
+   */
+  public close(): void {
+    this.setOpen(false);
+  }
+
   public dispose(): void {
     this.root.remove();
   }

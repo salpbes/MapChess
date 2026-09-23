@@ -14,7 +14,7 @@
 import type { IGeocoder } from '@mapdata/geocode/NominatimGeocoder';
 import { describeArea } from '@mapdata/model/MapArea';
 import type { MapArea } from '@mapdata/model/MapArea';
-import type { CuratedPlace } from '@app/curatedPlaces';
+import type { CuratedPlace, PlaceGroup } from '@app/curatedPlaces';
 import type { SelectedArea } from '@mapdata/model/SelectedArea';
 
 // Type-only: the value import is deferred, so MapLibre stays out of the
@@ -44,8 +44,8 @@ export interface AreaBarDeps {
    */
   readonly pickerHost: HTMLElement;
   readonly onAreaChanged: (area: SelectedArea) => void;
-  /** Places offered by name, so a player never faces an empty map. */
-  readonly presets?: readonly CuratedPlace[];
+  /** Places offered by name, in their sections, so a player never faces an empty map. */
+  readonly presets?: readonly PlaceGroup[];
 }
 
 export class AreaBar {
@@ -171,7 +171,7 @@ export class AreaBar {
    * A star button and a short list under it. Closes on a choice, on Escape, or
    * on a click anywhere else — the three ways anyone expects a menu to close.
    */
-  private presetPicker(presets: readonly CuratedPlace[]): HTMLDivElement {
+  private presetPicker(groups: readonly PlaceGroup[]): HTMLDivElement {
     const wrap = document.createElement('div');
     wrap.className = 'area-bar__presets';
 
@@ -192,33 +192,24 @@ export class AreaBar {
     };
     this.closePresets = close;
 
-    for (const preset of presets) {
-      const row = document.createElement('button');
-      row.type = 'button';
-      row.className = 'area-bar__list-item';
-
-      /*
-        A name and the ground under it. This was one lowercase word per row,
-        which is fine for three test fixtures and useless for a list somebody
-        is meant to choose from: "morgarten" tells a player nothing, and the
-        reason to go there is the slope, not the spelling.
-      */
-      const name = document.createElement('span');
-      name.className = 'area-bar__list-name';
-      name.textContent = preset.name.charAt(0).toUpperCase() + preset.name.slice(1);
-      const blurb = document.createElement('span');
-      blurb.className = 'area-bar__list-blurb';
-      blurb.textContent =
-        preset.offline === true ? `${preset.blurb} · ready offline` : preset.blurb;
-      row.append(name, blurb);
-
-      row.addEventListener('click', () => {
-        close();
-        this.area = preset.area;
-        this.render();
-        this.deps.onAreaChanged(preset.area);
-      });
-      list.appendChild(row);
+    /*
+      In sections, by era. Fifteen places in one run is a list you read; five
+      short sections is one you scan — a player who wants the Somme looks for
+      "First World War", not for a name they may not know yet. Each section is a
+      labelled group so a screen reader announces where in the list it is.
+    */
+    for (const group of groups) {
+      const section = document.createElement('div');
+      section.className = 'area-bar__list-group';
+      section.setAttribute('role', 'group');
+      const heading = document.createElement('div');
+      heading.className = 'area-bar__list-heading';
+      heading.id = `area-bar-era-${group.era}`;
+      heading.textContent = group.label;
+      section.setAttribute('aria-labelledby', heading.id);
+      section.appendChild(heading);
+      for (const preset of group.places) section.appendChild(this.presetRow(preset, close));
+      list.appendChild(section);
     }
 
     const show = (): void => {
@@ -238,6 +229,32 @@ export class AreaBar {
 
     wrap.append(open, list);
     return wrap;
+  }
+
+  /**
+   * A name and the ground under it. This was one lowercase word per row, which
+   * is fine for three test fixtures and useless for a list somebody is meant to
+   * choose from: "morgarten" tells a player nothing, and the reason to go there
+   * is the slope, not the spelling.
+   */
+  private presetRow(preset: CuratedPlace, close: () => void): HTMLButtonElement {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'area-bar__list-item';
+    const name = document.createElement('span');
+    name.className = 'area-bar__list-name';
+    name.textContent = preset.name;
+    const blurb = document.createElement('span');
+    blurb.className = 'area-bar__list-blurb';
+    blurb.textContent = preset.blurb;
+    row.append(name, blurb);
+    row.addEventListener('click', () => {
+      close();
+      this.area = preset.area;
+      this.render();
+      this.deps.onAreaChanged(preset.area);
+    });
+    return row;
   }
 
   private render(): void {

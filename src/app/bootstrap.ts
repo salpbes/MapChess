@@ -41,7 +41,7 @@ import {
 } from '@mapdata/features/OverpassFeatureProvider';
 import type { CachedFeatures } from '@mapdata/features/OverpassFeatureProvider';
 import { buildBriefing } from '@mapdata/board/buildBriefing';
-import type { BriefingInputs } from '@mapdata/board/buildBriefing';
+import type { Briefing, BriefingInputs } from '@mapdata/board/buildBriefing';
 import { WikidataProvider } from '@mapdata/history/WikidataProvider';
 import type { HistoryFact } from '@mapdata/history/historyFacts';
 import { primaryPlaceName } from '@mapdata/features/primaryPlace';
@@ -54,6 +54,7 @@ import { EventBus } from '@shared/events/EventBus';
 import { LocalJsonStore } from '@shared/storage/LocalJsonStore';
 import { AreaBar } from '@ui/AreaBar';
 import { AssessmentCard } from '@ui/AssessmentCard';
+import { PlaceTitle } from '@ui/PlaceTitle';
 import { CoachCard } from '@ui/CoachCard';
 import { Attribution } from '@ui/Attribution';
 import { BoardDebugPanel } from '@ui/BoardDebugPanel';
@@ -94,7 +95,15 @@ import { WorldStage } from '@world/scene/WorldStage';
 
 import { BoardComposer } from './BoardComposer';
 import type { AppConfig } from './config';
-import { CURATED_PLACES } from './curatedPlaces';
+import {
+  CURATED_PLACES,
+  ERA_LABEL,
+  curatedByEra,
+  curatedPlaceAt,
+  isBattlefield,
+  namedBriefing,
+} from './curatedPlaces';
+import type { CuratedPlace } from './curatedPlaces';
 
 export interface AppHandle {
   /** The board currently shown — flat until the area's terrain has loaded, then warped. */
@@ -188,6 +197,10 @@ export function bootstrap(
   let resumable: SavedGame | null = savedOnLoad;
   /** What the current board is called, once its features have arrived. */
   let placeName: string | null = null;
+  /** The area the board is being built for, so a finished board knows what it is. */
+  let boardArea: SelectedArea = savedOnLoad?.area ?? config.defaultArea;
+  /** A place chosen by name whose title is still to be shown, once its board is ready. */
+  let pendingTitle: CuratedPlace | null = null;
   /** Drops a Wikidata answer that arrives after the player has moved on. */
   let briefingGeneration = 0;
 
@@ -267,6 +280,7 @@ export function bootstrap(
     onChooseField: () => {
       areaBar.openPresets();
     },
+    famousFields: CURATED_PLACES.filter(isBattlefield).map((p) => p.name),
     // The name if the map knows one; the coordinates are the fallback, not the point.
     areaLabel: () => placeName ?? areaBar.label,
     savedGame: () => summarise(resumable),
@@ -301,6 +315,7 @@ export function bootstrap(
       sheet.setTipsWaiting(waiting);
     },
   });
+  const placeTitle = new PlaceTitle(uiContainer);
   const gameOver = new GameOverScreen(uiContainer, bus, themeTracker, () => {
     menu.open();
   });
@@ -399,9 +414,14 @@ export function bootstrap(
       geocoder: new NominatimGeocoder(),
       styleUrl: config.mapStyleUrl,
       pickerHost: uiContainer,
-      presets: CURATED_PLACES,
+      presets: curatedByEra(),
       onAreaChanged: (area) => {
         placeName = null;
+        // Chosen by name, or landed exactly on a named place: either way, announce it.
+        pendingTitle = curatedPlaceAt(area);
+        placeTitle.hide();
+        // A new place is something to look at: out of the drawer, onto the board.
+        sheet.close();
         loadArea(area);
         // A new area is a new board, so it is a new game: identities from the old
         // map would otherwise follow pieces onto ground they never came from.
@@ -444,8 +464,18 @@ export function bootstrap(
   // --- board: flat until terrain arrives, then warped (Phase 8) ---
   const boardScene = new BoardScene({ stage, pieces, highlights, picker });
   const composer = new BoardComposer(config.boardSizeMeters, ({ model, mode }) => {
+    /*
+      A battlefield is headed with its battle. Derived from the area itself, so a
+      resumed game at Gettysburg is called Gettysburg with nothing extra saved,
+      and a square dragged off the ridge stops claiming the name.
+    */
+    const curated = curatedPlaceAt(boardArea);
+    const battle = curated !== null && isBattlefield(curated) ? curated : null;
+    const fieldName = model.features === null ? null : primaryPlaceName(model.features);
+    const titled = (b: Briefing): Briefing =>
+      battle === null ? b : namedBriefing(b, battle, fieldName);
     // The flat placeholder board carries no features; keep the last known name.
-    if (model.features !== null) placeName = primaryPlaceName(model.features);
+    if (model.features !== null) placeName = battle?.name ?? fieldName;
     const inputs: BriefingInputs | null =
       model.features === null || model.heights === null || model.cover === null
         ? null
@@ -455,17 +485,30 @@ export function bootstrap(
             cover: model.cover,
             bounds: model.layout.bounds,
           };
-    briefing.show(inputs === null ? null : buildBriefing(inputs));
+    briefing.show(inputs === null ? null : titled(buildBriefing(inputs)));
     if (inputs !== null) {
       const generation = ++briefingGeneration;
       void historyProvider.factsFor(inputs.features).then((history) => {
         // A later board may have arrived while Wikidata was answering.
         if (generation !== briefingGeneration || history.size === 0) return;
-        briefing.show(buildBriefing({ ...inputs, history }));
+        briefing.show(titled(buildBriefing({ ...inputs, history })));
       });
     }
     boardScene.show(model);
     themeTracker.setTheme(model.theme);
+    // The arrival, marked once: when the chosen place's board is actually there.
+    if (
+      model.features !== null &&
+      pendingTitle !== null &&
+      sameArea(pendingTitle.area, boardArea)
+    ) {
+      const kicker = isBattlefield(pendingTitle) ? ERA_LABEL[pendingTitle.era] : null;
+      placeTitle.show({ kicker, name: pendingTitle.name, line: pendingTitle.blurb });
+      announcer.say(
+        `${pendingTitle.name}${kicker === null ? '' : `, ${kicker}`}. ${pendingTitle.blurb.replace(' · ', ', ')}.`,
+      );
+      pendingTitle = null;
+    }
     // Positions changed under the pieces; re-place them from the engine's position.
     view.showPosition(engine.pieces());
     const t = model.terrain;
@@ -475,6 +518,7 @@ export function bootstrap(
   });
 
   function loadArea(area: SelectedArea): void {
+    boardArea = area;
     const generation = composer.beginArea();
     areaGeneration = generation;
     void elevation.load(area).then((result) => {
@@ -580,6 +624,7 @@ export function bootstrap(
       fps?.dispose();
       viewControls.dispose();
       gameOver.dispose();
+      placeTitle.dispose();
       controls.dispose();
       menu.dispose();
       hintCard.dispose();

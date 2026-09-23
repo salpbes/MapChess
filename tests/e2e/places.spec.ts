@@ -55,8 +55,54 @@ test.describe('places offered by name', () => {
     // ...then the rows the menu opens. A second, different list would be a
     // second thing to keep in step, which is how duplicate controls start.
     await tapControl(page, 'Menu — new game, resume, change area');
-    await page.getByRole('button', { name: 'Or start on famous ground' }).click();
+    await page.getByRole('button', { name: 'Play on famous ground' }).click();
     await expect(page.locator('.area-bar__list-item').first()).toBeVisible();
     expect(await page.locator('.area-bar__list-item').count()).toBe(fromStar);
+  });
+
+  test('files the places under their eras', async ({ page }) => {
+    await bootBoard(page);
+    await startGame(page);
+    await tapControl(page, 'Famous fields');
+
+    // Scanned, not read: sections with headings a player looks for.
+    const headings = page.locator('.area-bar__list-heading');
+    await expect(headings.first()).toBeVisible();
+    const labels = await headings.allTextContents();
+    expect(labels).toEqual(
+      expect.arrayContaining(['Ancient & medieval', 'First World War', 'Second World War']),
+    );
+    // A heading is not a choice: only the rows are buttons.
+    expect(
+      await page
+        .locator('.area-bar__list-heading')
+        .evaluateAll((els) => els.every((e) => e.tagName !== 'BUTTON')),
+    ).toBe(true);
+    await expect(page.getByRole('group', { name: 'Second World War' })).toContainText(
+      'Monte Cassino',
+    );
+  });
+
+  test('names the place as you arrive, then gets out of the way', async ({ page }) => {
+    await bootBoard(page);
+    await startGame(page);
+    await tapControl(page, 'Famous fields');
+    // Rievaulx ships with its data, so the whole arrival runs with no network.
+    await page.locator('.area-bar__list-item', { hasText: 'Rievaulx' }).click();
+
+    const title = page.locator('.place-title');
+    await expect(title).toBeVisible({ timeout: 30_000 });
+    await expect(title.locator('.place-title__name')).toHaveText('Rievaulx');
+
+    // Heard as well as seen, through the app's one live region — not a second
+    // one of its own, which would race the move announcements.
+    await expect(page.locator('[aria-live="polite"]')).toHaveCount(1);
+    await expect(page.locator('[aria-live="polite"]')).toContainText('Rievaulx');
+
+    // It never stands between a player and the board.
+    expect(await title.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('none');
+
+    // And it leaves on its own, with nothing to dismiss.
+    await expect(title).toBeHidden({ timeout: 10_000 });
   });
 });

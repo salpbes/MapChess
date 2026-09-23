@@ -2103,3 +2103,237 @@ body {
   outline: 2px solid #b45cff;
   outline-offset: -4px;
 }
+
+/* ------------------------------------------------------------ famous ground */
+
+/*
+  The list in sections. The headings stick as the list scrolls, so a player
+  deep in the twentieth century still knows which century they are in.
+*/
+.area-bar__list-group + .area-bar__list-group {
+  margin-top: 4px;
+  padding-top: 2px;
+  border-top: 1px solid var(--paper-edge);
+}
+
+.area-bar__list-heading {
+  position: sticky;
+  top: -4px;
+  z-index: 1;
+  padding: 7px 8px 3px;
+  background: var(--paper);
+  color: var(--paper-ink-soft);
+  font-family: var(--paper-serif);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/*
+  The menu's door onto the list. A card rather than a text button, because the
+  text button was the one control on the menu a newcomer would not press. Gold
+  like the rest of the menu's accents, and quieter than "New game" on purpose:
+  it should be found, not shouted.
+*/
+.menu__fields {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 212, 71, 0.5);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 212, 71, 0.16), rgba(255, 212, 71, 0.03) 65%), #2a2d33;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  color: #e6e6e6;
+  cursor: pointer;
+  gap: 12px;
+  text-align: left;
+  transition:
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+
+.menu__fields:hover,
+.menu__fields:focus-visible {
+  border-color: #ffd447;
+  transform: translateY(-1px);
+}
+
+.menu__fields-mark {
+  display: flex;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 212, 71, 0.16);
+  color: #ffd447;
+}
+
+.menu__fields-words {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menu__fields-title {
+  color: #f4efe0;
+  font-family: var(--paper-serif);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.menu__fields-teaser {
+  overflow: hidden;
+  color: #b9b3a2;
+  font-size: 12px;
+  font-style: italic;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu__fields-go {
+  flex: 0 0 auto;
+  color: #ffd447;
+  font-size: 22px;
+  line-height: 1;
+}
+
+/*
+  The arrival. Set like a documentary's title rather than a game's banner: era
+  in spaced capitals, the place large, a hairline, one line in italic. A soft
+  dark pool behind it rather than a box, so it reads over snow and over sea
+  without drawing a rectangle on the landscape. Never takes a click.
+*/
+.place-title {
+  position: fixed;
+  top: 17%;
+  left: 50%;
+  z-index: 15;
+  display: flex;
+  max-width: min(660px, calc(100vw - 32px));
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 40px 18px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(16, 14, 12, 0.72) 0%,
+    rgba(16, 14, 12, 0.42) 55%,
+    rgba(16, 14, 12, 0) 78%
+  );
+  color: #f6f0df;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+  text-align: center;
+  transform: translate(-50%, 12px);
+  transition:
+    opacity 700ms ease,
+    transform 900ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/*
+  `#ui > *` hands the pointer back to every overlay, and an id outranks this
+  class, so the plain rule above lost: the card sat over the board swallowing
+  taps for five seconds after every arrival. A player who knows where they are
+  going moves a piece immediately, so this one has to be said with the id.
+*/
+#ui > .place-title {
+  pointer-events: none;
+}
+
+.place-title[hidden] {
+  display: none;
+}
+
+.place-title--in {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.place-title--out {
+  opacity: 0;
+  transform: translate(-50%, -6px);
+}
+
+.place-title__kicker {
+  color: #e3c46b;
+  font-family: var(--paper-serif);
+  font-size: 12px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+}
+
+.place-title__kicker[hidden] {
+  display: none;
+}
+
+.place-title__name {
+  font-family: var(--paper-serif);
+  font-size: clamp(30px, 5.2vw, 52px);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.05;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.65);
+}
+
+.place-title__rule {
+  width: 72px;
+  height: 1px;
+  margin: 4px 0;
+  background: linear-gradient(90deg, transparent, #e3c46b, transparent);
+}
+
+.place-title__line {
+  color: #eae2cc;
+  font-family: var(--paper-serif);
+  font-size: clamp(14px, 1.8vw, 17px);
+  font-style: italic;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu__fields,
+  .place-title {
+    transition: opacity 1ms;
+  }
+
+  .menu__fields:hover,
+  .menu__fields:focus-visible,
+  .place-title,
+  .place-title--in,
+  .place-title--out {
+    transform: translate(-50%, 0);
+  }
+
+  .menu__fields:hover,
+  .menu__fields:focus-visible {
+    transform: none;
+  }
+}
+
+/*
+  A phone lying on its side is about 390px tall, and at full size this card
+  pushed "Back to the board" — the one way out of the menu — nine pixels below
+  the fold. Short screens get it on one line: the names go, the door stays.
+*/
+@media (max-height: 520px) {
+  .menu__fields {
+    padding: 7px 10px;
+    gap: 10px;
+  }
+
+  .menu__fields-mark {
+    width: 28px;
+    height: 28px;
+  }
+
+  .menu__fields-teaser {
+    display: none;
+  }
+}

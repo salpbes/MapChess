@@ -85,7 +85,13 @@ export class Announcer {
     if (text !== '') this.say(text);
   }
 
-  private say(text: string): void {
+  /**
+   * Says something in the one live region. Public for the few things that are
+   * not game events but still need saying — arriving at a named place is one —
+   * so that nothing else in the app grows a live region of its own. Two regions
+   * race, and a reader mid-sentence announces only whichever wrote last.
+   */
+  public say(text: string): void {
     // Rewriting with the same string is not a change, so a reader stays quiet.
     // A trailing space makes a repeat count as new text without being read.
     this.el.textContent = this.el.textContent === text ? `${text} ` : text;

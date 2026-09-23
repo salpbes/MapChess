@@ -34,6 +34,8 @@ setWorkerUrl(maplibreWorkerUrl);
 
 import type { IGeocoder, PlaceResult } from '@mapdata/geocode/NominatimGeocoder';
 import { cornerRing, describeArea } from '@mapdata/model/MapArea';
+
+import { pickerBoard } from './pickerBoard';
 import { NetworkError } from '@mapdata/net/fetchJson';
 import { normaliseBearing } from '@mapdata/model/SelectedArea';
 import type { LatLon, SelectedArea } from '@mapdata/model/SelectedArea';
@@ -50,6 +52,10 @@ const SOURCE_ID = 'mapchess-area';
 const FILL_LAYER = 'mapchess-area-fill';
 const OUTLINE_LAYER = 'mapchess-area-outline';
 const WHITE_EDGE_LAYER = 'mapchess-area-white-edge';
+const CELL_LAYER = 'area-board-cells';
+const PIECE_LAYER = 'area-board-pieces';
+const PIECE_EDGE_LAYER = 'area-board-piece-edges';
+const KING_LAYER = 'area-board-kings';
 
 export class AreaPicker {
   private readonly root: HTMLDivElement;
@@ -130,7 +136,7 @@ export class AreaPicker {
 
     const hint = el('div', 'area-picker__hint');
     hint.textContent =
-      'Drag the square to move it, drag the map to pan, pinch or scroll to zoom. The bright edge is White’s side.';
+      'Drag the board to move it and turn it with the slider. White’s pieces are the light ones, along the bright edge.';
 
     panel.append(searchRow, this.results, rotRow, this.readout, hint, actions);
     this.root.append(mapEl, panel);
@@ -188,8 +194,56 @@ export class AreaPicker {
       type: 'fill',
       source: SOURCE_ID,
       filter: ['==', ['get', 'kind'], 'square'],
-      paint: { 'fill-color': '#ffd447', 'fill-opacity': 0.18 },
+      // Nearly clear now: the board below does the showing. It stays as the
+      // layer a drag picks the square up by, which needs the whole square.
+      paint: { 'fill-color': '#ffd447', 'fill-opacity': 0.05 },
     });
+
+    /*
+      The board itself: squares light enough that the map reads through them,
+      then both armies in their starting places. A classic board's two browns,
+      so it looks like a chessboard before it looks like anything else.
+    */
+    this.map.addLayer({
+      id: CELL_LAYER,
+      type: 'fill',
+      source: SOURCE_ID,
+      filter: ['==', ['get', 'kind'], 'cell'],
+      paint: {
+        'fill-color': ['case', ['get', 'dark'], '#8b5a2b', '#f0d9b5'],
+        // Light enough that roads and place names read through: the ground is
+        // what is being chosen, and the board is only there to show how it lies.
+        'fill-opacity': 0.32,
+      },
+    });
+    this.map.addLayer({
+      id: PIECE_LAYER,
+      type: 'fill',
+      source: SOURCE_ID,
+      filter: ['==', ['get', 'kind'], 'piece'],
+      paint: {
+        'fill-color': ['match', ['get', 'side'], 'white', '#fbf8ee', '#1f1c19'],
+        'fill-opacity': 0.9,
+      },
+    });
+    this.map.addLayer({
+      id: PIECE_EDGE_LAYER,
+      type: 'line',
+      source: SOURCE_ID,
+      filter: ['==', ['get', 'kind'], 'piece'],
+      paint: {
+        'line-color': ['match', ['get', 'side'], 'white', '#2a2622', '#e9dec4'],
+        'line-width': 1,
+      },
+    });
+    this.map.addLayer({
+      id: KING_LAYER,
+      type: 'fill',
+      source: SOURCE_ID,
+      filter: ['==', ['get', 'kind'], 'king-mark'],
+      paint: { 'fill-color': ['match', ['get', 'side'], 'white', '#1f1c19', '#fbf8ee'] },
+    });
+
     this.map.addLayer({
       id: OUTLINE_LAYER,
       type: 'line',
@@ -263,6 +317,7 @@ export class AreaPicker {
     return {
       type: 'FeatureCollection',
       features: [
+        ...pickerBoard(this.currentArea()).features,
         {
           type: 'Feature',
           properties: { kind: 'square' },

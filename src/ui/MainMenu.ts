@@ -31,6 +31,8 @@ export interface MainMenuDeps {
   readonly onChooseArea: () => void;
   /** Opens the list of places offered by name — the same list the star opens. */
   readonly onChooseField: () => void;
+  /** Names to tease with on the card that opens it: real places, not a slogan. */
+  readonly famousFields: readonly string[];
   /** The name of the place being fought over, or its coordinates if unnamed. */
   readonly areaLabel: () => string;
   /** Null when there is nothing to resume. */
@@ -60,6 +62,8 @@ export class MainMenu {
   private readonly side: HTMLSelectElement;
   private readonly level: HTMLSelectElement;
   private readonly area: HTMLSpanElement;
+  private readonly fields: HTMLButtonElement;
+  private readonly fieldsTeaser: HTMLSpanElement;
   private readonly resume: HTMLButtonElement;
   private readonly resumeNote: HTMLDivElement;
   private readonly onKeyDown: (event: KeyboardEvent) => void;
@@ -102,6 +106,43 @@ export class MainMenu {
     this.area = document.createElement('span');
     this.area.className = 'menu__area';
 
+    /*
+      A second door to the same list, here because this is where a player who
+      has never seen the game is standing. It was a quiet text button, and a
+      quiet button is exactly what a newcomer does not press: it gave no hint
+      that behind it were Thermopylae and Monte Cassino.
+
+      So it is a card that names them. The names do the selling — real places a
+      player has heard of — rather than an exclamation mark doing it. It stays
+      below the map row and below the weight of "New game": anywhere on Earth
+      is still the game, and this only helps somebody who does not yet know
+      where to point it.
+    */
+    this.fields = document.createElement('button');
+    this.fields.type = 'button';
+    this.fields.className = 'menu__fields';
+    this.fields.setAttribute('aria-label', 'Play on famous ground');
+    const mark = document.createElement('span');
+    mark.className = 'menu__fields-mark';
+    mark.appendChild(icon('star', 20));
+    const words = document.createElement('span');
+    words.className = 'menu__fields-words';
+    const heading = document.createElement('span');
+    heading.className = 'menu__fields-title';
+    heading.textContent = 'Play on famous ground';
+    this.fieldsTeaser = document.createElement('span');
+    this.fieldsTeaser.className = 'menu__fields-teaser';
+    words.append(heading, this.fieldsTeaser);
+    const go = document.createElement('span');
+    go.className = 'menu__fields-go';
+    go.setAttribute('aria-hidden', 'true');
+    go.textContent = '›';
+    this.fields.append(mark, words, go);
+    this.fields.addEventListener('click', () => {
+      this.close();
+      deps.onChooseField();
+    });
+
     panel.append(
       title,
       tagline,
@@ -114,16 +155,7 @@ export class MainMenu {
         this.close();
         deps.onChooseArea();
       }),
-      /*
-        A second door to the same list, here because this is where a player who
-        has never seen the game is standing. The map above stays exactly as it
-        was: anywhere on Earth is the game, and this only helps somebody who
-        does not yet know where to point it.
-      */
-      button('Or start on famous ground', 'menu__button menu__button--quiet', () => {
-        this.close();
-        deps.onChooseField();
-      }),
+      this.fields,
       button('New game', 'menu__button menu__button--primary', () => {
         this.close();
         deps.onNewGame(this.current());
@@ -148,6 +180,7 @@ export class MainMenu {
 
   public open(): void {
     this.refresh();
+    this.fieldsTeaser.textContent = teaser(this.deps.famousFields);
     this.backdrop.hidden = false;
     this.deps.onVisibility?.(true);
   }
@@ -244,6 +277,20 @@ function place(value: HTMLElement, onChoose: () => void): HTMLDivElement {
 
   row.append(open, text);
   return row;
+}
+
+/**
+ * Four names from the list, different each time the menu opens, so a player
+ * who comes back finds somewhere they did not notice last time.
+ */
+function teaser(names: readonly string[]): string {
+  const pool = [...names];
+  for (let i = pool.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j] ?? '', pool[i] ?? ''];
+  }
+  const shown = pool.slice(0, 4);
+  return pool.length > shown.length ? `${shown.join(' · ')} …` : shown.join(' · ');
 }
 
 function divider(): HTMLHRElement {
