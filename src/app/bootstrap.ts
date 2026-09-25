@@ -88,7 +88,10 @@ import { MoveAnimator } from '@world/pieces/MoveAnimator';
 import { PieceLayer } from '@world/pieces/PieceLayer';
 import { ModelPieceFactory } from '@world/pieces/ModelPieceFactory';
 import { ProceduralPieceFactory } from '@world/pieces/ProceduralPieceFactory';
-import type { PieceModels } from '@world/pieces/loadPieceModels';
+import { DEFAULT_PIECE_SET, isCompleteSet, loadPieceModels } from '@world/pieces/loadPieceModels';
+import type { ModelKey, PieceModels } from '@world/pieces/loadPieceModels';
+import type { Object3D } from 'three';
+import { PIECE_SETS } from '@world/pieces/pieceSets';
 import { BoardPicker } from '@world/scene/BoardPicker';
 import { PointerInput } from '@world/scene/PointerInput';
 import { WorldStage } from '@world/scene/WorldStage';
@@ -104,6 +107,7 @@ import {
   namedBriefing,
 } from './curatedPlaces';
 import type { CuratedPlace } from './curatedPlaces';
+import { choosePieceSet, previewSetFrom } from './pieceSetChoice';
 
 export interface AppHandle {
   /** The board currently shown — flat until the area's terrain has loaded, then warped. */
@@ -112,14 +116,8 @@ export interface AppHandle {
   selectedArea(): SelectedArea;
   heightField(): HeightField | null;
   features(): readonly MapFeature[] | null;
-  /**
-   * Adopts piece models that finished downloading after the board was shown.
-   *
-   * The game does not wait for them — see main.ts — so this is how the drawn
-   * set is upgraded once the real one arrives. Safe at any point: it re-places
-   * the position from the engine, which is the authority on where pieces are.
-   */
-  usePieceModels(models: PieceModels): void;
+  /** The piece set the board is being dressed in: "medieval" unless it is a named battle. */
+  pieceSet(): string;
   dispose(): void;
 }
 
@@ -147,7 +145,7 @@ export function bootstrap(
     Always the modelled factory, even when the map it is handed is empty. The
     models are no longer required to be present before the board is built, and
     an empty factory delegates every piece to the procedural set until
-    usePieceModels() fills it in.
+    usePieceSet() fills it in.
   */
   const modelled = new ModelPieceFactory(models, procedural);
   const pieces = new PieceLayer(initialLayout, modelled);
@@ -163,6 +161,69 @@ export function bootstrap(
   // --- game ---
   const bus = new EventBus<GameEvents>();
   const engine = new ChessEngine();
+
+  /*
+    Pieces, by set. The board opens on the drawn pieces and dresses itself when
+    the models land: the models are 11 MB, and every byte of that used to stand
+    between the player and their first frame. A set that never arrives leaves
+    drawn pieces on the board, which is what a failed load always meant.
+
+    Which set is choosePieceSet's call — the original everywhere, an era's set
+    on its own named battlefields once the set is whole, or whatever the
+    address previews. Each set is fetched once and kept, so walking from Anzac
+    Cove to Holy Island and back costs nothing the second time.
+
+    A previewed set may be half made. Its missing pieces come from the original
+    set, so a preview is always a full, playable board: the point is to see the
+    new figures on real ground as they are finished, not to wait for all twelve.
+  */
+  const setFacts = {
+    exists: (set: string) => Object.hasOwn(PIECE_SETS, set),
+    complete: (set: string) => isCompleteSet(set),
+  };
+  const previewSet = previewSetFrom(window.location.search, setFacts.exists);
+  if (previewSet !== null) {
+    console.info(
+      `Previewing the "${previewSet}" pieces; anything it lacks comes from "${DEFAULT_PIECE_SET}".`,
+    );
+  }
+  const setLoads = new Map<string, Promise<PieceModels>>();
+  let wantedSet: string | null = null;
+
+  function loadSet(set: string): Promise<PieceModels> {
+    let load = setLoads.get(set);
+    if (load === undefined) {
+      load = loadPieceModels(cellUnit, stage.renderer, set);
+      setLoads.set(set, load);
+    }
+    return load;
+  }
+
+  function usePieceSet(set: string): void {
+    if (set === wantedSet) return;
+    wantedSet = set;
+    const parts =
+      set === DEFAULT_PIECE_SET ? [loadSet(set)] : [loadSet(DEFAULT_PIECE_SET), loadSet(set)];
+    void Promise.all(parts)
+      .then((maps) => {
+        // A later board asked for a different set while this one downloaded.
+        if (wantedSet !== set) return;
+        // Later maps win, so the chosen set's figures cover the original's.
+        const merged = new Map<ModelKey, Object3D>();
+        for (const map of maps) for (const [key, model] of map) merged.set(key, model);
+        if (merged.size === 0) return;
+        modelled.replace(merged);
+        // Rebuilt from the engine's position, the authority on where pieces are;
+        // a move animating at this moment is cut short, not corrupted.
+        view.showPosition(engine.pieces());
+      })
+      .catch((error: unknown) => {
+        console.warn(
+          `The "${set}" pieces could not be loaded; the board keeps what it has.`,
+          error,
+        );
+      });
+  }
   const promotion = new PromotionPrompt(uiContainer);
   const ai = new StockfishAI({ workerUrl: config.engineUrl, difficulty: config.defaultDifficulty });
   ai.ready().catch((error: unknown) => {
@@ -519,6 +580,7 @@ export function bootstrap(
 
   function loadArea(area: SelectedArea): void {
     boardArea = area;
+    usePieceSet(choosePieceSet(area, previewSet, setFacts));
     const generation = composer.beginArea();
     areaGeneration = generation;
     void elevation.load(area).then((result) => {
@@ -602,14 +664,7 @@ export function bootstrap(
     selectedArea: () => areaBar.current,
     heightField: () => elevation.heightField,
     features: () => features.features,
-    usePieceModels: (loaded) => {
-      if (loaded.size === 0) return;
-      modelled.adopt(loaded);
-      // Rebuilds every piece from the engine's position, so anything already on
-      // the board is replaced by its model. A move animating at this moment is
-      // cut short rather than corrupted; the position it lands on is the same.
-      view.showPosition(engine.pieces());
-    },
+    pieceSet: () => wantedSet ?? DEFAULT_PIECE_SET,
     dispose: () => {
       input.dispose();
       boardDebug?.dispose();

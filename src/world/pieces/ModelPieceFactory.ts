@@ -35,6 +35,17 @@ export class ModelPieceFactory implements IPieceMeshFactory {
    * standing were built from whatever existed at the time, so the caller
    * re-places the position afterwards to bring them across.
    */
+  /**
+   * Swaps in a whole set, dropping whatever was there. Adopting adds on top,
+   * which is right when models arrive piecemeal; moving from Anzac Cove back
+   * to Holy Island needs the Gallipoli figures gone, not kept where the new
+   * set has nothing to replace them with.
+   */
+  public replace(models: PieceModels): void {
+    this.models.clear();
+    this.adopt(models);
+  }
+
   public adopt(models: PieceModels): void {
     for (const [key, template] of models) {
       this.models.set(key, template);
@@ -50,7 +61,8 @@ export class ModelPieceFactory implements IPieceMeshFactory {
     object.name = key;
     // The picker walks up from whichever mesh the ray hit, so the tag belongs
     // on the root it will arrive at.
-    object.userData = { piece };
+    // Which set it came from travels with it, for tests and anyone debugging.
+    object.userData = { piece, set: template.userData.set as unknown };
     return object;
   }
 

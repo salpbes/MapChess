@@ -25,8 +25,8 @@ export interface ScreenPoint {
  * layout for the warped one. Clicking before that hits squares which are about
  * to move.
  */
-export async function bootBoard(page: Page): Promise<void> {
-  await page.goto('/');
+export async function bootBoard(page: Page, path = '/'): Promise<void> {
+  await page.goto(path);
   await expect(page.getByRole('dialog', { name: 'MapChess menu' })).toBeVisible();
 
   await page.waitForFunction(

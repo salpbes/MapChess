@@ -46,6 +46,8 @@ interface Candidate {
   readonly lon: number;
   /** Set on places picked BECAUSE they are flat, to check the method discriminates. */
   readonly control?: true;
+  /** Measured as it will be offered: some boards are turned to face their story. */
+  readonly rotationDeg?: number;
 }
 
 const CANDIDATES: readonly Candidate[] = [
@@ -64,7 +66,8 @@ const CANDIDATES: readonly Candidate[] = [
   { name: 'Waterloo (1815)', era: '19th', lat: 50.68, lon: 4.4064 },
 
   // WW1
-  { name: 'Anzac Cove, Gallipoli (1915)', era: 'ww1', lat: 40.2422, lon: 26.2756 },
+  // Turned so White's back rank is the beach: the first coordinate was offshore.
+  { name: 'Anzac Cove, Gallipoli (1915)', era: 'ww1', lat: 40.24, lon: 26.2918, rotationDeg: 100 },
   { name: 'Fort Douaumont, Verdun (1916)', era: 'ww1', lat: 49.2108, lon: 5.4342 },
   { name: 'Vimy Ridge (1917)', era: 'ww1', lat: 50.3794, lon: 2.7739 },
   { name: 'Kobarid / Caporetto (1917)', era: 'ww1', lat: 46.2461, lon: 13.5789 },
@@ -165,7 +168,7 @@ async function measure(c: Candidate): Promise<Result> {
     centerLat: c.lat,
     centerLon: c.lon,
     sizeMeters: SIZE_M,
-    rotationDeg: 0,
+    rotationDeg: c.rotationDeg ?? 0,
   };
   const heights = await heightsFor(area);
   const raw = await overpass(area);

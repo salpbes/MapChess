@@ -17,6 +17,9 @@ import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 
 import type { Color, PieceType } from '@domain/chess/types';
 
+import { PIECE_SETS } from './pieceSets';
+import type { PieceSetDef } from './pieceSets';
+
 /** `${color}-${type}`, the key a factory looks a model up by. */
 export type ModelKey = `${Color}-${PieceType}`;
 
@@ -103,9 +106,13 @@ const SIZE_ADJUST: Readonly<Partial<Record<PieceType, SizeAdjust>>> = {
  * and running that script: the result is loaded, hashed and served with no code
  * change here. A name that does not match the convention is ignored rather than
  * guessed at.
+ *
+ * One folder per set (medieval/, ww1/, …), and every set is in this glob. That
+ * costs nothing at page load: an eager `?url` glob is a table of URL strings,
+ * not the models, and only the set asked for is ever fetched.
  */
 const FILES: Readonly<Record<string, string>> = import.meta.glob(
-  '../../chesspieces/compressed/*.glb',
+  '../../chesspieces/compressed/*/*.glb',
   {
     eager: true,
     query: '?url',
@@ -114,31 +121,90 @@ const FILES: Readonly<Record<string, string>> = import.meta.glob(
 );
 
 const TYPES: readonly PieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
-const COLORS: readonly Color[] = ['white', 'black'];
 
 /**
- * `<type>_<colour>.glb`, e.g. `rook_white.glb`. Anything else is skipped.
+ * The piece a filename names, read against its set's armies.
+ *
+ * Two words either way round: `rook_white.glb` in the original set,
+ * `anzac_pawn.glb` in the era sets. One word must be a piece; the other is a
+ * colour, or an army the set says plays one. Anything else is skipped.
  *
  * Exported so the convention is testable without a browser: it is the whole
  * contract for adding a piece, and a silent mismatch would look exactly like a
  * model that failed to load.
  */
-export function modelKeyFor(path: string): ModelKey | null {
+export function modelKeyFor(path: string, armies: PieceSetDef = COLOUR_NAMES): ModelKey | null {
   const name =
     path
       .split('/')
       .pop()
       ?.replace(/\.glb$/i, '')
       .toLowerCase() ?? '';
-  const [type, color] = name.split('_');
-  if (!TYPES.includes(type as PieceType)) return null;
-  if (!COLORS.includes(color as Color)) return null;
-  return `${color as Color}-${type as PieceType}`;
+  const words = name.split('_');
+  if (words.length !== 2) return null;
+  const typeWord = words.find((w) => TYPES.includes(w as PieceType));
+  if (typeWord === undefined) return null;
+  const sideWord = words[0] === typeWord ? words[1] : words[0];
+  const color: Color | null =
+    sideWord === armies.white || sideWord === 'white'
+      ? 'white'
+      : sideWord === armies.black || sideWord === 'black'
+        ? 'black'
+        : null;
+  if (color === null) return null;
+  return `${color}-${typeWord as PieceType}`;
 }
+
+/** A set that names its sides by colour, as the original one does. */
+const COLOUR_NAMES: PieceSetDef = { white: 'white', black: 'black' };
 
 export type PieceModels = ReadonlyMap<ModelKey, Object3D>;
 
-export async function loadPieceModels(unit: number, renderer: WebGLRenderer): Promise<PieceModels> {
+/**
+ * The set every board uses unless it has a reason to use another. It is the
+ * original hand-made set, filed under medieval/ when the era sets arrived.
+ */
+export const DEFAULT_PIECE_SET = 'medieval';
+
+/** The set a compressed model belongs to: the folder it sits in. */
+export function pieceSetOf(path: string): string | null {
+  const parts = path.split('/');
+  return parts.length >= 2 ? (parts[parts.length - 2] ?? null) : null;
+}
+
+/**
+ * The pieces a set has models for, read from the bundle's file list without
+ * fetching anything — so the game can decide whether to offer a set before it
+ * spends a byte on it.
+ */
+export function piecesInSet(
+  set: string,
+  files: Readonly<Record<string, string>> = FILES,
+): readonly ModelKey[] {
+  const armies = PIECE_SETS[set] ?? COLOUR_NAMES;
+  const keys = new Set<ModelKey>();
+  for (const path of Object.keys(files)) {
+    if (pieceSetOf(path) !== set) continue;
+    const key = modelKeyFor(path, armies);
+    if (key !== null) keys.add(key);
+  }
+  return [...keys];
+}
+
+/**
+ * All twelve: six pieces, two sides. A set is offered to players only when it
+ * is complete — an ANZAC pawn beside a medieval knight is a work in progress,
+ * not a board — and until then it can still be previewed with `?pieces=`.
+ */
+export function isCompleteSet(set: string, files?: Readonly<Record<string, string>>): boolean {
+  return piecesInSet(set, files).length === TYPES.length * 2;
+}
+
+export async function loadPieceModels(
+  unit: number,
+  renderer: WebGLRenderer,
+  set: string = DEFAULT_PIECE_SET,
+): Promise<PieceModels> {
   const loader = new GLTFLoader();
 
   /*
@@ -153,8 +219,10 @@ export async function loadPieceModels(unit: number, renderer: WebGLRenderer): Pr
     .detectSupport(renderer);
   loader.setKTX2Loader(ktx2);
 
+  const armies = PIECE_SETS[set] ?? COLOUR_NAMES;
   const found = Object.entries(FILES)
-    .map(([path, url]) => ({ key: modelKeyFor(path), url, path }))
+    .filter(([path]) => pieceSetOf(path) === set)
+    .map(([path, url]) => ({ key: modelKeyFor(path, armies), url, path }))
     .filter((entry): entry is { key: ModelKey; url: string; path: string } => entry.key !== null);
 
   const loaded: { key: ModelKey; scene: Object3D; box: Box3 }[] = [];
@@ -216,7 +284,9 @@ export async function loadPieceModels(unit: number, renderer: WebGLRenderer): Pr
       );
     }
 
-    models.set(key, stand(scene, box, up, across));
+    const root = stand(scene, box, up, across);
+    root.userData.set = set;
+    models.set(key, root);
   }
   return models;
 }

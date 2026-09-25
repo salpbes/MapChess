@@ -17,12 +17,12 @@
 //       (5.05 MB against 3.39), which is the trade it is meant to make —
 //       quality over size — and the wrong one here.
 //
-// USAGE: `npm run pieces` after adding or replacing anything in
-//        `src/chesspieces/`. The output is committed, so a build and CI never
+// USAGE: `npm run pieces` after adding or replacing anything in a set folder
+//        under `src/chesspieces/` (medieval/, ww1/, …). The output is committed, so a build and CI never
 //        need an encoder. Nothing runs this automatically: if you change a
 //        master and skip this, the game keeps serving the previous compression.
 
-import { readdirSync, mkdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, mkdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { NodeIO } from '@gltf-transform/core';
@@ -65,37 +65,73 @@ const OPTIONS = {
 };
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
-mkdirSync(OUT, { recursive: true });
+const force = process.argv.includes('--force');
 
-const files = readdirSync(SOURCE)
-  .filter((n) => n.endsWith('.glb'))
+/*
+  One folder per piece set — medieval/, ww1/, ww2/ — each compressed into the
+  same name under compressed/. A set is a folder rather than a filename prefix
+  so a set can be added, replaced or deleted as a unit, and so the loader can
+  fetch one set without the others ever leaving the server.
+*/
+const sets = readdirSync(SOURCE, { withFileTypes: true })
+  .filter((d) => d.isDirectory() && d.name !== 'compressed' && !d.name.startsWith('.'))
+  .map((d) => d.name)
   .sort();
-if (files.length === 0) {
-  console.error(`No .glb files in ${SOURCE}.`);
-  process.exit(1);
+
+const stray = readdirSync(SOURCE).filter((n) => n.endsWith('.glb'));
+if (stray.length > 0) {
+  console.warn(
+    `Ignoring ${String(stray.length)} .glb file(s) directly in ${SOURCE}: pieces now live in a set folder, e.g. ${SOURCE}/medieval/.`,
+  );
 }
 
 let before = 0;
 let after = 0;
-for (const name of files) {
-  const from = join(SOURCE, name);
-  const to = join(OUT, name);
-  const started = Date.now();
+let skipped = 0;
+for (const set of sets) {
+  const files = readdirSync(join(SOURCE, set))
+    .filter((n) => n.endsWith('.glb'))
+    .sort();
+  if (files.length === 0) continue;
+  mkdirSync(join(OUT, set), { recursive: true });
 
-  const doc = await io.read(from);
-  await doc.transform(ktx2(OPTIONS));
-  await io.write(to, doc);
+  for (const name of files) {
+    const from = join(SOURCE, set, name);
+    const to = join(OUT, set, name);
 
-  const wasSize = statSync(from).size;
-  const isSize = statSync(to).size;
-  before += wasSize;
-  after += isSize;
-  console.info(
-    `${name.padEnd(20)} ${(wasSize / 1048576).toFixed(2)} MB -> ${(isSize / 1048576).toFixed(2)} MB` +
-      `  (${((Date.now() - started) / 1000).toFixed(1)}s)`,
-  );
+    /*
+      Up to date means the compressed copy is newer than its master. Encoding
+      takes about nine seconds a model, and the collection is heading for
+      several sets of twelve; re-encoding every one on every run would make the
+      script something people avoid running — which is exactly how a changed
+      master ends up serving its old compression. --force re-encodes anyway.
+    */
+    if (!force && existsSync(to) && statSync(to).mtimeMs >= statSync(from).mtimeMs) {
+      skipped += 1;
+      continue;
+    }
+
+    const started = Date.now();
+    const doc = await io.read(from);
+    await doc.transform(ktx2(OPTIONS));
+    await io.write(to, doc);
+
+    const wasSize = statSync(from).size;
+    const isSize = statSync(to).size;
+    before += wasSize;
+    after += isSize;
+    console.info(
+      `${`${set}/${name}`.padEnd(28)} ${(wasSize / 1048576).toFixed(2)} MB -> ${(isSize / 1048576).toFixed(2)} MB` +
+        `  (${((Date.now() - started) / 1000).toFixed(1)}s)`,
+    );
+  }
 }
 
+if (skipped > 0) console.info(`${String(skipped)} already up to date (use --force to re-encode).`);
+if (before === 0) {
+  console.info('Nothing to compress.');
+  process.exit(0);
+}
 console.info(
   `\nSet: ${(before / 1048576).toFixed(1)} MB -> ${(after / 1048576).toFixed(1)} MB ` +
     `(${(before / after).toFixed(1)}x smaller)`,

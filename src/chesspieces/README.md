@@ -1,32 +1,47 @@
 # `src/chesspieces/` — piece meshes
 
-Drop a `.glb` in here, run `npm run pieces`, and it becomes that piece.
+Pieces live in **sets**, one folder each: `medieval/`, `ww1/`, `ww2/`, …
 
-The second step matters. This folder holds the **masters** — whatever came out
-of Blender, texture and all. What the game loads is `compressed/`, written by
-`npm run pieces`. Nothing runs it for you, so a master you add without running
-it is a master the game never sees, and a master you _change_ without running it
-leaves the previous version on the board. See `scripts/compress-pieces.mjs`.
+Drop a `.glb` into a set folder, run `npm run pieces`, and it becomes that
+piece. The second step matters: these folders hold the **masters**, whatever
+came out of Blender. What the game loads is `compressed/<set>/`, written by
+`npm run pieces`. It skips anything already up to date, so running it is cheap;
+`npm run pieces -- --force` re-encodes everything.
 
 ## Naming
 
-`<type>_<colour>.glb` — the filename is the wiring.
+Two words, the piece and its side, either way round:
 
 ```text
-pawn_white.glb    knight_white.glb   bishop_white.glb
-rook_white.glb    queen_white.glb    king_white.glb
-pawn_black.glb    knight_black.glb   …
+medieval/pawn_white.glb      the original set names its sides by colour
+ww1/anzac_pawn.glb           an era set names them by army
+ww1/ottoman_pawn.glb
 ```
 
-Case does not matter. Anything that does not parse — `rook.glb`,
-`castle_white.glb`, `rook_red.glb` — is **skipped silently**, and that piece
-stays procedural, which looks exactly like a model that failed to load. The
-rule is pinned down in `tests/world/modelKeyFor.test.ts`.
+Pieces are `pawn`, `knight`, `bishop`, `rook`, `queen`, `king`. Which army is
+White is decided **once**, in `src/world/pieces/pieceSets.ts`, not in the
+filenames:
 
-Types are `pawn`, `knight`, `bishop`, `rook`, `queen`, `king`. Colours are
-`white` and `black`. Mixing is fine and expected: any piece without a model
-falls back to the drawn one in `PieceGeometry.ts`, so the set can be replaced
-a piece at a time.
+```ts
+ww1: { white: 'anzac', black: 'ottoman' },
+```
+
+A name that does not parse — `anzac-pawn.glb`, `french_pawn.glb` in the WW1
+folder, `rook.glb` — is **skipped silently**, which looks exactly like a model
+that failed to load. The rule is pinned down in
+`tests/world/modelKeyFor.test.ts`.
+
+## Which set a board uses
+
+- **Anywhere on the map:** `medieval`, always. It is the original set.
+- **A famous battlefield:** its era's set — `ww1` for Anzac Cove, Verdun and
+  Kobarid — but **only once that set has all twelve pieces.** Until then those
+  boards keep the medieval pieces, so players never see a half-made set.
+- **A preview, for you:** add `?pieces=ww1` to the address. Every board then
+  uses that set, with any piece it does not have yet taken from `medieval`, so
+  you can see new figures on real ground as each one is finished.
+
+A new era set needs its folder, its line in `pieceSets.ts`, and nothing else.
 
 ## What the loader does for you
 

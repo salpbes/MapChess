@@ -144,12 +144,21 @@ export const CURATED_PLACES: readonly CuratedPlace[] = [
     blurb: 'The battle they fought above the clouds · 1863',
     area: at(35.0086, -85.3389),
   },
-  // 74 m · 22 named · 3 kinds of ground · water
+  /*
+    198 m · 56 named · water — and Lone Pine (Kanlısırt) on the board.
+
+    Turned to 100° and moved 1.4 km inland so that White's back rank is the
+    beach: ANZAC plays White, and their pieces start on the shore they landed
+    on, with the Ottoman line on the ridges 200 m above. The first coordinate
+    was offshore — a kilometre inland its back rank was still in the sea — and
+    it measured 74 m and 22 names. Found by sampling the terrain along White's
+    edge rather than by eye.
+  */
   {
     name: 'Anzac Cove',
     era: 'ww1',
     blurb: 'Ravines rising straight off the beach · 1915',
-    area: at(40.2422, 26.2756),
+    area: at(40.24, 26.2918, 2000, 100),
   },
   // 105 m · 34 named — including Douaumont, the village that was never rebuilt
   {
