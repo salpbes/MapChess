@@ -48,6 +48,21 @@ const PIECE_HEIGHT = 0.74;
 const FOOTPRINT = 0.36;
 
 /**
+ * How far a piece may reach along its own file, from its centre, as a
+ * fraction of cell width: the whole of its own square, and no further.
+ *
+ * FOOTPRINT is a radius, and treating every piece as round is right for a
+ * figure but wrong for a gun. A field gun is long and narrow, and its length
+ * runs along the file, where the nearest thing is the piece a whole square
+ * ahead — not beside it, where FOOTPRINT's neighbours are. Checked as a
+ * circle, the WW1 guns were shrunk until their barrels would fit sideways
+ * between two neighbours that are nowhere near them. A round piece is still
+ * limited by FOOTPRINT, which is the smaller of the two, so nothing round
+ * changes.
+ */
+const ALONG_FILE = 0.5;
+
+/**
  * Which way the models face, in radians about Y, before the board turns them.
  *
  * PieceLayer yaws White to −Z and Black to +Z, so a model is expected to face
@@ -275,8 +290,11 @@ export async function loadPieceModels(
     */
     const size = new Vector3();
     box.getSize(size);
-    const half = Math.max(Math.max(size.x, size.z) / 2, Number.EPSILON);
-    const cap = (FOOTPRINT * unit) / half;
+    // After faceForward every model faces −Z, so x is across the rank and z
+    // runs along the file.
+    const halfAcross = Math.max(size.x / 2, Number.EPSILON);
+    const halfAlong = Math.max(size.z / 2, Number.EPSILON);
+    const cap = Math.min((FOOTPRINT * unit) / halfAcross, (ALONG_FILE * unit) / halfAlong);
     const { tall, across, fit } = fitToCell(up, up * (adjust.width ?? 1), cap);
     if (fit === 'shrunk') {
       console.warn(

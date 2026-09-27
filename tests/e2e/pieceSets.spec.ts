@@ -156,6 +156,11 @@ test.describe('piece sets', () => {
       // Mostly along the file, and toward the other army.
       expect(Math.abs(dz), `${color} gun aims along the rank`).toBeGreaterThan(Math.abs(dx));
       expect(Math.sign(dz), `${color} gun faces its own side`).toBe(color === 'white' ? -1 : 1);
+      // Long, and allowed the length of its own square along the file — but
+      // no further, or the barrel would run into the piece ahead.
+      expect(Math.hypot(dx, dz), `${color} gun reaches past its square`).toBeLessThanOrEqual(
+        0.5 * (2000 / 8) + 1,
+      );
     }
   });
 });
