@@ -91,4 +91,71 @@ test.describe('piece sets', () => {
       expect(z).toBeCloseTo(y ?? 0, 9);
     }
   });
+
+  test('turns the field guns to fire at the enemy', async ({ page }) => {
+    await bootBoard(page, '/?pieces=ww1');
+    await startGame(page);
+    await expect.poll(() => setOf(page, 'white', 'bishop'), { timeout: 30_000 }).toBe('ww1');
+
+    /*
+      Each gun's muzzle is its farthest point from the piece's own axis in the
+      upper half of the model — the trail rests on the ground, the barrel does
+      not. White stands at +Z and faces −Z, so a White barrel must point toward
+      −Z and a Black one toward +Z. The guns were modelled barrel along −X, and
+      before `turn` they fired straight down the rank at their own pieces.
+    */
+    const muzzles = await page.evaluate(() => {
+      const out: { color: string; dx: number; dz: number }[] = [];
+      /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access,
+         @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment */
+      (window.__mapchess?.stage as any).scene.traverse((root: any) => {
+        const p = root.userData?.piece;
+        if (p?.type !== 'bishop' || root.userData.set !== 'ww1') return;
+        root.updateMatrixWorld(true);
+        const o = root.matrixWorld.elements;
+        const ox = o[12] as number,
+          oz = o[14] as number;
+        const pts: number[][] = [];
+        root.traverse((n: any) => {
+          const pos = n.geometry?.attributes?.position;
+          if (pos === undefined) return;
+          const e = n.matrixWorld.elements as number[];
+          const at = (k: number): number => e[k] ?? 0;
+          for (let i = 0; i < (pos.count as number); i += 3) {
+            const x = pos.getX(i) as number;
+            const y = pos.getY(i) as number;
+            const z = pos.getZ(i) as number;
+            pts.push([
+              at(0) * x + at(4) * y + at(8) * z + at(12),
+              at(1) * x + at(5) * y + at(9) * z + at(13),
+              at(2) * x + at(6) * y + at(10) * z + at(14),
+            ]);
+          }
+        });
+        const ys = pts.map((q) => q[1] ?? 0);
+        const lo = Math.min(...ys),
+          hi = Math.max(...ys);
+        let far = [0, 0, 0],
+          d = -1;
+        for (const q of pts) {
+          if ((q[1] ?? 0) < lo + 0.45 * (hi - lo)) continue;
+          const r = Math.hypot((q[0] ?? 0) - ox, (q[2] ?? 0) - oz);
+          if (r > d) {
+            d = r;
+            far = q;
+          }
+        }
+        out.push({ color: p.color as string, dx: (far[0] ?? 0) - ox, dz: (far[2] ?? 0) - oz });
+      });
+      /* eslint-enable */
+      return out;
+    });
+
+    expect(muzzles).toHaveLength(4);
+    for (const { color, dx, dz } of muzzles) {
+      // Mostly along the file, and toward the other army.
+      expect(Math.abs(dz), `${color} gun aims along the rank`).toBeGreaterThan(Math.abs(dx));
+      expect(Math.sign(dz), `${color} gun faces its own side`).toBe(color === 'white' ? -1 : 1);
+    }
+  });
 });

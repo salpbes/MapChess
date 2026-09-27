@@ -230,7 +230,7 @@ export async function loadPieceModels(
     found.map(async ({ key, url, path }) => {
       try {
         const gltf = await loader.loadAsync(url);
-        faceForward(gltf.scene, path);
+        faceForward(gltf.scene, path, armies.turn?.[key.split('-')[1] as PieceType] ?? 0);
         loaded.push({ key, scene: gltf.scene, box: new Box3().setFromObject(gltf.scene) });
       } catch (error: unknown) {
         // Not fatal: the board falls back to the piece it already had.
@@ -335,14 +335,15 @@ export function fitToCell(
  * rotation that means something, and guessing at it would be worse than
  * leaving it and saying so.
  */
-function faceForward(scene: Object3D, path: string): void {
+function faceForward(scene: Object3D, path: string, turnDeg = 0): void {
   for (const child of scene.children) {
     const { x, z } = child.rotation;
     if (Math.abs(x) > 1e-6 || Math.abs(z) > 1e-6) {
       console.warn(`${path} is rotated off the upright; leaving it as exported.`);
       continue;
     }
-    child.rotation.y = MODEL_FACING;
+    // Plus whatever turn the set records for a piece modelled side-on.
+    child.rotation.y = MODEL_FACING + (turnDeg * Math.PI) / 180;
   }
 }
 

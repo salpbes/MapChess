@@ -13,11 +13,21 @@
 //       `isCompleteSet` — so a half-made set can live in the repository, and be
 //       previewed with `?pieces=<set>`, without anybody else seeing it.
 
+import type { PieceType } from '@domain/chess/types';
+
 export interface PieceSetDef {
   /** The army that plays White, as it is spelled in the filenames. */
   readonly white: string;
   /** The army that plays Black. */
   readonly black: string;
+  /**
+   * Degrees a piece was modelled turned from the set's usual front, for the
+   * pieces that were. A standing figure is made facing forward; a field gun is
+   * usually made along its length, barrel out to the side, and left alone it
+   * fires down the rank instead of at the enemy. Positive turns it
+   * anticlockwise seen from above.
+   */
+  readonly turn?: Readonly<Partial<Record<PieceType, number>>>;
 }
 
 export const PIECE_SETS: Readonly<Record<string, PieceSetDef>> = {
@@ -27,5 +37,10 @@ export const PIECE_SETS: Readonly<Record<string, PieceSetDef>> = {
     White: the side that landed and attacked moves first, and the Anzac Cove
     board is turned so that White's back rank is the beach they came ashore on.
   */
-  ww1: { white: 'anzac', black: 'ottoman' },
+  ww1: {
+    white: 'anzac',
+    black: 'ottoman',
+    // Both field guns were modelled barrel along −X; measured, not eyeballed.
+    turn: { bishop: 90 },
+  },
 };

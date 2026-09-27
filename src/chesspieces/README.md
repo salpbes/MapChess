@@ -26,6 +26,14 @@ filenames:
 ww1: { white: 'anzac', black: 'ottoman' },
 ```
 
+**Facing.** Model standing figures facing forward the way the medieval set
+does, and they will face the enemy. Something built along its length — a field
+gun, a tank — usually comes out of Blender side-on. Say so in the set's entry
+rather than re-exporting: `turn: { bishop: 90 }` turns that piece 90°
+(anticlockwise seen from above). The WW1 field guns needed exactly that; the
+test `turns the field guns to fire at the enemy` checks the barrels point at
+the other army.
+
 A name that does not parse — `anzac-pawn.glb`, `french_pawn.glb` in the WW1
 folder, `rook.glb` — is **skipped silently**, which looks exactly like a model
 that failed to load. The rule is pinned down in
