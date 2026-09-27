@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_PIECE_SET,
+  fitToCell,
   isCompleteSet,
   modelKeyFor,
   pieceSetOf,
@@ -92,5 +93,29 @@ describe('complete sets', () => {
   it('calls a set complete at all twelve', () => {
     const all = files(types.flatMap((t) => [`anzac_${t}`, `ottoman_${t}`]));
     expect(isCompleteSet('ww1', all)).toBe(true);
+  });
+});
+
+describe('fitToCell', () => {
+  it('leaves a piece that fits exactly as it asked', () => {
+    expect(fitToCell(1, 1.16, 2)).toEqual({ tall: 1, across: 1.16, fit: 'as-asked' });
+  });
+
+  it('trims an over-wide adjustment, but never below the modelled width', () => {
+    const { tall, across, fit } = fitToCell(1, 1.3, 1.1);
+    expect(fit).toBe('trimmed');
+    expect(tall).toBe(1);
+    expect(across).toBe(1.1);
+    // Still at least as broad as modelled: the adjustment is undone, not the model.
+    expect(across).toBeGreaterThanOrEqual(tall);
+  });
+
+  it('shrinks a model too broad even as made, keeping its shape', () => {
+    // The WW1 rooks: at rook height they would need 1.2x the room a cell has.
+    const { tall, across, fit } = fitToCell(1.2, 1.2, 1);
+    expect(fit).toBe('shrunk');
+    // Height and plan by the same factor — the proportions the author made.
+    expect(across / tall).toBe(1);
+    expect(across).toBe(1);
   });
 });

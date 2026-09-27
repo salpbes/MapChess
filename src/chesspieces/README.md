@@ -50,6 +50,12 @@ A new era set needs its folder, its line in `pieceSets.ts`, and nothing else.
   get from modelling is _relative_ size — the current set is height-normalised,
   every model exactly 2.00 units tall, so which piece outranks which is decided
   by `SIZE_ADJUST` in `loadPieceModels.ts` and nowhere else.
+- **Never squeezes a figure.** A model too wide for a square even at its own
+  proportions is shrunk *evenly* until it fits, so it keeps the shape you made
+  and loses height instead. The WW1 rooks are like this: about half again as
+  wide as the medieval ones, so they stand at roughly pawn height. To get a
+  taller piece, make it narrower — about 0.70 half-width at 2.00 tall is what a
+  square holds at rook height.
 - **Stands it on its feet** — the bounding box is measured and the model is
   shifted so y = 0 is the ground and the centre is on the axis. An origin at
   the model's centre is fine.

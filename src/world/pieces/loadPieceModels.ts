@@ -269,26 +269,55 @@ export async function loadPieceModels(
       broad enough to fill its own square would have pulled all twelve pieces
       down with it, so the only way to make a castle look like a castle was to
       shrink the whole set. Clamping here costs the piece that is too wide and
-      nobody else. stand() already scales plan and height separately, so a
-      trimmed piece stands slightly slimmer than it asked for, not shorter.
+      nobody else: a width adjustment that overruns is trimmed back toward the
+      modelled width, and a model too broad even as made is shrunk whole —
+      never squeezed. See fitToCell.
     */
     const size = new Vector3();
     box.getSize(size);
     const half = Math.max(Math.max(size.x, size.z) / 2, Number.EPSILON);
-    const wanted = up * (adjust.width ?? 1);
-    const across = Math.min(wanted, (FOOTPRINT * unit) / half);
-    if (across < wanted - 1e-9) {
+    const cap = (FOOTPRINT * unit) / half;
+    const { tall, across, fit } = fitToCell(up, up * (adjust.width ?? 1), cap);
+    if (fit === 'shrunk') {
       console.warn(
-        `${type} is broader than a cell allows; its plan was trimmed to fit. ` +
-          `Lower its width in SIZE_ADJUST if that is meant to be permanent.`,
+        `${set}/${type} is broader than a cell even as modelled; shrunk whole, to ${String(Math.round((tall / up) * 100))}%, to keep its shape.`,
+      );
+    } else if (fit === 'trimmed') {
+      console.warn(
+        `${set}/${type}'s width adjustment is more than a cell allows; trimmed back toward its modelled width.`,
       );
     }
 
-    const root = stand(scene, box, up, across);
+    const root = stand(scene, box, tall, across);
     root.userData.set = set;
     models.set(key, root);
   }
   return models;
+}
+
+/**
+ * How big a piece stands, given the height it asks for (`up`), the plan width
+ * it asks for (`wanted`), and the widest a cell allows (`cap`), all as scale
+ * factors on the model.
+ *
+ * Trimming the plan is fair only down to the model's own proportions: that
+ * undoes a width adjustment, it does not reshape anybody's work. A model
+ * broader than a cell even at its natural width is shrunk whole instead, so it
+ * keeps the shape it was made with and loses stature rather than being
+ * squeezed on one axis. The WW1 rooks are the case that found it: half again
+ * the medieval rooks' width, which the old rule narrowed to 83% of what was
+ * modelled. Their author chose shape over height, and this is that choice.
+ *
+ * Exported to be tested: nothing else guards against a piece being distorted.
+ */
+export function fitToCell(
+  up: number,
+  wanted: number,
+  cap: number,
+): { tall: number; across: number; fit: 'as-asked' | 'trimmed' | 'shrunk' } {
+  if (cap < up) return { tall: cap, across: cap, fit: 'shrunk' };
+  if (wanted > cap) return { tall: up, across: cap, fit: 'trimmed' };
+  return { tall: up, across: wanted, fit: 'as-asked' };
 }
 
 /**
