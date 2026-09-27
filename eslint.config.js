@@ -17,6 +17,9 @@ export default tseslint.config(
       'dist/',
       'node_modules/',
       'coverage/',
+      // Written by Playwright while a run is in progress, not source.
+      'test-results/',
+      'playwright-report/',
       'docs/**/*.html',
       'public/engine/',
       'public/basis/',

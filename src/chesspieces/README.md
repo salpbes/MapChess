@@ -44,7 +44,11 @@ that failed to load. The rule is pinned down in
 - **Anywhere on the map:** `medieval`, always. It is the original set.
 - **A famous battlefield:** its era's set — `ww1` for Anzac Cove, Verdun and
   Kobarid — but **only once that set has all twelve pieces.** Until then those
-  boards keep the medieval pieces, so players never see a half-made set.
+  boards keep the medieval pieces, so players never see a half-made set. The
+  WW1 set is complete and live.
+- **Give the two sides different tones.** A player has to tell their pieces
+  from the opponent's anywhere on the board. The medieval armies differ in
+  brightness by about 73/255; the WW1 armies by about 26, and their pawns by 2.
 - **A preview, for you:** add `?pieces=ww1` to the address. Every board then
   uses that set, with any piece it does not have yet taken from `medieval`, so
   you can see new figures on real ground as each one is finished.

@@ -36,28 +36,36 @@ async function setOf(page: Page, color: 'white' | 'black', type: string): Promis
 }
 
 test.describe('piece sets', () => {
-  test('keeps a half-made set away from players, even on its own battlefield', async ({ page }) => {
+  test("dresses a finished set's battlefield in it, for every player", async ({ page }) => {
     await bootBoard(page);
     await startGame(page);
+    // No preview in the address: this is what anybody choosing Anzac Cove sees.
     await tapControl(page, 'Famous fields');
     await page.locator('.area-bar__list-item', { hasText: 'Anzac Cove' }).click();
 
-    // The WW1 set has two pieces of twelve, so Gallipoli is still medieval.
-    expect(await page.evaluate(() => window.__mapchess?.pieceSet())).toBe('medieval');
-    await expect.poll(() => setOf(page, 'white', 'pawn'), { timeout: 30_000 }).toBe('medieval');
+    expect(await page.evaluate(() => window.__mapchess?.pieceSet())).toBe('ww1');
+    for (const type of ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']) {
+      await expect.poll(() => setOf(page, 'white', type), { timeout: 30_000 }).toBe('ww1');
+      expect(await setOf(page, 'black', type), `black ${type}`).toBe('ww1');
+    }
   });
 
-  test('previews an unfinished set, filling its gaps from the original', async ({ page }) => {
+  test('keeps the original pieces everywhere that is not a named battle', async ({ page }) => {
+    // Holy Island, the default board. A half-made set is kept from players by
+    // choosePieceSet, which the unit tests pin; this pins the other promise —
+    // that a finished era set stays on its own battlefields.
+    await bootBoard(page);
+    await startGame(page);
+    expect(await page.evaluate(() => window.__mapchess?.pieceSet())).toBe('medieval');
+    await expect.poll(() => setOf(page, 'white', 'knight'), { timeout: 30_000 }).toBe('medieval');
+  });
+
+  test('previews a set on any board', async ({ page }) => {
     await bootBoard(page, '/?pieces=ww1');
     await startGame(page);
-
     expect(await page.evaluate(() => window.__mapchess?.pieceSet())).toBe('ww1');
-    // The figures that exist are the new ones...
-    await expect.poll(() => setOf(page, 'white', 'pawn'), { timeout: 30_000 }).toBe('ww1');
-    await expect.poll(() => setOf(page, 'black', 'pawn'), { timeout: 30_000 }).toBe('ww1');
-    // ...and the rest of the board is still a full game.
-    expect(await setOf(page, 'white', 'knight')).toBe('medieval');
-    expect(await setOf(page, 'black', 'king')).toBe('medieval');
+    await expect.poll(() => setOf(page, 'white', 'queen'), { timeout: 30_000 }).toBe('ww1');
+    expect(await setOf(page, 'black', 'king')).toBe('ww1');
   });
 
   test('never squeezes a figure to make it fit', async ({ page }) => {

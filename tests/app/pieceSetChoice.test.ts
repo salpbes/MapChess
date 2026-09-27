@@ -28,6 +28,29 @@ describe('choosePieceSet', () => {
     expect(choosePieceSet(anzac.area, null, facts(['medieval']))).toBe('medieval');
   });
 
+  it('dresses every First World War place in the WW1 set, not just Anzac Cove', () => {
+    const ww1 = CURATED_PLACES.filter((p) => p.era === 'ww1');
+    expect(ww1.map((p) => p.name).sort()).toEqual(['Anzac Cove', 'Kobarid', 'Verdun']);
+    for (const place of ww1) {
+      expect(choosePieceSet(place.area, null, facts(['medieval', 'ww1'])), place.name).toBe('ww1');
+    }
+  });
+
+  it('keeps every other famous place on the original set', () => {
+    for (const place of CURATED_PLACES.filter((p) => p.era !== 'ww1')) {
+      expect(choosePieceSet(place.area, null, facts(['medieval', 'ww1'])), place.name).toBe(
+        'medieval',
+      );
+    }
+  });
+
+  it('stops calling it a WW1 board once the square is dragged off the battlefield', () => {
+    const verdun = CURATED_PLACES.find((p) => p.name === 'Verdun');
+    if (verdun === undefined) throw new Error('Verdun missing');
+    const nudged = { ...verdun.area, centerLat: verdun.area.centerLat + 0.001 };
+    expect(choosePieceSet(nudged, null, facts(['medieval', 'ww1']))).toBe('medieval');
+  });
+
   it('dresses a named battle in its era once the set is whole', () => {
     expect(choosePieceSet(anzac.area, null, facts(['medieval', 'ww1']))).toBe('ww1');
   });
