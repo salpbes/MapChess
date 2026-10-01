@@ -12,6 +12,7 @@ import {
   curatedByEra,
   curatedPlaceAt,
   isBattlefield,
+  moodFor,
   namedBriefing,
 } from '@app/curatedPlaces';
 import { FIXTURE_AREAS } from '@mapdata/model/fixtureAreas';
@@ -108,5 +109,23 @@ describe('curated places', () => {
     expect(named.remark).toBe(briefing.remark);
     // No "Field" line when the map has no name, or the same one.
     expect(namedBriefing(briefing, cassino, null).lines[1]).toEqual(briefing.lines[0]);
+  });
+
+  it('opens each battle in weather it has a reason for, and anywhere else at midday', () => {
+    const at = (name: string) => {
+      const p = CURATED_PLACES.find((q) => q.name === name);
+      if (p === undefined) throw new Error(`${name} missing`);
+      return moodFor(p.area);
+    };
+    expect(at('Lookout Mountain')).toBe('mist');
+    expect(at('Kobarid')).toBe('mist');
+    expect(at('Verdun')).toBe('storm');
+    expect(at('Glencoe')).toBe('storm');
+    expect(at('Gettysburg')).toBe('midday');
+    // The default board, and anywhere a player picks for themselves.
+    expect(at('Lindisfarne')).toBe('midday');
+    expect(moodFor({ centerLat: 10, centerLon: 10, sizeMeters: 2000, rotationDeg: 0 })).toBe(
+      'midday',
+    );
   });
 });

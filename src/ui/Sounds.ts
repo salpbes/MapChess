@@ -11,7 +11,15 @@
 //       moved. It is off until asked for: sound that starts on its own is the
 //       rudest thing a web page can do.
 
+import type { Square } from '@domain/board/Square';
+import type { CoverName } from '@domain/theme/types';
 import type { GameBus } from '@game/GameEvents';
+import { rainsIn } from '@world/scene/Atmosphere';
+import type { Mood } from '@world/scene/Atmosphere';
+
+import { playGround } from './groundAudio';
+import { playNearThunder, playThunder, startStorm } from './weatherAudio';
+import type { Ambience } from './weatherAudio';
 
 /** Quiet enough to leave on. */
 const VOLUME = 0.16;
@@ -46,11 +54,16 @@ export class Sounds {
   private pending: readonly Note[] | null = null;
   private waking: (() => void) | null = null;
   private readonly unsubscribe: (() => void)[];
+  private mood: Mood = 'midday';
+  /** What a square is, on the board now in play; null before it is known. */
+  private groundOf: (square: Square) => CoverName | null = () => null;
+  private ambience: Ambience | null = null;
 
   public constructor(bus: GameBus) {
     this.unsubscribe = [
       bus.on('move-played', (move) => {
         this.queue(move.captured === null ? MOVE : CAPTURE);
+        this.groundUnder(move.to, move.captured !== null);
       }),
       bus.on('status-changed', ({ status }) => {
         if (status.kind === 'playing' && status.inCheck) this.queue(CHECK);
@@ -67,13 +80,75 @@ export class Sounds {
    */
   public setEnabled(enabled: boolean): void {
     this.enabled = enabled;
-    if (!enabled) return;
+    if (!enabled) {
+      this.refreshAmbience();
+      return;
+    }
     this.context ??= makeContext();
     claimPlayback();
     this.wake();
     // Usually called straight from the switch's own click, which is the only
     // moment iOS will unlock a context in.
     this.unlock();
+    this.refreshAmbience();
+  }
+
+  /**
+   * The weather the board is in. A storm brings rain and wind, for as long as
+   * it lasts and the sound is on; the rest are quiet.
+   */
+  public setWeather(mood: Mood): void {
+    this.mood = mood;
+    this.refreshAmbience();
+  }
+
+  /** The weather being heard right now, if any — for tests. */
+  public get ambient(): Mood | null {
+    return this.ambience === null ? null : this.mood;
+  }
+
+  /**
+   * Thunder after a lightning strike, if the sound is on: a far strike rolls
+   * in after a delay, a near one hits at once.
+   */
+  public thunder(near: boolean, delaySeconds: number): void {
+    const context = this.context;
+    if (!this.enabled || context === null || context.state === 'closed') return;
+    if (near) playNearThunder(context, delaySeconds);
+    else playThunder(context, delaySeconds);
+  }
+
+  /**
+   * Tells the sounds what each square is, whenever a board arrives, so a move
+   * can sound like the ground it lands on.
+   */
+  public setGround(groundOf: (square: Square) => CoverName | null): void {
+    this.groundOf = groundOf;
+  }
+
+  private groundUnder(square: Square, heavy: boolean): void {
+    const context = this.context;
+    if (!this.enabled || context?.state !== 'running') return;
+    const cover = this.groundOf(square);
+    if (cover !== null) playGround(context, cover, heavy);
+  }
+
+  /** How hard it is raining, so the rain's sound can follow the rain. */
+  public setRainIntensity(intensity: number): void {
+    this.ambience?.setIntensity(intensity);
+  }
+
+  private refreshAmbience(): void {
+    const wanted = this.enabled && rainsIn(this.mood);
+    const context = this.context;
+    if (wanted && this.ambience === null && context !== null && context.state !== 'closed') {
+      // Started even on a context still waiting for a first tap: it will be
+      // heard the moment the context wakes, already raining.
+      this.ambience = startStorm(context);
+    } else if (!wanted && this.ambience !== null) {
+      this.ambience.stop();
+      this.ambience = null;
+    }
   }
 
   /** Resumes the context, and if it will not resume yet, waits for a gesture. */
@@ -126,6 +201,8 @@ export class Sounds {
   }
 
   public dispose(): void {
+    this.ambience?.stop();
+    this.ambience = null;
     this.stopWaiting();
     for (const off of this.unsubscribe) off();
     void this.context?.close().catch(() => undefined);

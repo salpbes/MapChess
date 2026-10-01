@@ -235,6 +235,8 @@ function makeMaterial(role: HighlightRole): MeshBasicMaterial {
     opacity,
     transparent: true,
     depthWrite: false,
+    // Weather may blur the far hills, never where a piece can go.
+    fog: false,
     // Nudges the overlay toward the camera so it never z-fights the platform.
     polygonOffset: true,
     polygonOffsetFactor: -1,
@@ -249,6 +251,7 @@ function makeMarkMaterial(role: MarkRole): MeshBasicMaterial {
     opacity,
     transparent: true,
     depthWrite: false,
+    fog: false,
     // Flat overlays with no inside: drawing both faces saves caring which way
     // a generated ring or disc happens to wind.
     side: DoubleSide,

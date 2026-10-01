@@ -84,6 +84,7 @@ import { ViewControls } from '@ui/ViewControls';
 import { BoardScene } from '@world/builders/BoardScene';
 import { BoardView } from '@world/pieces/BoardView';
 import { HighlightLayer } from '@world/pieces/HighlightLayer';
+import { CaptureEffects } from '@world/pieces/CaptureEffects';
 import { MoveAnimator } from '@world/pieces/MoveAnimator';
 import { PieceLayer } from '@world/pieces/PieceLayer';
 import { ModelPieceFactory } from '@world/pieces/ModelPieceFactory';
@@ -92,6 +93,8 @@ import { DEFAULT_PIECE_SET, isCompleteSet, loadPieceModels } from '@world/pieces
 import type { ModelKey, PieceModels } from '@world/pieces/loadPieceModels';
 import type { Object3D } from 'three';
 import { PIECE_SETS } from '@world/pieces/pieceSets';
+import { EPISODE_REST_SECONDS, thunderEpisode, thundersIn } from '@world/scene/Atmosphere';
+import type { Mood } from '@world/scene/Atmosphere';
 import { BoardPicker } from '@world/scene/BoardPicker';
 import { PointerInput } from '@world/scene/PointerInput';
 import { WorldStage } from '@world/scene/WorldStage';
@@ -104,6 +107,7 @@ import {
   curatedByEra,
   curatedPlaceAt,
   isBattlefield,
+  moodFor,
   namedBriefing,
 } from './curatedPlaces';
 import type { CuratedPlace } from './curatedPlaces';
@@ -118,6 +122,10 @@ export interface AppHandle {
   features(): readonly MapFeature[] | null;
   /** The piece set the board is being dressed in: "medieval" unless it is a named battle. */
   pieceSet(): string;
+  /** The weather being heard, if the sound is on and it is storming. */
+  weatherSound(): Mood | null;
+  /** A lightning strike now, as the storm would send one — near or far. For tests. */
+  strike(near: boolean): void;
   dispose(): void;
 }
 
@@ -151,10 +159,12 @@ export function bootstrap(
   const pieces = new PieceLayer(initialLayout, modelled);
   const highlights = new HighlightLayer(initialLayout);
   const animator = new MoveAnimator({ unit: cellUnit });
-  const view = new BoardView(pieces, highlights, animator);
+  const captures = new CaptureEffects(cellUnit);
+  const view = new BoardView(pieces, highlights, animator, captures);
   stage.add(...view.objects);
   const stopAnimator = stage.loop.onTick((dt) => {
     animator.update(dt);
+    captures.update(dt);
     highlights.update(dt);
   });
 
@@ -574,6 +584,10 @@ export function bootstrap(
     }
     boardScene.show(model);
     themeTracker.setTheme(model.theme);
+    // A move sounds like the ground it lands on; a flat board has no ground to tell.
+    const cover = model.cover;
+    sounds.setGround((square) => cover?.get(square) ?? null);
+    captures.setGround((square) => cover?.get(square) ?? null);
     // The arrival, marked once: when the chosen place's board is actually there.
     if (
       model.features !== null &&
@@ -597,6 +611,11 @@ export function bootstrap(
 
   function loadArea(area: SelectedArea): void {
     boardArea = area;
+    // Each board opens in its own weather; the button shows it and can change it.
+    const mood = moodFor(area);
+    stage.setMood(mood);
+    viewControls.setMood(mood);
+    sounds.setWeather(mood);
     usePieceSet(choosePieceSet(area, previewSet, setFacts));
     const generation = composer.beginArea();
     areaGeneration = generation;
@@ -659,6 +678,10 @@ export function bootstrap(
     onSceneryChanged: (on) => {
       boardScene.setSceneryVisible(on);
     },
+    onMoodChanged: (mood) => {
+      stage.setMood(mood);
+      sounds.setWeather(mood);
+    },
     onCoachingChanged: (on) => {
       game.setCoaching(on);
     },
@@ -671,6 +694,51 @@ export function bootstrap(
     onTopDown: () => {
       stage.lookDown();
     },
+  });
+
+  /*
+    The storm comes in episodes, as the author described it: a strike close
+    by — lit hard, its thunder right on top of you — then ten to fifteen
+    seconds later two far off, a few seconds apart, each heard a moment after
+    its light. Then a quiet spell, and another. Strikes are never closer than
+    MIN_STRIKE_GAP_SECONDS, which keeps the flashes inside the photosensitivity
+    guideline. The stage decides whether a strike is seen — never for a player
+    who has asked for less motion — and the thunder follows either way: sound
+    is not motion, and a storm you cannot see can still be heard.
+  */
+  const strikeTimers: number[] = [];
+  const strike = (near: boolean): void => {
+    if (!thundersIn(stage.mood)) return;
+    stage.flash(near);
+    sounds.thunder(near, near ? 0.1 : 0.8 + Math.random() * 1.8);
+  };
+  const scheduleEpisode = (delaySeconds: number): void => {
+    strikeTimers.push(
+      window.setTimeout(() => {
+        strikeTimers.length = 0;
+        const episode = thunderEpisode();
+        for (const { at, near } of episode) {
+          strikeTimers.push(
+            window.setTimeout(() => {
+              strike(near);
+            }, at * 1000),
+          );
+        }
+        const { min, max } = EPISODE_REST_SECONDS;
+        const last = episode[episode.length - 1]?.at ?? 0;
+        scheduleEpisode(last + min + Math.random() * (max - min));
+      }, delaySeconds * 1000),
+    );
+  };
+  scheduleEpisode(6 + Math.random() * 6);
+
+  // The rain's sound follows the rain on screen, a few times a second.
+  let sinceRainSound = 0;
+  const stopRainSound = stage.loop.onTick((dt) => {
+    sinceRainSound += dt;
+    if (sinceRainSound < 0.25) return;
+    sinceRainSound = 0;
+    sounds.setRainIntensity(stage.rainIntensity);
   });
 
   loadArea(areaBar.current);
@@ -688,6 +756,8 @@ export function bootstrap(
     heightField: () => elevation.heightField,
     features: () => features.features,
     pieceSet: () => wantedSet ?? DEFAULT_PIECE_SET,
+    weatherSound: () => sounds.ambient,
+    strike,
     dispose: () => {
       input.dispose();
       boardDebug?.dispose();
@@ -712,6 +782,8 @@ export function bootstrap(
       dock.dispose();
       column.dispose();
       stopPeek();
+      for (const timer of strikeTimers) window.clearTimeout(timer);
+      stopRainSound();
       narrow.removeEventListener('change', fitCoordinates);
       stopStanding();
       keyboard.dispose();

@@ -114,6 +114,8 @@ export class CoordinateLabels {
           opacity: RESTING_OPACITY,
           depthWrite: false,
           depthTest: false,
+          // Read at a glance in any weather: mist may hide the far hills, not the 8.
+          fog: false,
           side: DoubleSide,
         }),
       );

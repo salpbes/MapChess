@@ -52,6 +52,28 @@ const PATHS: Readonly<Record<string, readonly string[]>> = {
   tagOff: ['M20 4h-7.2L4 12.8 11.2 20 20 11.2V4Z', 'M3.5 3.5l17 17'],
   // A board seen square on, which is what the button gives you.
   topDown: ['M4 4h16v16H4Z', 'M12 4v16', 'M4 12h16'],
+  // The weather button wears the weather it is showing.
+  sun: [
+    'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z',
+    'M12 2.5V5',
+    'M12 19v2.5',
+    'M2.5 12H5',
+    'M19 12h2.5',
+    'M5.3 5.3l1.8 1.8',
+    'M16.9 16.9l1.8 1.8',
+    'M5.3 18.7l1.8-1.8',
+    'M16.9 7.1l1.8-1.8',
+  ],
+  // Wavy, so it never reads as the menu's three straight rules.
+  mist: [
+    'M3 8.5c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0',
+    'M3 13.5c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0',
+    'M7 18.5h10',
+  ],
+  storm: [
+    'M7 14a4 4 0 1 1 .9-7.9A5 5 0 0 1 17.6 7 3.5 3.5 0 1 1 17 14H7Z',
+    'M12.5 14.5l-2 3.5h3l-2 3.5',
+  ],
   // A tree: the woods and the rest of the scenery round the board.
   tree: ['M12 3 6 13h3.5L6 19h12l-3.5-6H18L12 3Z', 'M12 19v2.5'],
   // A board's corner with ticks along both edges — letters below, numbers on

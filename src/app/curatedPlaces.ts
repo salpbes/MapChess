@@ -41,6 +41,7 @@
 import type { Briefing, BriefingLine } from '@mapdata/board/buildBriefing';
 import { FIXTURE_AREAS } from '@mapdata/model/fixtureAreas';
 import type { SelectedArea } from '@mapdata/model/SelectedArea';
+import type { Mood } from '@world/scene/Atmosphere';
 
 /**
  * The sections the list is shown in. Offline is not an era, but it is how a
@@ -69,6 +70,12 @@ export interface CuratedPlace {
   readonly area: SelectedArea;
   /** True for the areas whose elevation ships in the bundle. */
   readonly offline?: true;
+  /**
+   * The weather a board opens in, where the battle gives one a reason: mist
+   * where fog was part of the fighting, storm where the season was. Midday
+   * otherwise. The player's weather button changes it for the board in hand.
+   */
+  readonly mood?: Mood;
 }
 
 function at(lat: number, lon: number, sizeMeters = 2000, rotationDeg = 0): SelectedArea {
@@ -140,6 +147,8 @@ export const CURATED_PLACES: readonly CuratedPlace[] = [
   // 449 m · 9 named — the most vertical board in the list
   {
     name: 'Lookout Mountain',
+    // "The battle above the clouds": fog lay on the mountain through the fighting.
+    mood: 'mist',
     era: 'early-modern',
     blurb: 'The battle they fought above the clouds · 1863',
     area: at(35.0086, -85.3389),
@@ -163,6 +172,8 @@ export const CURATED_PLACES: readonly CuratedPlace[] = [
   // 105 m · 34 named — including Douaumont, the village that was never rebuilt
   {
     name: 'Verdun',
+    // Fought from February, through snow, rain and mud.
+    mood: 'storm',
     era: 'ww1',
     blurb: 'Fort Douaumont, and a village left as it fell · 1916',
     area: at(49.2108, 5.4342),
@@ -170,6 +181,8 @@ export const CURATED_PLACES: readonly CuratedPlace[] = [
   // 307 m · 23 named — the Isonzo between the mountains
   {
     name: 'Kobarid',
+    // The Caporetto offensive opened in fog and rain.
+    mood: 'mist',
     era: 'ww1',
     blurb: 'The river valley under the Julian Alps · 1917',
     area: at(46.2461, 13.5789),
@@ -177,6 +190,8 @@ export const CURATED_PLACES: readonly CuratedPlace[] = [
   // 77 m · 99 named — and the map names them in Russian
   {
     name: 'Mamayev Kurgan',
+    // Held into the Stalingrad winter.
+    mood: 'storm',
     era: 'ww2',
     blurb: 'The hill that overlooked Stalingrad · 1942',
     area: at(48.7422, 44.5372),
@@ -184,6 +199,8 @@ export const CURATED_PLACES: readonly CuratedPlace[] = [
   // 457 m · 32 named — the best board in the survey on both counts at once
   {
     name: 'Monte Cassino',
+    // The winter battles were fought in rain, mud and cold.
+    mood: 'storm',
     era: 'ww2',
     blurb: 'The abbey on its mountain · 1944',
     area: at(41.4894, 13.8139),
@@ -191,7 +208,8 @@ export const CURATED_PLACES: readonly CuratedPlace[] = [
 
   fixture('lindisfarne', 'Tidal sands and a causeway that drowns twice a day'),
   fixture('rievaulx', 'An abbey in a wooded valley'),
-  fixture('glencoe', 'A glen steep enough to lose an army in · 1692'),
+  // The massacre was in February, in a blizzard.
+  { ...fixture('glencoe', 'A glen steep enough to lose an army in · 1692'), mood: 'storm' },
 ];
 
 /**
@@ -256,4 +274,9 @@ export function namedBriefing(
   if (fieldName !== null && fieldName !== place.name)
     lines.push({ label: 'Field', text: fieldName });
   return { ...briefing, title: place.name, lines: [...lines, ...briefing.lines] };
+}
+
+/** The weather a board opens in: its battle's, or midday anywhere else. */
+export function moodFor(area: SelectedArea): Mood {
+  return curatedPlaceAt(area)?.mood ?? 'midday';
 }

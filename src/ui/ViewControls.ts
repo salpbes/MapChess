@@ -14,6 +14,8 @@
 //       while giving the board back.
 
 import type { LabelMode } from '@world/builders/LabelBuilder';
+import { MOODS } from '@world/scene/Atmosphere';
+import type { Mood } from '@world/scene/Atmosphere';
 
 import { iconButton, setIcon } from './icons';
 import type { IconName } from './icons';
@@ -43,6 +45,8 @@ export interface ViewControlsDeps {
   readonly onCoachingChanged: (on: boolean) => void;
   readonly onCoordinatesChanged: (on: boolean) => void;
   readonly onSceneryChanged: (on: boolean) => void;
+  /** The player chose different weather for the board in hand. */
+  readonly onMoodChanged: (mood: Mood) => void;
   readonly onSoundChanged: (on: boolean) => void;
   readonly onRecenter: () => void;
   /** Straight down at the whole board, for reading it as a chessboard. */
@@ -62,6 +66,8 @@ export class ViewControls {
   private coordinating: boolean;
   private readonly scenery: HTMLButtonElement;
   private scenic: boolean;
+  private readonly weather: HTMLButtonElement;
+  private mood: Mood = 'midday';
   private sounding: boolean;
 
   public constructor(container: HTMLElement, deps: ViewControlsDeps) {
@@ -131,10 +137,24 @@ export class ViewControls {
       this.setScenery(!this.scenic, deps);
     });
 
+    /*
+      Not remembered, unlike the switches beside it. A board opens in its own
+      weather — mist at Kobarid, storm at Verdun — and a choice made at one
+      battle would otherwise follow the player onto the next, which is exactly
+      what the per-battle weather is for.
+    */
+    this.weather = iconButton('sun', 'Weather', 'view-controls__button', () => {
+      const next = MOODS[(MOODS.indexOf(this.mood) + 1) % MOODS.length] ?? 'midday';
+      this.mood = next;
+      this.render();
+      deps.onMoodChanged(next);
+    });
+
     this.root.append(
       this.labels,
       this.coords,
       this.scenery,
+      this.weather,
       this.coach,
       this.assess,
       this.sound,
@@ -154,6 +174,12 @@ export class ViewControls {
     // start audio before a gesture; skipping this made the button show "on",
     // stay silent, and need pressing twice to be heard.
     deps.onSoundChanged(this.sounding);
+  }
+
+  /** Shows the weather a new board opened in, without asking for it again. */
+  public setMood(mood: Mood): void {
+    this.mood = mood;
+    this.render();
   }
 
   public get labelMode(): LabelMode {
@@ -211,6 +237,11 @@ export class ViewControls {
   }
 
   private render(): void {
+    const next = MOODS[(MOODS.indexOf(this.mood) + 1) % MOODS.length] ?? 'midday';
+    setIcon(this.weather, MOOD_ICON[this.mood]);
+    const weatherLabel = `Weather: ${MOOD_NAME[this.mood]} — change to ${MOOD_NAME[next]}`;
+    this.weather.dataset.tip = weatherLabel;
+    this.weather.setAttribute('aria-label', weatherLabel);
     const sceneryLabel = this.scenic
       ? 'Hide the trees'
       : 'Show the trees — the woods on and around the board';
@@ -247,6 +278,13 @@ export class ViewControls {
     this.labels.classList.toggle('view-controls__button--off', this.mode === 'off');
   }
 }
+
+const MOOD_ICON: Readonly<Record<Mood, IconName>> = { midday: 'sun', mist: 'mist', storm: 'storm' };
+const MOOD_NAME: Readonly<Record<Mood, string>> = {
+  midday: 'midday',
+  mist: 'mist',
+  storm: 'storm',
+};
 
 /** Stored as the words "on" and "off"; `fallback` covers never having chosen. */
 function readFlag(key: string, fallback = false): boolean {

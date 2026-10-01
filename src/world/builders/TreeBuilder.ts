@@ -34,6 +34,7 @@ import type { BufferGeometry } from 'three';
 import { containsPoint } from '@domain/board/polygon';
 import type { BoardPoint, Cell } from '@domain/board/types';
 import type { MapFeature } from '@mapdata/model/MapFeature';
+import { weather } from '@world/scene/Atmosphere';
 
 export type TreeShape = 'broadleaf' | 'conifer';
 
@@ -176,6 +177,44 @@ function crownGeometry(shape: TreeShape): BufferGeometry {
   return new IcosahedronGeometry(h * 0.36, 0).scale(1, 0.9, 1).translate(0, h * 0.6, 0);
 }
 
+/**
+ * Lets the wind bend a tree: more at the crown than at the root, in gusts,
+ * each tree a little out of step with its neighbours. Done in the vertex
+ * shader from the shared weather clock, so a storm costs the CPU nothing.
+ *
+ * Every tree is planted with its own turn about Y, and a displacement made in
+ * its own frame would turn with it — two thousand trees each leaning a
+ * different way. So the world-space wind is carried back into the tree's
+ * frame through its instance matrix first, and the whole wood leans together,
+ * the way the rain is slanting.
+ */
+function swayInWind(material: MeshLambertMaterial): void {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = weather.time;
+    shader.uniforms.uWind = weather.wind;
+    shader.uniforms.uWindDir = weather.windDir;
+    shader.vertexShader =
+      'uniform float uTime;\nuniform float uWind;\nuniform vec2 uWindDir;\n' +
+      shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        #ifdef USE_INSTANCING
+          vec2 ax = instanceMatrix[0].xz;
+          vec2 az = instanceMatrix[2].xz;
+          float phase = instanceMatrix[3].x * 0.011 + instanceMatrix[3].z * 0.017;
+          float bend = clamp(position.y / ${TREE_HEIGHT.toFixed(2)}, 0.0, 1.0);
+          bend *= bend;
+          float gust = 0.65 + 0.35 * sin(uTime * (1.4 + 0.8 * uWind) + phase)
+                     + 0.15 * sin(uTime * 3.7 + phase * 2.3);
+          vec2 lean = uWindDir * uWind * ${(TREE_HEIGHT * 0.22).toFixed(2)} * bend * gust;
+          transformed.xz += vec2(dot(lean, ax), dot(lean, az)) / dot(ax, ax);
+        #endif`,
+      );
+  };
+  // Every tree material compiles to the same program.
+  material.customProgramCacheKey = () => 'tree-in-wind';
+}
+
 export function buildTrees(spots: readonly TreeSpot[]): Group {
   const group = new Group();
   group.name = 'trees';
@@ -192,14 +231,14 @@ export function buildTrees(spots: readonly TreeSpot[]): Group {
   for (const shape of ['broadleaf', 'conifer'] as const) {
     const mine = spots.filter((s) => s.shape === shape);
     if (mine.length === 0) continue;
-    const crowns = new InstancedMesh(
-      crownGeometry(shape),
-      new MeshLambertMaterial({ color: CROWN[shape], flatShading: true }),
-      mine.length,
-    );
+    const crownMaterial = new MeshLambertMaterial({ color: CROWN[shape], flatShading: true });
+    const trunkMaterial = new MeshLambertMaterial({ color: TRUNK, flatShading: true });
+    swayInWind(crownMaterial);
+    swayInWind(trunkMaterial);
+    const crowns = new InstancedMesh(crownGeometry(shape), crownMaterial, mine.length);
     const trunks = new InstancedMesh(
       shape === 'broadleaf' ? trunk : trunk.clone(),
-      new MeshLambertMaterial({ color: TRUNK, flatShading: true }),
+      trunkMaterial,
       mine.length,
     );
     mine.forEach((s, i) => {

@@ -83,6 +83,18 @@ export class PieceLayer {
     this.group.remove(object);
   }
 
+  /**
+   * Takes a piece off the board's books but leaves it in the scene, for
+   * CaptureEffects to knock over: the one transform in this game that tilts a
+   * piece, and only once it is no longer on the board. The caller removes it.
+   */
+  public release(square: Square): Object3D | null {
+    const object = this.bySquare.get(square);
+    if (object === undefined) return null;
+    this.bySquare.delete(square);
+    return object;
+  }
+
   /** Swaps the mesh on a square for a different piece (promotion). */
   public replace(square: Square, piece: Piece): void {
     this.remove(square);
