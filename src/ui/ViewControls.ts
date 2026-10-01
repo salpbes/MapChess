@@ -22,6 +22,7 @@ const STORAGE_KEY = 'mapchess.labelMode';
 const ASSESS_KEY = 'mapchess.assessing';
 const SOUND_KEY = 'mapchess.sound';
 const COACH_KEY = 'mapchess.coach';
+const COORDS_KEY = 'mapchess.coordinates';
 /** Cycled in this order by repeated clicks. */
 const MODES: readonly LabelMode[] = ['names', 'markers', 'off'];
 const MODE_ICON: Readonly<Record<LabelMode, IconName>> = {
@@ -39,6 +40,7 @@ export interface ViewControlsDeps {
   readonly onLabelsChanged: (mode: LabelMode) => void;
   readonly onAssessingChanged: (on: boolean) => void;
   readonly onCoachingChanged: (on: boolean) => void;
+  readonly onCoordinatesChanged: (on: boolean) => void;
   readonly onSoundChanged: (on: boolean) => void;
   readonly onRecenter: () => void;
   /** Straight down at the whole board, for reading it as a chessboard. */
@@ -54,6 +56,8 @@ export class ViewControls {
   private mode: LabelMode;
   private assessing: boolean;
   private coaching: boolean;
+  private readonly coords: HTMLButtonElement;
+  private coordinating: boolean;
   private sounding: boolean;
 
   public constructor(container: HTMLElement, deps: ViewControlsDeps) {
@@ -70,6 +74,9 @@ export class ViewControls {
     */
     this.assessing = readFlag(ASSESS_KEY, true);
     this.coaching = readFlag(COACH_KEY, true);
+    // On for the same reason: the coaching says "play e4", and a beginner
+    // needs to be able to find e4 before they will think to look for a switch.
+    this.coordinating = readFlag(COORDS_KEY, true);
     this.sounding = readFlag(SOUND_KEY);
 
     this.root = document.createElement('div');
@@ -109,7 +116,19 @@ export class ViewControls {
       deps.onTopDown,
     );
 
-    this.root.append(this.labels, this.coach, this.assess, this.sound, topDown, recenter);
+    this.coords = iconButton('coords', 'Board coordinates', 'view-controls__button', () => {
+      this.setCoordinates(!this.coordinating, deps);
+    });
+
+    this.root.append(
+      this.labels,
+      this.coords,
+      this.coach,
+      this.assess,
+      this.sound,
+      topDown,
+      recenter,
+    );
     container.appendChild(this.root);
 
     this.render();
@@ -117,6 +136,7 @@ export class ViewControls {
     deps.onLabelsChanged(this.mode);
     deps.onAssessingChanged(this.assessing);
     deps.onCoachingChanged(this.coaching);
+    deps.onCoordinatesChanged(this.coordinating);
     // Applied like the others. Sounds handles the fact that a browser will not
     // start audio before a gesture; skipping this made the button show "on",
     // stay silent, and need pressing twice to be heard.
@@ -163,7 +183,21 @@ export class ViewControls {
     deps.onSoundChanged(on);
   }
 
+  private setCoordinates(on: boolean, deps: ViewControlsDeps): void {
+    this.coordinating = on;
+    remember(COORDS_KEY, on);
+    this.render();
+    deps.onCoordinatesChanged(on);
+  }
+
   private render(): void {
+    const coordsLabel = this.coordinating
+      ? 'Hide the board coordinates'
+      : 'Show the board coordinates — a to h, 1 to 8 round the edge';
+    this.coords.dataset.tip = coordsLabel;
+    this.coords.setAttribute('aria-label', coordsLabel);
+    this.coords.classList.toggle('view-controls__button--off', !this.coordinating);
+
     this.assess.dataset.tip = this.assessing
       ? 'Hide how the game stands'
       : 'Show how the game stands — the engine rates the position after each move';

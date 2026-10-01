@@ -305,6 +305,9 @@ export function bootstrap(
   const identityCard = new IdentityCard(briefing.selectionSlot, bus, themeTracker);
   // The same line, in the one place a phone can see it while the drawer is shut.
   const stopPeek = bus.on('selection-changed', ({ square }) => {
+    // A selected square keeps its letter and number lit, so a beginner can
+    // read where the piece they picked up stands.
+    boardScene.setSelectedSquare(square);
     sheet.setPeek(square === null ? null : identityLine(themeTracker.describe(square)));
   });
   // The same verdict the card carries, in the one place a phone can read it
@@ -524,6 +527,17 @@ export function bootstrap(
 
   // --- board: flat until terrain arrives, then warped (Phase 8) ---
   const boardScene = new BoardScene({ stage, pieces, highlights, picker });
+  /*
+    Coordinates are sized in metres, so they shrink with the board, and a phone
+    shows the board small: at desktop size they could not be read on a 390 px
+    screen. The same breakpoint the stylesheet uses for the phone layout.
+  */
+  const narrow = window.matchMedia('(max-width: 880px), (max-height: 520px)');
+  const fitCoordinates = (): void => {
+    boardScene.setCoordinateScale(narrow.matches ? 1.8 : 1);
+  };
+  fitCoordinates();
+  narrow.addEventListener('change', fitCoordinates);
   const composer = new BoardComposer(config.boardSizeMeters, ({ model, mode }) => {
     /*
       A battlefield is headed with its battle. Derived from the area itself, so a
@@ -636,6 +650,9 @@ export function bootstrap(
     onAssessingChanged: (on) => {
       game.setAssessing(on);
     },
+    onCoordinatesChanged: (on) => {
+      boardScene.setCoordinatesVisible(on);
+    },
     onCoachingChanged: (on) => {
       game.setCoaching(on);
     },
@@ -689,6 +706,7 @@ export function bootstrap(
       dock.dispose();
       column.dispose();
       stopPeek();
+      narrow.removeEventListener('change', fitCoordinates);
       stopStanding();
       keyboard.dispose();
       announcer.dispose();

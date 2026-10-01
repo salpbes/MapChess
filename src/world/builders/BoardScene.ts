@@ -16,6 +16,7 @@ import type { Square } from '@domain/board/Square';
 import { CellBuilder } from './CellBuilder';
 import { DebugOverlayBuilder } from './DebugOverlayBuilder';
 import type { DebugOverlayOptions } from './DebugOverlayBuilder';
+import { CoordinateLabels } from './CoordinateBuilder';
 import { LabelBuilder } from './LabelBuilder';
 import type { LabelMode } from './LabelBuilder';
 import { skirtDepthFor, TerrainBuilder } from './TerrainBuilder';
@@ -41,6 +42,11 @@ export class BoardScene {
   private labels: Group | null = null;
   private labelMode: LabelMode = 'names';
   private hovered: Square | null = null;
+  private selected: Square | null = null;
+  /** The coordinates round the edge, rebuilt with each board. */
+  private coordinates: CoordinateLabels | null = null;
+  private coordinatesOn = true;
+  private coordinateScale = 1;
   private overlay: Group | null = null;
   private overlayOptions: DebugOverlayOptions = { labels: false, features: false };
   private current: WorldModel | null = null;
@@ -66,6 +72,33 @@ export class BoardScene {
     if (square === this.hovered) return;
     this.hovered = square;
     this.applyLabelMode();
+    this.lightCoordinates();
+  }
+
+  /** The selected square: its letter and number stay lit while nothing is hovered. */
+  public setSelectedSquare(square: Square | null): void {
+    this.selected = square;
+    this.lightCoordinates();
+  }
+
+  public setCoordinatesVisible(on: boolean): void {
+    this.coordinatesOn = on;
+    if (this.coordinates !== null) this.coordinates.group.visible = on;
+  }
+
+  public setCoordinateScale(scale: number): void {
+    this.coordinateScale = scale;
+    this.coordinates?.setScale(scale);
+  }
+
+  /** The coordinates lit right now, for tests. */
+  public get litCoordinates(): readonly string[] {
+    return this.coordinates?.litCoordinates ?? [];
+  }
+
+  private lightCoordinates(): void {
+    // Hover wins while it lasts: it is where the player is looking now.
+    this.coordinates?.light(this.hovered ?? this.selected);
   }
 
   private applyLabelMode(): void {
@@ -123,6 +156,14 @@ export class BoardScene {
     }
     stage.add(...this.objects);
 
+    // On every board, flat or warped: a square's name does not wait for terrain.
+    this.coordinates?.dispose();
+    this.coordinates = new CoordinateLabels(layout);
+    this.coordinates.group.visible = this.coordinatesOn;
+    this.coordinates.setScale(this.coordinateScale);
+    this.lightCoordinates();
+    stage.add(this.coordinates.group);
+
     pieces.setLayout(layout);
     highlights.setLayout(layout);
     picker.setLayout(layout, cells);
@@ -140,6 +181,8 @@ export class BoardScene {
   public dispose(): void {
     for (const o of this.objects) disposeObject(o);
     this.objects = [];
+    this.coordinates?.dispose();
+    this.coordinates = null;
     disposeObject(this.overlay);
     this.overlay = null;
   }

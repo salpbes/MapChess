@@ -52,6 +52,17 @@ const PATHS: Readonly<Record<string, readonly string[]>> = {
   tagOff: ['M20 4h-7.2L4 12.8 11.2 20 20 11.2V4Z', 'M3.5 3.5l17 17'],
   // A board seen square on, which is what the button gives you.
   topDown: ['M4 4h16v16H4Z', 'M12 4v16', 'M4 12h16'],
+  // A board's corner with ticks along both edges — letters below, numbers on
+  // the right, as the coordinates sit on the board itself.
+  coords: [
+    'M19 4v15H4',
+    'M7 19v-3',
+    'M11 19v-3',
+    'M15 19v-3',
+    'M19 8h-3',
+    'M19 12h-3',
+    'M19 15.5h-3',
+  ],
   /*
     The drawer's two tabs. Deliberately not `map` and `book`: both were already
     on screen beside them — `map` on "choose a place" and `book` on the

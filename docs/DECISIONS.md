@@ -856,3 +856,21 @@ Four changes to how the places in D-068 are offered, and one to the map picker f
 **Addendum, 2026-09-27 — the WW1 set is complete, and goes to players as modelled.** All twelve pieces are in: ANZAC Light Horse and Ottoman cavalry as knights, officers as queens and kings, field guns as bishops, strongpoints as rooks, infantry as pawns. `isCompleteSet('ww1')` is now true, so Anzac Cove, Verdun and Kobarid dress in it for every player without a preview; everywhere else keeps the medieval set. Measured on a live board, the knights, queens and kings stand exactly where their medieval counterparts do (0.90, 1.04, 1.07 of a square), and the knights face the enemy as modelled — their upper mass leans toward the other army on both sides — so they need no `turn`.
 
 One risk was measured and accepted rather than fixed. The two armies are close in colour: averaged over each model's texture, the brightness gap between ANZAC and Ottoman is 26/255 against the medieval set's 73, and the pawns differ by 2 — effectively the same khaki. At the start position sides are told apart by where they stand; in a middlegame that leans on the move highlights and on memory. Offered a hold, a game-side tint of one army, or shipping as modelled, the author chose to ship. If players report confusing the sides, the cheapest fix is a clearly different tone on one army's uniforms or bases in Blender; a hold is one line in `pieceSets.ts` if a set ever needs keeping back while that happens.
+
+## D-071 — Board coordinates round the edge, lit by the square in hand
+
+**Date:** 2026-10-01 · **Phase:** beyond 13
+
+**Decision.** Letters a–h lie on the ground just outside White's edge and numbers 1–8 just outside the h-file, like the printing on a real board's frame. They are on by default with a remembered switch beside the other view switches, and the file and rank of the hovered square — or, failing that, the selected one — light up gold.
+
+**Why at all.** The game already spoke in coordinates the player could not see: the coach says _strong players usually play e4, d4 or c4_, a hint says _that square is…_, the identity line ends _· e4_, and the record is algebraic. A beginner told to play e4 had no way to find e4. And the coordinates are the first thing anyone learning chess has to learn; lighting the two that name the square in hand teaches them as the game is played.
+
+**Why it is easy here.** The warp moves every corner inside the board but leaves the border straight and evenly divided — on a warped board every rank-1 square still owns exactly 250 m of the south border and every h-file square 250 m of the east — so each label sits at the exact middle of its square's border segment, whatever the ground does. Each stands at its own square's platform height, since edge squares sit on different terraces, and they are drawn over the scene like the place names, so a ridge cannot hide one.
+
+**Decided by prototype.** A throwaway build put the numbers beside the a-file, where most boards print them. On a desktop the left-hand panels sit over that edge and the prototype lost the 1, the 2 and half the a; so the numbers moved to the h-file. On a 390 px phone the letters were too small to read, because they are sized in metres and the phone shows the board small; the phone layout's breakpoint now scales them 1.8×, and each label is pushed out by its own half-size plus a gap, so a bigger label never creeps back over the board.
+
+**Chosen by the author:** outside the edge rather than inside the corner squares (which pieces cover at the start) or on every square (which competes with the place names everywhere); on by default; lit on hover and selection.
+
+**Left as it was.** The desktop's left panel still overlaps the board's near-left corner, so the a is partly under it. That is the camera's framing, which affects the board itself, not just its letter.
+
+**Tests.** `coordinateAnchors` is pure and pinned on a flat and a warped board — every letter inside its own file's border span, every number inside its rank's, at that square's height. `coordinates.spec.ts` reads the live scene: sixteen labels on by default, the right two lit for a selected piece and none once it is put down, and the switch remembered across a reload.
