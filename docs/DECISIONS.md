@@ -874,3 +874,23 @@ One risk was measured and accepted rather than fixed. The two armies are close i
 **Left as it was.** The desktop's left panel still overlaps the board's near-left corner, so the a is partly under it. That is the camera's framing, which affects the board itself, not just its letter.
 
 **Tests.** `coordinateAnchors` is pure and pinned on a flat and a warped board — every letter inside its own file's border span, every number inside its rank's, at that square's height. `coordinates.spec.ts` reads the live scene: sixteen labels on by default, the right two lit for a selected piece and none once it is put down, and the switch remembered across a reload.
+
+## D-072 — Trees where the map has a wood
+
+**Date:** 2026-10-01 · **Phase:** beyond 13
+
+**Context.** Asked what more of the map could stand on the board in 3D, the survey found the cheapest wins were data already downloaded and barely used: woods and forests only tinted a square green, and castles, abbeys, ruins, monuments and churches only drew a floating marker. Buildings, roads, railways and walls are not fetched at all. A throwaway prototype tried trees and simple landmark models on the two offline boards that suit them — Rievaulx's woods and Holy Island's ruins — and the author chose trees, leaving landmarks for later.
+
+**Decision.** Trees are planted inside every wood outline, on the board's squares and on the land around it, broadleaf or conifer as OSM's `leaf_type` records (the loader already kept it as the wood's subtype) and mixed where it records nothing. Two instanced meshes per shape, so Rievaulx's two thousand trees — 1,462 broadleaf, 466 conifer, matching a wood mapped mostly as broadleaved — cost four draw calls. A scenery switch beside the other view switches hides them, on by default and remembered.
+
+**What the prototype got wrong, and the tests now pin.** It tested points against woods with the same polygon test the board's squares use, which is correct only for convex shapes; woods are not, and it lost nearly every tree (26 at Rievaulx, against two thousand). `insideOutline` is an even-odd ray test, and the tests plant a U-shaped wood and assert nothing grows in its notch. It also drew every wood as conifers, which was wrong for Rievaulx.
+
+**Rules.** A tree never stands within 0.3 of a square of its middle, where a piece stands; on a square it stands at that square's platform height, off the board on the terrain at the landscape's own exaggeration, and nowhere the landscape is not drawn. Placement is a pure function of the map, so a board grows the same wood every time. Past a cap — 2,500, or 1,200 on a phone, where a forest is texture anyway — trees are thinned by a stable score rather than cut off, so every wood survives sparser instead of the last few disappearing.
+
+**Scale, deliberately not true.** A tree is 0.11 of a square, about thirty metres, beside pieces about two hundred metres tall. It is a symbol of a wood, the way the pieces are symbols of armies. The author chose 0.11 over the prototype's 0.16 by comparing the two at Rievaulx: smaller trees read as woodland rather than as single trees, let the slopes and terraces show through, and leave the pieces the tallest things on the board.
+
+**Safe by construction.** The picker raycasts only squares and pieces, so no tree can take a click; `scenery.spec.ts` picks up the pawn on e2 in the middle of Rievaulx's woods to prove it.
+
+**Not yet.** Landmark models — the author's choice to leave for now; when they come, the prototype says they need a deliberate size larger than realistic and a recognisable silhouette per kind, and a GLB per kind made like the pieces would suit the set better than geometry drawn in code. Buildings and roads would need new data, and buildings a much heavier download.
+
+**Addendum — the thumb-size test measured itself out of time.** Adding the coordinates and scenery switches made `touch.spec.ts`'s "what a thumb has to hit" time out on a loaded run at the thirty-fourth button, with every button the right size: it asked the browser twice per button, seventy round trips. It now measures every button in one pass in the page (13 s against a timeout). It was checked by narrowing the view buttons to 30 px, where it fails with "too narrow for a thumb", so it still guards what it claims to.

@@ -23,6 +23,7 @@ const ASSESS_KEY = 'mapchess.assessing';
 const SOUND_KEY = 'mapchess.sound';
 const COACH_KEY = 'mapchess.coach';
 const COORDS_KEY = 'mapchess.coordinates';
+const SCENERY_KEY = 'mapchess.scenery';
 /** Cycled in this order by repeated clicks. */
 const MODES: readonly LabelMode[] = ['names', 'markers', 'off'];
 const MODE_ICON: Readonly<Record<LabelMode, IconName>> = {
@@ -41,6 +42,7 @@ export interface ViewControlsDeps {
   readonly onAssessingChanged: (on: boolean) => void;
   readonly onCoachingChanged: (on: boolean) => void;
   readonly onCoordinatesChanged: (on: boolean) => void;
+  readonly onSceneryChanged: (on: boolean) => void;
   readonly onSoundChanged: (on: boolean) => void;
   readonly onRecenter: () => void;
   /** Straight down at the whole board, for reading it as a chessboard. */
@@ -58,6 +60,8 @@ export class ViewControls {
   private coaching: boolean;
   private readonly coords: HTMLButtonElement;
   private coordinating: boolean;
+  private readonly scenery: HTMLButtonElement;
+  private scenic: boolean;
   private sounding: boolean;
 
   public constructor(container: HTMLElement, deps: ViewControlsDeps) {
@@ -77,6 +81,9 @@ export class ViewControls {
     // On for the same reason: the coaching says "play e4", and a beginner
     // needs to be able to find e4 before they will think to look for a switch.
     this.coordinating = readFlag(COORDS_KEY, true);
+    // The trees are the ground you are playing on; off is for a player who
+    // wants the plainest board, not the default.
+    this.scenic = readFlag(SCENERY_KEY, true);
     this.sounding = readFlag(SOUND_KEY);
 
     this.root = document.createElement('div');
@@ -120,9 +127,14 @@ export class ViewControls {
       this.setCoordinates(!this.coordinating, deps);
     });
 
+    this.scenery = iconButton('tree', 'Scenery', 'view-controls__button', () => {
+      this.setScenery(!this.scenic, deps);
+    });
+
     this.root.append(
       this.labels,
       this.coords,
+      this.scenery,
       this.coach,
       this.assess,
       this.sound,
@@ -137,6 +149,7 @@ export class ViewControls {
     deps.onAssessingChanged(this.assessing);
     deps.onCoachingChanged(this.coaching);
     deps.onCoordinatesChanged(this.coordinating);
+    deps.onSceneryChanged(this.scenic);
     // Applied like the others. Sounds handles the fact that a browser will not
     // start audio before a gesture; skipping this made the button show "on",
     // stay silent, and need pressing twice to be heard.
@@ -183,6 +196,13 @@ export class ViewControls {
     deps.onSoundChanged(on);
   }
 
+  private setScenery(on: boolean, deps: ViewControlsDeps): void {
+    this.scenic = on;
+    remember(SCENERY_KEY, on);
+    this.render();
+    deps.onSceneryChanged(on);
+  }
+
   private setCoordinates(on: boolean, deps: ViewControlsDeps): void {
     this.coordinating = on;
     remember(COORDS_KEY, on);
@@ -191,6 +211,12 @@ export class ViewControls {
   }
 
   private render(): void {
+    const sceneryLabel = this.scenic
+      ? 'Hide the trees'
+      : 'Show the trees — the woods on and around the board';
+    this.scenery.dataset.tip = sceneryLabel;
+    this.scenery.setAttribute('aria-label', sceneryLabel);
+    this.scenery.classList.toggle('view-controls__button--off', !this.scenic);
     const coordsLabel = this.coordinating
       ? 'Hide the board coordinates'
       : 'Show the board coordinates — a to h, 1 to 8 round the edge';

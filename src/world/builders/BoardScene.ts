@@ -8,20 +8,24 @@
 //       app/" — only holds if the world can accept a new layout at runtime.
 //       This is the one place that knows every object that depends on it.
 
+import { InstancedMesh } from 'three';
 import type { Group, Object3D } from 'three';
 
 import type { IBoardLayout } from '@domain/board/IBoardLayout';
 import type { Square } from '@domain/board/Square';
+import { sampleHeight } from '@mapdata/model/HeightField';
 
 import { CellBuilder } from './CellBuilder';
 import { DebugOverlayBuilder } from './DebugOverlayBuilder';
 import type { DebugOverlayOptions } from './DebugOverlayBuilder';
 import { CoordinateLabels } from './CoordinateBuilder';
 import { LabelBuilder } from './LabelBuilder';
+import { buildTrees, treeSpots } from './TreeBuilder';
 import type { LabelMode } from './LabelBuilder';
 import { skirtDepthFor, TerrainBuilder } from './TerrainBuilder';
 import { WaterBuilder } from './WaterBuilder';
 import type { WorldModel } from './WorldModel';
+import { heightToY } from './WorldModel';
 import type { HighlightLayer } from '../pieces/HighlightLayer';
 import type { PieceLayer } from '../pieces/PieceLayer';
 import type { BoardPicker } from '../scene/BoardPicker';
@@ -47,6 +51,10 @@ export class BoardScene {
   private coordinates: CoordinateLabels | null = null;
   private coordinatesOn = true;
   private coordinateScale = 1;
+  private trees: Group | null = null;
+  private sceneryOn = true;
+  /** Most trees on one board; set lower on a phone. */
+  private treeCap = 2500;
   private overlay: Group | null = null;
   private overlayOptions: DebugOverlayOptions = { labels: false, features: false };
   private current: WorldModel | null = null;
@@ -84,6 +92,25 @@ export class BoardScene {
   public setCoordinatesVisible(on: boolean): void {
     this.coordinatesOn = on;
     if (this.coordinates !== null) this.coordinates.group.visible = on;
+  }
+
+  public setSceneryVisible(on: boolean): void {
+    this.sceneryOn = on;
+    if (this.trees !== null) this.trees.visible = on;
+  }
+
+  /** Applies from the next board; trees are planted when a board is built. */
+  public setTreeCap(cap: number): void {
+    this.treeCap = cap;
+  }
+
+  /** How many trees the current board grew, for tests. */
+  public get treeCount(): number {
+    let n = 0;
+    this.trees?.traverse((node) => {
+      if (node instanceof InstancedMesh && node.name.startsWith('trees-')) n += node.count;
+    });
+    return n;
   }
 
   public setCoordinateScale(scale: number): void {
@@ -135,6 +162,7 @@ export class BoardScene {
     for (const o of this.objects) disposeObject(o);
     this.objects = [];
     this.labels = null;
+    this.trees = null;
 
     const cover = model.cover;
     const cells = new CellBuilder({
@@ -147,6 +175,27 @@ export class BoardScene {
 
     if (model.heights !== null && model.exaggeration !== null) {
       this.objects.push(new TerrainBuilder().build(model, model.heights));
+    }
+    if (model.features !== null && model.heights !== null) {
+      const heights = model.heights;
+      const xEnd = heights.originX + (heights.cols - 1) * heights.stepMeters;
+      const zEnd = heights.originZ + (heights.rows - 1) * heights.stepMeters;
+      this.trees = buildTrees(
+        treeSpots({
+          features: model.features,
+          cells: layout.cells,
+          bounds: layout.bounds,
+          // Only where the landscape is drawn: a tree past its edge would stand on nothing.
+          groundAt: (x, z) =>
+            x < heights.originX || x > xEnd || z < heights.originZ || z > zEnd
+              ? null
+              : heightToY(model, sampleHeight(heights, x, z)),
+          bare: (cell) => cover?.get(cell.square) === 'water',
+          cap: this.treeCap,
+        }),
+      );
+      this.trees.visible = this.sceneryOn;
+      this.objects.push(this.trees);
     }
     if (model.features !== null) {
       this.objects.push(new WaterBuilder().build(model, model.features));

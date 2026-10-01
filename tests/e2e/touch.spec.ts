@@ -141,17 +141,39 @@ test.describe('the board under a finger', () => {
 
     // Every control on screen, not a sample: the icon row is where Phase 12's
     // last bug lived, and it is exactly the row that was sized for a mouse.
-    const buttons = page.locator('.sheet__button, .sheet__tab, .dock button');
-    const count = await buttons.count();
-    expect(count).toBeGreaterThan(5);
+    /*
+      Measured in one pass in the page. This asked the browser twice per
+      button — is it visible, how big is it — and that is seventy round trips
+      once the coordinates and scenery switches arrived: on a loaded run it
+      timed out at the thirty-fourth button with every button the right size.
+      The size of the row should not decide whether the test finishes.
+    */
+    const sizes = await page
+      .locator('.sheet__button, .sheet__tab, .dock button')
+      .evaluateAll((els) =>
+        els
+          .map((el, i) => {
+            const r = el.getBoundingClientRect();
+            const style = getComputedStyle(el);
+            const shown =
+              r.width > 0 &&
+              r.height > 0 &&
+              style.visibility !== 'hidden' &&
+              style.display !== 'none';
+            return {
+              label: el.getAttribute('aria-label') ?? `button ${String(i)}`,
+              width: r.width,
+              height: r.height,
+              shown,
+            };
+          })
+          .filter((b) => b.shown),
+      );
+    expect(sizes.length).toBeGreaterThan(5);
 
-    for (let i = 0; i < count; i += 1) {
-      const button = buttons.nth(i);
-      if (!(await button.isVisible())) continue;
-      const box = await button.boundingBox();
-      const label = (await button.getAttribute('aria-label')) ?? `button ${String(i)}`;
-      expect(box?.height ?? 0, `${label} is too short for a thumb`).toBeGreaterThanOrEqual(44);
-      expect(box?.width ?? 0, `${label} is too narrow for a thumb`).toBeGreaterThanOrEqual(44);
+    for (const { label, width, height } of sizes) {
+      expect(height, `${label} is too short for a thumb`).toBeGreaterThanOrEqual(44);
+      expect(width, `${label} is too narrow for a thumb`).toBeGreaterThanOrEqual(44);
     }
   });
 });

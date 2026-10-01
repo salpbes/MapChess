@@ -535,6 +535,9 @@ export function bootstrap(
   const narrow = window.matchMedia('(max-width: 880px), (max-height: 520px)');
   const fitCoordinates = (): void => {
     boardScene.setCoordinateScale(narrow.matches ? 1.8 : 1);
+    // Fewer trees on a phone: a forest is texture at that size, and a phone's
+    // GPU is the one most likely to feel two thousand of them.
+    boardScene.setTreeCap(narrow.matches ? 1200 : 2500);
   };
   fitCoordinates();
   narrow.addEventListener('change', fitCoordinates);
@@ -652,6 +655,9 @@ export function bootstrap(
     },
     onCoordinatesChanged: (on) => {
       boardScene.setCoordinatesVisible(on);
+    },
+    onSceneryChanged: (on) => {
+      boardScene.setSceneryVisible(on);
     },
     onCoachingChanged: (on) => {
       game.setCoaching(on);
