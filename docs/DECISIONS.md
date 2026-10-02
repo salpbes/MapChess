@@ -938,3 +938,41 @@ The thunder now comes in episodes, and the rain at two strengths — both as the
 **Found while previewing, and changed.** The dust started at the piece's centre and rose inside the two pieces' outline, where they hid it; it now sprays from the base towards the square's edges, lighter in colour so it shows against the square, slowed by air so it hangs at the edges. The piece first began to sink before it was down and was barely seen falling; it now falls, lies still, then sinks. The knock-back is nearly half a square, so the victim clears the attacker. The unit test then caught the top of the piece falling back towards its attacker while its feet were pushed away — a sign error in the rotation, fixed and pinned.
 
 **What it does not do.** A player who has asked for less motion sees the piece simply go, as before, with no dust; the sounds stay. When White captures, the victim falls away from White's camera and is partly behind the attacker — the author saw this in the prototype and kept it.
+
+## D-075 — The mist drifts
+
+**Date:** 2026-10-02 · **Phase:** beyond 13
+
+**Context.** The author asked for some very mild wind in the mist. The mist was a fog with still air (wind 0): the same haze everywhere and always, which reads as a still picture of mist.
+
+**Decision.** Mist now has barely a breath of wind (0.07, well under midday's 0.18), enough to stir the trees, and veils of mist drift over the board on it (`MistVeils.ts`): sixteen broad, faint sheets of churning noise lying level above the highest ground, crossing the board in about two minutes. Each fades out near the edges of a box larger than the board, so it leaves on one side and comes back on the other without being seen to jump. Like the rain, the shader places every veil from its own clock.
+
+**Above the pieces.** The first version hung the veils just above the ground. A frame diff showed the tops of the pieces unchanged while the mist moved round them: the pieces stood up through the sheets, which would cut a faint hard line across each one. The veils now lie above the tallest piece on the highest square, so a piece is under the mist or clear of it, never cut by it. Being level, they never cut a line through a hillside either.
+
+**Reduced motion.** The mist stays, because it is weather, not motion; it only stops drifting, and the trees stop swaying.
+
+**Given body, and a little more wind.** The author found the drift right but the veils flat, and asked for a little more wind. Each veil is now a stack of five level slices (three on a phone, where each is another pass over the screen), each smaller and brighter than the one below, keeping only the thicker parts of the mist beneath it — a dome with a lit top and a shaded underside, which shifts against itself as the camera moves. Each slice is also lit where its mist thins toward the low eastern sun, and the noise has a second, finer layer of curls over its billows. The wind rose from 0.07 to 0.12, still under midday's breeze, and the drift from 0.009 to 0.014 board widths a second. Looked at almost edge-on, from a camera brought right down to the board, the slices thin to almost nothing: the cost of drawing mist as layers, and not a view the default camera gives.
+
+## D-076 — A fine day: birds overhead, and its sound
+
+**Date:** 2026-10-02 · **Phase:** beyond 13
+
+**Context.** Asked what sunny weather could have, the author chose birds overhead and sound.
+
+**Birds** (`Birds.ts`). Every half minute to a minute and a half, a visit: a loose V of three to seven birds crossing high over the board, or a single bigger bird that flies in, wheels over the board for half a minute and drifts away. They flap a while and glide a while, and bank into a turn; their small shadows slide over the squares. They fly well above the tallest piece, so they never come between a player and a piece, and mostly cross from east or west — the first preview's flock came from the far side, where it stayed foreshortened above the back rank and hardly seemed to move. The soarer first hung so high it showed above the far edge, and in a unit test sometimes missed its circle entirely, drifting on the way in; it now makes straight for a circle that lies wholly over the board and is held on it. Midday only, and none for a player who has asked for less motion.
+
+**Sound** (`fairAudio.ts`), with the sound on. A soft breeze, and now and then a songbird's run of chirps; on a board with water on at least three squares, waves lapping instead, and a gull far off. When a visit first comes over the board it is heard: gulls by the water, rooks inland, the mewing of a buzzard for the soarer. Midday used to be silent, so the board went quiet the moment a storm cleared. Everything is synthesised, and all of it sits well under the move knock.
+
+## D-077 — The mist is a volume, not layers
+
+**Date:** 2026-10-02 · **Phase:** beyond 13
+
+**Context.** The author asked whether a published volumetric-cloud project could help the mist. It could not be used: it is an archived demo whose author says it is not for production, it has no licence (so its code is all rights reserved), and it renders at console-game cost. Its technique, raymarching, was the right one.
+
+**Decision.** `MistVolume.ts` replaces the stacked layers of D-075. A box over the board, from above the tallest piece, is drawn by its inside faces; each pixel steps along its line of sight through the box (22 steps, 12 on a phone), sampling tileable 3D noise that drifts on the wind — stretched billows, eaten at the edges by finer curls, thinning toward the box's floor, ceiling and sides — and looks once toward the low eastern sun at each step, which gives bright tops and grey undersides. The sum is capped well short of opaque. Because everything solid is below the box, the shader never needs the depth of the scene.
+
+**Chosen by the author, from a side-by-side trial.** The two were rendered at the same moment from three cameras. The layers read as mist only from above and vanished seen from low or from the side; the volume read as mist from all three. On a machine with no graphics card the volume cost about 130 ms a frame to the layers' 27; it is the dearer by five times, but on real graphics hardware both are small.
+
+**Smoothed.** The first volume showed grain with the camera inside the mist, where a ray can run the whole box long. Rays now stop at 1.3 board widths, where the fog takes over, and start at an interleaved-gradient-noise offset rather than a random hash; the grain is gone from the side view. The noise volume is built the first time mist is shown, not when the stage is, since most boards open in fine weather.
+
+**Still to prove.** Smoothness on a phone: the author judged it on a desktop.

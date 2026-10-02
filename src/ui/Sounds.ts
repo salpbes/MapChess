@@ -14,10 +14,15 @@
 import type { Square } from '@domain/board/Square';
 import type { CoverName } from '@domain/theme/types';
 import type { GameBus } from '@game/GameEvents';
-import { rainsIn } from '@world/scene/Atmosphere';
+import { birdsIn, rainsIn, veilsIn } from '@world/scene/Atmosphere';
+import type { Visit } from '@world/scene/Birds';
 import type { Mood } from '@world/scene/Atmosphere';
 
 import { playGround } from './groundAudio';
+import { startFairDay } from './fairAudio';
+import type { FairDay } from './fairAudio';
+import { startMist } from './mistAudio';
+import type { MistSound } from './mistAudio';
 import { playNearThunder, playThunder, startStorm } from './weatherAudio';
 import type { Ambience } from './weatherAudio';
 
@@ -58,6 +63,10 @@ export class Sounds {
   /** What a square is, on the board now in play; null before it is known. */
   private groundOf: (square: Square) => CoverName | null = () => null;
   private ambience: Ambience | null = null;
+  private fair: FairDay | null = null;
+  private misty: MistSound | null = null;
+  private shore = false;
+  private calls = 0;
 
   public constructor(bus: GameBus) {
     this.unsubscribe = [
@@ -104,7 +113,34 @@ export class Sounds {
 
   /** The weather being heard right now, if any — for tests. */
   public get ambient(): Mood | null {
-    return this.ambience === null ? null : this.mood;
+    return this.ambience === null && this.fair === null && this.misty === null ? null : this.mood;
+  }
+
+  /**
+   * Whether the board has a lot of water on it, whenever a board arrives: a
+   * fine day there is waves and gulls rather than hedgerow birds.
+   */
+  public setShore(shore: boolean): void {
+    if (shore === this.shore) return;
+    this.shore = shore;
+    // Heard at once, on a board already in fine weather.
+    this.fair?.stop();
+    this.fair = null;
+    this.misty?.stop();
+    this.misty = null;
+    this.refreshAmbience();
+  }
+
+  /** The call of birds flying over the board, if the sound is on. */
+  public birdCall(kind: Visit): void {
+    if (!this.enabled || this.fair === null) return;
+    this.fair.call(kind);
+    this.calls += 1;
+  }
+
+  /** How many bird calls have been sounded; for tests. */
+  public get birdCalls(): number {
+    return this.calls;
   }
 
   /**
@@ -141,6 +177,20 @@ export class Sounds {
   private refreshAmbience(): void {
     const wanted = this.enabled && rainsIn(this.mood);
     const context = this.context;
+    const fine = this.enabled && birdsIn(this.mood);
+    if (fine && this.fair === null && context !== null && context.state !== 'closed') {
+      this.fair = startFairDay(context, this.shore);
+    } else if (!fine && this.fair !== null) {
+      this.fair.stop();
+      this.fair = null;
+    }
+    const misty = this.enabled && veilsIn(this.mood);
+    if (misty && this.misty === null && context !== null && context.state !== 'closed') {
+      this.misty = startMist(context, this.shore);
+    } else if (!misty && this.misty !== null) {
+      this.misty.stop();
+      this.misty = null;
+    }
     if (wanted && this.ambience === null && context !== null && context.state !== 'closed') {
       // Started even on a context still waiting for a first tap: it will be
       // heard the moment the context wakes, already raining.
@@ -203,6 +253,10 @@ export class Sounds {
   public dispose(): void {
     this.ambience?.stop();
     this.ambience = null;
+    this.fair?.stop();
+    this.fair = null;
+    this.misty?.stop();
+    this.misty = null;
     this.stopWaiting();
     for (const off of this.unsubscribe) off();
     void this.context?.close().catch(() => undefined);

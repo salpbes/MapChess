@@ -52,6 +52,10 @@ interface MoodDef {
   /** 0 is still air, 1 a gale: bends the trees and slants the rain. */
   readonly wind: number;
   readonly rain: boolean;
+  /** Mist drifting over the board (MistVolume). */
+  readonly veils: boolean;
+  /** Birds in the sky now and then, and a fine day's sound (Birds, fairAudio). */
+  readonly birds: boolean;
   /** Lightning, and the thunder after it. */
   readonly thunder: boolean;
 }
@@ -76,6 +80,14 @@ export function windFor(mood: Mood): number {
 
 export function rainsIn(mood: Mood): boolean {
   return MOOD[mood].rain;
+}
+
+export function veilsIn(mood: Mood): boolean {
+  return MOOD[mood].veils;
+}
+
+export function birdsIn(mood: Mood): boolean {
+  return MOOD[mood].birds;
 }
 
 export function thundersIn(mood: Mood): boolean {
@@ -210,6 +222,8 @@ const MOOD: Readonly<Record<Mood, MoodDef>> = {
     // A light breeze: enough that the woods are alive, not enough to notice.
     wind: 0.18,
     rain: false,
+    veils: false,
+    birds: true,
     thunder: false,
   },
   // A low morning sun from the east through pale fog: the far side fades and
@@ -225,9 +239,12 @@ const MOOD: Readonly<Record<Mood, MoodDef>> = {
     hemiPower: 1.25,
     fillPower: 0.5,
     fog: { color: '#d9dedd', near: 0.9, far: 3.1 },
-    // Mist lies where the air is still.
-    wind: 0,
+    // A light air: enough to carry the mist along and stir the trees, and
+    // still under midday's breeze — a wind any stronger would clear the mist.
+    wind: 0.12,
     rain: false,
+    veils: true,
+    birds: false,
     thunder: false,
   },
   // Overcast and grey, but lit enough from the sky that a black piece on a
@@ -245,6 +262,8 @@ const MOOD: Readonly<Record<Mood, MoodDef>> = {
     fog: { color: '#6f7883', near: 1.5, far: 4.6 },
     wind: 1,
     rain: true,
+    veils: false,
+    birds: false,
     thunder: true,
   },
 };

@@ -86,15 +86,25 @@ test.describe('weather', () => {
       page.evaluate(() => ({
         raining: window.__mapchess?.stage.raining,
         wind: window.__mapchess?.stage.wind,
+        veiled: window.__mapchess?.stage.veiled,
       }));
-    expect(await weatherNow()).toEqual({ raining: true, wind: 1 });
+    expect(await weatherNow()).toEqual({ raining: true, wind: 1, veiled: false });
     await stepWeather(page); // midday: a breeze and no rain
     const midday = await weatherNow();
     expect(midday.raining).toBe(false);
     expect(midday.wind).toBeGreaterThan(0);
     expect(midday.wind).toBeLessThan(0.5);
-    await stepWeather(page); // mist: still air
-    expect(await weatherNow()).toEqual({ raining: false, wind: 0 });
+    expect(midday.veiled).toBe(false);
+    await stepWeather(page); // mist: barely a breath, carrying veils of mist
+    const mist = await weatherNow();
+    expect(mist.raining).toBe(false);
+    expect(mist.veiled).toBe(true);
+    expect(mist.wind).toBeGreaterThan(0);
+    expect(mist.wind).toBeLessThan(midday.wind ?? 0);
+    // And the veils are drifting.
+    const drifted = () => page.evaluate(() => window.__mapchess?.stage.mistClock ?? 0);
+    const before = await drifted();
+    await expect.poll(drifted).toBeGreaterThan(before);
 
     expect(failures, failures.join('\n')).toEqual([]);
   });
@@ -110,6 +120,21 @@ test.describe('weather', () => {
     expect(await page.evaluate(() => window.__mapchess?.stage.wind)).toBe(0);
   });
 
+  test('keeps the mist but stills it for a player who has asked for less motion', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await bootBoard(page);
+    await startGame(page);
+    await stepWeather(page); // Holy Island, midday to mist
+    expect(await mood(page)).toBe('mist');
+    // The mist is still there — it is weather, not motion — and it does not move.
+    expect(await page.evaluate(() => window.__mapchess?.stage.veiled)).toBe(true);
+    expect(await page.evaluate(() => window.__mapchess?.stage.wind)).toBe(0);
+    await page.waitForTimeout(1000);
+    expect(await page.evaluate(() => window.__mapchess?.stage.mistClock)).toBe(0);
+  });
+
   test('strikes lightning in a storm, and nowhere else', async ({ page }) => {
     await bootBoard(page);
     await startGame(page);
@@ -123,7 +148,8 @@ test.describe('weather', () => {
     await choose(page, 'Glencoe');
     const first = await strike();
     expect(first.struck).toBe(true);
-    expect((await strike()).strikes).toBe((first.strikes ?? 0) + 1);
+    // At least one more: the storm's own lightning may strike in between as well.
+    expect((await strike()).strikes).toBeGreaterThan(first.strikes ?? 0);
     // A close strike is the same kind of strike, lit harder.
     expect(await page.evaluate(() => window.__mapchess?.stage.flash(true))).toBe(true);
   });
@@ -136,7 +162,7 @@ test.describe('weather', () => {
     expect(await page.evaluate(() => window.__mapchess?.stage.flash())).toBe(false);
   });
 
-  test('sounds like a storm while it storms and the sound is on', async ({ page }) => {
+  test('sounds like the weather while the sound is on', async ({ page }) => {
     await bootBoard(page);
     await startGame(page);
     const heard = () => page.evaluate(() => window.__mapchess?.weatherSound() ?? null);
@@ -145,15 +171,87 @@ test.describe('weather', () => {
     expect(await heard()).toBeNull();
     await tapControl(page, 'Turn the sound on');
     await expect.poll(heard).toBe('storm');
-    // Midday is quiet; the storm's sound fades away.
+    // Every weather has its sound: a fine day's, then the mist's.
     await stepWeather(page);
-    await expect.poll(heard).toBeNull();
+    await expect.poll(heard).toBe('midday');
+    await stepWeather(page);
+    await expect.poll(heard).toBe('mist');
     // And sound off silences a storm too.
-    await stepWeather(page);
     await stepWeather(page);
     await expect.poll(heard).toBe('storm');
     await tapControl(page, 'Turn the sound off');
     await expect.poll(heard).toBeNull();
+  });
+
+  test('sends birds over on a fine day, and only then', async ({ page }) => {
+    await bootBoard(page);
+    await startGame(page);
+    const send = (kind: 'flock' | 'soarer') =>
+      page.evaluate((k) => window.__mapchess?.stage.sendBirds(k), kind);
+    const flying = () => page.evaluate(() => window.__mapchess?.stage.birdsFlying ?? 0);
+    // Holy Island at midday.
+    expect(await send('flock')).toBe(true);
+    expect(await flying()).toBeGreaterThanOrEqual(3);
+    expect(await send('soarer')).toBe(true);
+    expect(await flying()).toBe(1);
+    // Not in the mist, and not in a storm.
+    await stepWeather(page);
+    expect(await flying()).toBe(0);
+    expect(await send('flock')).toBe(false);
+    await stepWeather(page);
+    expect(await send('flock')).toBe(false);
+  });
+
+  test('sends no birds for a player who has asked for less motion', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await bootBoard(page);
+    await startGame(page);
+    expect(await mood(page)).toBe('midday');
+    expect(await page.evaluate(() => window.__mapchess?.stage.sendBirds('flock'))).toBe(false);
+  });
+
+  test('calls as the birds come over, without a fault', async ({ page }) => {
+    const faults: string[] = [];
+    page.on('pageerror', (e) => faults.push(e.message));
+    page.on('console', (m) => {
+      if (m.type() === 'error' && !m.text().includes('ERR_BLOCKED_BY_CLIENT'))
+        faults.push(m.text());
+    });
+    await bootBoard(page);
+    await startGame(page);
+    await tapControl(page, 'Turn the sound on');
+    await expect
+      .poll(() => page.evaluate(() => window.__mapchess?.weatherSound() ?? null))
+      .toBe('midday');
+    const calls = () => page.evaluate(() => window.__mapchess?.birdCalls() ?? 0);
+    // Counted from now: birds may already have come over on their own.
+    const before = await calls();
+    await page.evaluate(() => window.__mapchess?.stage.sendBirds('flock'));
+    // Heard when they first come over the board, a few seconds in.
+    await expect.poll(calls, { timeout: 40_000 }).toBe(before + 1);
+    await page.evaluate(() => window.__mapchess?.stage.sendBirds('soarer'));
+    await expect.poll(calls, { timeout: 40_000 }).toBe(before + 2);
+    await page.waitForTimeout(2500);
+    expect(faults, faults.join('\n')).toEqual([]);
+  });
+
+  test("plays the mist's drips and far calls without a fault", async ({ page }) => {
+    const faults: string[] = [];
+    page.on('pageerror', (e) => faults.push(e.message));
+    page.on('console', (m) => {
+      if (m.type() === 'error' && !m.text().includes('ERR_BLOCKED_BY_CLIENT'))
+        faults.push(m.text());
+    });
+    await bootBoard(page);
+    await startGame(page);
+    await tapControl(page, 'Turn the sound on');
+    await stepWeather(page); // Holy Island, midday to mist: a board by the sea, so a foghorn
+    await expect
+      .poll(() => page.evaluate(() => window.__mapchess?.weatherSound() ?? null))
+      .toBe('mist');
+    // Long enough for drips and the first far sound, which comes within nine seconds.
+    await page.waitForTimeout(10_000);
+    expect(faults, faults.join('\n')).toEqual([]);
   });
 
   test('plays near and far thunder over a heavy or a steady rain without a fault', async ({

@@ -113,6 +113,9 @@ import {
 import type { CuratedPlace } from './curatedPlaces';
 import { choosePieceSet, previewSetFrom } from './pieceSetChoice';
 
+/** Squares of water that make a board a shore, for the sound of a fine day. */
+const SHORE_SQUARES = 3;
+
 export interface AppHandle {
   /** The board currently shown — flat until the area's terrain has loaded, then warped. */
   layout(): IBoardLayout;
@@ -124,6 +127,8 @@ export interface AppHandle {
   pieceSet(): string;
   /** The weather being heard, if the sound is on and it is storming. */
   weatherSound(): Mood | null;
+  /** How many times birds flying over have been heard. For tests. */
+  birdCalls(): number;
   /** A lightning strike now, as the storm would send one — near or far. For tests. */
   strike(near: boolean): void;
   dispose(): void;
@@ -588,6 +593,11 @@ export function bootstrap(
     const cover = model.cover;
     sounds.setGround((square) => cover?.get(square) ?? null);
     captures.setGround((square) => cover?.get(square) ?? null);
+    // A board with water on a few of its squares is by the sea or a loch: a
+    // fine day there sounds of waves and gulls.
+    let wet = 0;
+    for (const kind of cover?.values() ?? []) if (kind === 'water') wet += 1;
+    sounds.setShore(wet >= SHORE_SQUARES);
     // The arrival, marked once: when the chosen place's board is actually there.
     if (
       model.features !== null &&
@@ -734,6 +744,11 @@ export function bootstrap(
 
   // The rain's sound follows the rain on screen, a few times a second.
   let sinceRainSound = 0;
+  // Birds flying over are heard as they come, if the sound is on.
+  const stopBirdCalls = stage.onBirds((kind) => {
+    sounds.birdCall(kind);
+  });
+
   const stopRainSound = stage.loop.onTick((dt) => {
     sinceRainSound += dt;
     if (sinceRainSound < 0.25) return;
@@ -757,6 +772,7 @@ export function bootstrap(
     features: () => features.features,
     pieceSet: () => wantedSet ?? DEFAULT_PIECE_SET,
     weatherSound: () => sounds.ambient,
+    birdCalls: () => sounds.birdCalls,
     strike,
     dispose: () => {
       input.dispose();
@@ -784,6 +800,7 @@ export function bootstrap(
       stopPeek();
       for (const timer of strikeTimers) window.clearTimeout(timer);
       stopRainSound();
+      stopBirdCalls();
       narrow.removeEventListener('change', fitCoordinates);
       stopStanding();
       keyboard.dispose();

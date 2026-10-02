@@ -21,7 +21,9 @@ import {
   applyMood,
   lightningAt,
   rainIntensityAt,
+  birdsIn,
   rainsIn,
+  veilsIn,
   thundersIn,
   weather,
   gustAt,
@@ -30,6 +32,9 @@ import {
 } from './Atmosphere';
 import type { Mood } from './Atmosphere';
 import { createLights } from './createLights';
+import { Birds } from './Birds';
+import type { Visit } from './Birds';
+import { MistVolume } from './MistVolume';
 import { Rain } from './Rain';
 import { createRenderer } from './createRenderer';
 import { RenderLoop } from './RenderLoop';
@@ -66,6 +71,8 @@ export class WorldStage {
   private readonly coarsePointer: boolean;
   private readonly unsubscribeControls: () => void;
   private readonly rain: Rain;
+  private readonly veils: MistVolume;
+  private readonly birds = new Birds();
   private readonly stopWeatherClock: () => void;
   /**
    * A player who has asked their device for less motion gets the storm's sky
@@ -105,8 +112,16 @@ export class WorldStage {
     this.rain = new Rain(this.coarsePointer ? 1600 : 3200);
     this.rain.fit(bounds);
     this.scene.add(this.rain.mesh);
+    // Fewer steps along each ray on a phone.
+    this.veils = new MistVolume(this.coarsePointer ? 12 : 22);
+    this.veils.fit(bounds);
+    this.scene.add(this.veils.mesh);
+    this.birds.fit(bounds);
+    this.scene.add(this.birds.group);
     this.stopWeatherClock = this.loop.onTick((dt) => {
       weather.time.value += dt;
+      if (this.veils.mesh.visible && !this.stillness.matches) this.veils.update(dt);
+      this.birds.update(dt);
       const dir = windDirectionAt(weather.time.value);
       weather.windDir.value.set(dir.x, dir.z);
       weather.wind.value = this.baseWind * gustAt(weather.time.value);
@@ -141,6 +156,8 @@ export class WorldStage {
     // A new rig is built at the old rig's defaults; the weather goes back on it.
     applyMood(this.scene, this.lights, bounds, this.weather);
     this.rain.fit(bounds);
+    this.veils.fit(bounds);
+    this.birds.fit(bounds);
     this.bounds = bounds;
   }
 
@@ -222,11 +239,39 @@ export class WorldStage {
     return this.rain.mesh.visible;
   }
 
+  /** Whether veils of mist lie over the board — still there, and still, when motion is reduced. */
+  public get veiled(): boolean {
+    return this.veils.mesh.visible;
+  }
+
+  /** Seconds of breeze the mist has drifted on; it stops while motion is reduced. */
+  public get mistClock(): number {
+    return this.veils.clock;
+  }
+
+  /** How many birds are in the sky right now. */
+  public get birdsFlying(): number {
+    return this.birds.flying;
+  }
+
+  /** Sends birds over now, if the weather has them; for tests. */
+  public sendBirds(kind: Visit = 'flock'): boolean {
+    return this.birds.send(kind);
+  }
+
+  /** Told when birds first come over the board, so they can be heard. */
+  public onBirds(listener: (kind: Visit) => void): () => void {
+    return this.birds.onArrival(listener);
+  }
+
   private applyMotion(): void {
     const still = this.stillness.matches;
     this.baseWind = still ? 0 : windFor(this.weather);
     weather.wind.value = this.baseWind * gustAt(weather.time.value);
     this.rain.mesh.visible = !still && rainsIn(this.weather);
+    // Mist is not motion: it stays when motion is reduced, it only stops drifting.
+    this.veils.setVisible(veilsIn(this.weather));
+    this.birds.setActive(!still && birdsIn(this.weather));
   }
 
   /**
@@ -283,6 +328,8 @@ export class WorldStage {
     this.stopWeatherClock();
     this.stillness.removeEventListener('change', this.onStillnessChanged);
     this.rain.dispose();
+    this.veils.dispose();
+    this.birds.dispose();
     this.controls.dispose();
     this.resize.dispose();
     this.renderer.dispose();
