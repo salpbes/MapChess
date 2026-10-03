@@ -48,25 +48,34 @@ test.describe('weather', () => {
     expect(await mood(page)).toBe('storm');
   });
 
-  test('lets the player change it, and the next board brings its own', async ({ page }) => {
+  /*
+    The two halves of this were one test, at Glencoe: five changes of weather
+    over the heaviest board there is, then a second board. On GitHub's
+    runners, which draw without a graphics card, that passed the limit for a
+    test. Holy Island, the board the game opens on, shows the same behaviour
+    for a fraction of the drawing.
+  */
+  test('lets the player change it, round every mood', async ({ page }) => {
     await bootBoard(page);
     await startGame(page);
-    await choose(page, 'Glencoe');
-
-    // Storm, then round through every mood and back.
-    await stepWeather(page);
+    // Holy Island opens at midday; round through every mood and back.
     expect(await mood(page)).toBe('midday');
     await stepWeather(page);
     expect(await mood(page)).toBe('mist');
     await stepWeather(page);
     expect(await mood(page)).toBe('storm');
-
-    // Mist chosen at Glencoe is not carried to Rievaulx, which opens at midday.
     await stepWeather(page);
+    expect(await mood(page)).toBe('midday');
+  });
+
+  test('does not carry a choice onto the next board, which brings its own', async ({ page }) => {
+    await bootBoard(page);
+    await startGame(page);
+    // Mist chosen at Holy Island is not carried to Glencoe, which opens in a storm.
     await stepWeather(page);
     expect(await mood(page)).toBe('mist');
-    await choose(page, 'Rievaulx');
-    expect(await mood(page)).toBe('midday');
+    await choose(page, 'Glencoe');
+    expect(await mood(page)).toBe('storm');
   });
 
   test('rains and blows in a storm, and only in a storm', async ({ page }) => {
@@ -166,19 +175,16 @@ test.describe('weather', () => {
     await bootBoard(page);
     await startGame(page);
     const heard = () => page.evaluate(() => window.__mapchess?.weatherSound() ?? null);
-    await choose(page, 'Glencoe');
-    // Silent until the player turns the sound on.
+    // Holy Island, at midday: silent until the player turns the sound on.
     expect(await heard()).toBeNull();
     await tapControl(page, 'Turn the sound on');
-    await expect.poll(heard).toBe('storm');
-    // Every weather has its sound: a fine day's, then the mist's.
-    await stepWeather(page);
+    // Every weather has its sound: a fine day's, the mist's, the storm's.
     await expect.poll(heard).toBe('midday');
     await stepWeather(page);
     await expect.poll(heard).toBe('mist');
-    // And sound off silences a storm too.
     await stepWeather(page);
     await expect.poll(heard).toBe('storm');
+    // And sound off silences a storm too.
     await tapControl(page, 'Turn the sound off');
     await expect.poll(heard).toBeNull();
   });
