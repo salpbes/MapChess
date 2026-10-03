@@ -40,6 +40,16 @@ import type { BoardBounds } from '@domain/board/types';
 const NOISE = 48;
 /** Board widths a second, on the mist's light air: a board crossed in a little over a minute. */
 const DRIFT = 0.014;
+/**
+ * Under 20 frames a second is too slow; twelve such frames in a row, and the
+ * mist takes fewer steps. A run that long is a machine that cannot keep up,
+ * not a hitch: a new board being built stalls a few frames, and must not
+ * cost a fast machine its mist for the rest of the game.
+ */
+const SLOW_FRAME = 0.05;
+const SLOW_RUN = 12;
+/** The fewest steps the mist will take: still billows, if coarser ones. */
+const MIN_STEPS = 5;
 
 function hash3(x: number, y: number, z: number, octave: number): number {
   const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + octave * 19.19) * 43758.5453;
@@ -123,6 +133,8 @@ const FRAGMENT = (steps: number) => /* glsl */ `
   uniform float uDensity;
   uniform float uMaxAlpha;
   uniform float uReach;
+  /** Steps actually taken along a ray: up to the most compiled, fewer on a struggling machine. */
+  uniform float uSteps;
   varying vec3 vWorld;
 
   float density(vec3 p) {
@@ -163,7 +175,7 @@ const FRAGMENT = (steps: number) => /* glsl */ `
     float far = min(min(min(tmax.x, tmax.y), tmax.z), near + uReach);
     if (far <= near) discard;
 
-    float stepLength = (far - near) / float(${String(steps)});
+    float stepLength = (far - near) / uSteps;
     // A different start for every pixel, so the steps never show as bands —
     // interleaved gradient noise, whose fine, even pattern reads as smooth
     // where a random hash reads as grain.
@@ -174,6 +186,7 @@ const FRAGMENT = (steps: number) => /* glsl */ `
     float lookToSun = (uBoxMax.y - uBoxMin.y) * 0.22;
 
     for (int i = 0; i < ${String(steps)}; i++) {
+      if (float(i) >= uSteps) break;
       vec3 p = origin + dir * t;
       float d = density(p);
       if (d > 0.0) {
@@ -203,9 +216,13 @@ export class MistVolume {
    */
   private noise: Data3DTexture | null = null;
   private readonly drift = new Vector2(1, 0.3).normalize();
+  private steps: number;
+  /** Frames in a row that took too long, while the mist was showing. */
+  private slowFrames = 0;
 
-  /** `steps` along every ray: fewer on a phone. */
+  /** `steps` along every ray, at most: fewer on a phone. */
   public constructor(steps = 22) {
+    this.steps = steps;
     this.material = new ShaderMaterial({
       vertexShader: VERTEX,
       fragmentShader: FRAGMENT(steps),
@@ -223,6 +240,7 @@ export class MistVolume {
         uDensity: { value: 1 },
         uMaxAlpha: { value: 0.62 },
         uReach: { value: 1 },
+        uSteps: { value: steps },
       },
       transparent: true,
       depthWrite: false,
@@ -263,6 +281,29 @@ export class MistVolume {
       if (u !== undefined) u.value = this.noise;
     }
     this.mesh.visible = visible;
+  }
+
+  /**
+   * Watches how long frames take while the mist shows, and takes fewer steps
+   * along each ray if they are too slow: a machine drawing without a graphics
+   * card spent a quarter of a second on every misty frame, and a game that
+   * answers a click a few seconds late is broken, not merely ugly. It steps
+   * down and never back up — a board that stuttered once would stutter again
+   * — and stops at a floor that still reads as mist.
+   */
+  public pace(frameSeconds: number): void {
+    if (!this.mesh.visible || this.steps <= MIN_STEPS) return;
+    this.slowFrames = frameSeconds > SLOW_FRAME ? this.slowFrames + 1 : 0;
+    if (this.slowFrames < SLOW_RUN) return;
+    this.slowFrames = 0;
+    this.steps = Math.max(MIN_STEPS, Math.floor(this.steps / 2));
+    const u = this.material.uniforms.uSteps;
+    if (u !== undefined) u.value = this.steps;
+  }
+
+  /** Steps taken along each ray now; for tests. */
+  public get stepsTaken(): number {
+    return this.steps;
   }
 
   public update(dt: number): void {

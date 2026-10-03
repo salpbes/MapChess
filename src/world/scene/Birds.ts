@@ -132,7 +132,9 @@ export class Birds {
   public send(kind: Visit = 'flock'): boolean {
     if (!this.active || this.bounds === null) return false;
     this.clear();
-    this.launch(kind);
+    // From just off the board's edge, not from far out: a visit asked for is
+    // over the board within a couple of seconds, however slow the frames.
+    this.launch(kind, 0.62);
     return true;
   }
 
@@ -177,7 +179,8 @@ export class Birds {
     this.group.removeFromParent();
   }
 
-  private launch(kind: Visit): void {
+  /** `from` is how far out it starts, in board widths from the middle. */
+  private launch(kind: Visit, from = 1.1): void {
     const b = this.bounds;
     if (b === null) return;
     const w = this.width;
@@ -186,8 +189,12 @@ export class Birds {
     // In from the east or the west, mostly, aimed somewhere over the board: a
     // bird crossing the view is seen crossing, one flying straight at the
     // camera or away from it hardly seems to move.
-    const from = (Math.random() < 0.5 ? 0 : Math.PI) + (Math.random() - 0.5) * 1.1;
-    const start = new Vector3(cx + Math.cos(from) * w * 1.1, 0, cz + Math.sin(from) * w * 1.1);
+    const bearing = (Math.random() < 0.5 ? 0 : Math.PI) + (Math.random() - 0.5) * 1.1;
+    const start = new Vector3(
+      cx + Math.cos(bearing) * w * from,
+      0,
+      cz + Math.sin(bearing) * w * from,
+    );
     const aim = new Vector3(
       cx + (Math.random() - 0.5) * w * 0.4,
       0,

@@ -120,6 +120,7 @@ export class WorldStage {
     this.scene.add(this.birds.group);
     this.stopWeatherClock = this.loop.onTick((dt) => {
       weather.time.value += dt;
+      this.veils.pace(dt);
       if (this.veils.mesh.visible && !this.stillness.matches) this.veils.update(dt);
       this.birds.update(dt);
       const dir = windDirectionAt(weather.time.value);
@@ -242,6 +243,11 @@ export class WorldStage {
   /** Whether veils of mist lie over the board — still there, and still, when motion is reduced. */
   public get veiled(): boolean {
     return this.veils.mesh.visible;
+  }
+
+  /** Steps the mist takes along each ray; fewer once frames have been too slow. */
+  public get mistSteps(): number {
+    return this.veils.stepsTaken;
   }
 
   /** Seconds of breeze the mist has drifted on; it stops while motion is reduced. */
