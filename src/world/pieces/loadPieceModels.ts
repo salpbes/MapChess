@@ -17,7 +17,7 @@ import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 
 import type { Color, PieceType } from '@domain/chess/types';
 
-import { PIECE_SETS } from './pieceSets';
+import { PIECE_SETS, folderOf } from './pieceSets';
 import type { PieceSetDef } from './pieceSets';
 
 /** `${color}-${type}`, the key a factory looks a model up by. */
@@ -199,7 +199,7 @@ export function piecesInSet(
   const armies = PIECE_SETS[set] ?? COLOUR_NAMES;
   const keys = new Set<ModelKey>();
   for (const path of Object.keys(files)) {
-    if (pieceSetOf(path) !== set) continue;
+    if (pieceSetOf(path) !== folderOf(set)) continue;
     const key = modelKeyFor(path, armies);
     if (key !== null) keys.add(key);
   }
@@ -236,7 +236,7 @@ export async function loadPieceModels(
 
   const armies = PIECE_SETS[set] ?? COLOUR_NAMES;
   const found = Object.entries(FILES)
-    .filter(([path]) => pieceSetOf(path) === set)
+    .filter(([path]) => pieceSetOf(path) === folderOf(set))
     .map(([path, url]) => ({ key: modelKeyFor(path, armies), url, path }))
     .filter((entry): entry is { key: ModelKey; url: string; path: string } => entry.key !== null);
 

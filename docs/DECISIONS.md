@@ -980,3 +980,13 @@ The thunder now comes in episodes, and the rain at two strengths — both as the
 **The deploy gate found the cost.** The first push of the volume failed on GitHub, whose runners draw without a graphics card: two weather tests timed out, and the weather file took 23 minutes locally under the same rendering. Each misty frame took a quarter of a second there, so clicks waited seconds for the frames Playwright needs before it presses. The mist now watches its own frame times (`MistVolume.pace`): after twelve frames in a row under 20 a second it halves its steps, down to a floor of five, and never steps back up. Twelve in a row is a machine that cannot keep up; the few long frames of a board being built never reach it, so a fast machine keeps every step. In software rendering the mist now costs about what the old layers did (7.5 frames a second against 8.2), and the weather tests take 7 minutes. The same pacing covers a weak phone, which the author has not yet tried.
 
 **Birds asked for come from near.** The other failure was a test waiting 40 seconds for birds to arrive: a visit starts more than half a board off the edge, and on a slow machine each frame's step is capped, so game time crawls. `Birds.send` now starts a visit just off the edge; the visits that come on their own still come from far out.
+
+## D-078 — Second World War pieces, two fronts from one folder
+
+**Date:** 2026-10-04 · **Phase:** beyond 13
+
+**Context.** The author began the WW2 set with an American and a German pawn, then added a Russian one. The game has two WW2 battlefields, and they were fought by different armies: Americans and Germans at Monte Cassino, Russians and Germans at Stalingrad.
+
+**Decision.** One folder, `ww2/`, holds every army, and a set may now name the folder it draws from (`folder` in `pieceSets.ts`). `ww2` is the USA against Germany; `ww2-east` is Russia against Germany from the same files. A curated place can name its set where its era's is the wrong armies (`pieces` in `curatedPlaces.ts`): Mamayev Kurgan uses `ww2-east`; every other WW2 board uses `ww2`. The attackers are White, as ANZAC is in WW1 — the Allies up the mountain at Cassino — and Germany is Black on both fronts, so the same army looks the same wherever it is met; at Stalingrad that makes the Russians White. Both sets stay preview-only (`?pieces=ww2`, `?pieces=ww2-east`) until each has all twelve pieces.
+
+The Russian pawn arrived as `russian_pawn..glb`; the doubled dot would have kept the loader from reading it as a pawn, so it was renamed.

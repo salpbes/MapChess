@@ -90,6 +90,20 @@ describe('complete sets', () => {
     expect(isCompleteSet('ww1', two)).toBe(false);
   });
 
+  it('draws two fronts from one folder, each its own pair of armies', () => {
+    const ww2 = Object.fromEntries(
+      ['usa_pawn', 'german_pawn', 'russian_pawn'].map((n) => [
+        `../../chesspieces/compressed/ww2/${n}.glb`,
+        `/${n}.glb`,
+      ]),
+    );
+    expect([...piecesInSet('ww2', ww2)].sort()).toEqual(['black-pawn', 'white-pawn']);
+    expect([...piecesInSet('ww2-east', ww2)].sort()).toEqual(['black-pawn', 'white-pawn']);
+    // The Russian is White in the east, and not a piece at all in the west.
+    expect(modelKeyFor('/ww2/russian_pawn.glb', PIECE_SETS['ww2-east'])).toBe('white-pawn');
+    expect(modelKeyFor('/ww2/russian_pawn.glb', PIECE_SETS.ww2)).toBeNull();
+  });
+
   it('calls a set complete at all twelve', () => {
     const all = files(types.flatMap((t) => [`anzac_${t}`, `ottoman_${t}`]));
     expect(isCompleteSet('ww1', all)).toBe(true);

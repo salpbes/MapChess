@@ -29,9 +29,11 @@ export function choosePieceSet(
   facts: PieceSetFacts,
 ): string {
   if (preview !== null && facts.exists(preview)) return preview;
-  // Sets are named after the era they dress, so a WW1 battle looks for "ww1".
+  // Sets are named after the era they dress, so a WW1 battle looks for "ww1",
+  // unless the place names its own: the armies that actually fought there.
   const place = curatedPlaceAt(area);
-  if (place !== null && facts.exists(place.era) && facts.complete(place.era)) return place.era;
+  const wanted = place === null ? null : (place.pieces ?? place.era);
+  if (wanted !== null && facts.exists(wanted) && facts.complete(wanted)) return wanted;
   return DEFAULT_PIECE_SET;
 }
 

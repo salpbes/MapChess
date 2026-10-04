@@ -28,6 +28,13 @@ export interface PieceSetDef {
    * anticlockwise seen from above.
    */
   readonly turn?: Readonly<Partial<Record<PieceType, number>>>;
+  /**
+   * The folder its models are in, when that is not the set's own name. One war
+   * can have more armies than one board has sides: the WW2 folder holds the
+   * Americans, the Germans and the Russians, and each front is a set drawing
+   * its pair from it.
+   */
+  readonly folder?: string;
 }
 
 export const PIECE_SETS: Readonly<Record<string, PieceSetDef>> = {
@@ -44,9 +51,16 @@ export const PIECE_SETS: Readonly<Record<string, PieceSetDef>> = {
     turn: { bishop: 90 },
   },
   /*
-    The Second World War, begun with an American and a German pawn and used for
-    every Second World War board. The USA is White, as ANZAC is in the first:
-    at Monte Cassino the Allies were the side attacking up the mountain.
+    The Second World War, two fronts drawn from one folder. In the west the USA
+    is White, as ANZAC is in the first war: at Monte Cassino the Allies were
+    the side attacking up the mountain. In the east, Russia. Germany is Black
+    on both, so the same army looks the same wherever it is met.
   */
   ww2: { white: 'usa', black: 'german' },
+  'ww2-east': { folder: 'ww2', white: 'russian', black: 'german' },
 };
+
+/** The folder a set's models are filed in. */
+export function folderOf(set: string): string {
+  return PIECE_SETS[set]?.folder ?? set;
+}

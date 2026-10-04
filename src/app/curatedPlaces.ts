@@ -76,6 +76,11 @@ export interface CuratedPlace {
    * otherwise. The player's weather button changes it for the board in hand.
    */
   readonly mood?: Mood;
+  /**
+   * The piece set, where the era's own is the wrong armies: Stalingrad was
+   * fought by Russians, not Americans. Otherwise the set named after the era.
+   */
+  readonly pieces?: string;
 }
 
 function at(lat: number, lon: number, sizeMeters = 2000, rotationDeg = 0): SelectedArea {
@@ -193,6 +198,7 @@ export const CURATED_PLACES: readonly CuratedPlace[] = [
     // Held into the Stalingrad winter.
     mood: 'storm',
     era: 'ww2',
+    pieces: 'ww2-east',
     blurb: 'The hill that overlooked Stalingrad · 1942',
     area: at(48.7422, 44.5372),
   },

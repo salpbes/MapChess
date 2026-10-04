@@ -55,6 +55,18 @@ describe('choosePieceSet', () => {
     expect(choosePieceSet(anzac.area, null, facts(['medieval', 'ww1']))).toBe('ww1');
   });
 
+  it('dresses a battle in the armies that fought there, not just its era', () => {
+    const stalingrad = CURATED_PLACES.find((p) => p.name === 'Mamayev Kurgan');
+    const cassino = CURATED_PLACES.find((p) => p.name === 'Monte Cassino');
+    if (stalingrad === undefined || cassino === undefined) throw new Error('places missing');
+    const ww2 = {
+      exists: (s: string) => ['medieval', 'ww2', 'ww2-east'].includes(s),
+      complete: () => true,
+    };
+    expect(choosePieceSet(stalingrad.area, null, ww2)).toBe('ww2-east');
+    expect(choosePieceSet(cassino.area, null, ww2)).toBe('ww2');
+  });
+
   it('falls back when an era has no set at all', () => {
     // Hastings is medieval, whose set is the original; the check is that an
     // era without a folder never yields a set name nothing can load.
