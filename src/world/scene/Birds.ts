@@ -232,6 +232,9 @@ export class Birds {
       circlingSince: null,
       arrived: false,
     };
+    // In place before the frame is drawn: a bird left where it was made stands
+    // on the middle of the board for one frame.
+    this.place(this.flight, 0);
   }
 
   private makeBird(span: number, offset: Vector3): Bird {

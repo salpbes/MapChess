@@ -43,4 +43,10 @@ export const PIECE_SETS: Readonly<Record<string, PieceSetDef>> = {
     // Both field guns were modelled barrel along −X; measured, not eyeballed.
     turn: { bishop: 90 },
   },
+  /*
+    The Second World War, begun with an American and a German pawn and used for
+    every Second World War board. The USA is White, as ANZAC is in the first:
+    at Monte Cassino the Allies were the side attacking up the mountain.
+  */
+  ww2: { white: 'usa', black: 'german' },
 };

@@ -66,6 +66,18 @@ describe('birds', () => {
     expect(heard).toEqual(['flock']);
   });
 
+  it('are never seen where they are made, before they are placed', () => {
+    const { birds } = birdsOver();
+    const at = new Vector3();
+    for (const kind of ['flock', 'soarer'] as const) {
+      birds.send(kind);
+      for (const child of birds.group.children) {
+        child.getWorldPosition(at);
+        expect(at.y).toBeGreaterThan(BOUNDS.maxY);
+      }
+    }
+  });
+
   it('let a soarer circle over the board for a while before it leaves', () => {
     const { birds, heard } = birdsOver();
     birds.send('soarer');
