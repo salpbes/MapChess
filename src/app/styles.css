@@ -1132,7 +1132,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  width: 340px;
+  width: 384px;
   padding: 22px;
   border-radius: 10px;
   background: #24272d;
@@ -1291,7 +1291,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 330px;
+  width: 374px;
   padding: 22px;
   border-radius: 10px;
   background: #24272d;
@@ -2015,9 +2015,15 @@ body {
   one control that gets you out. `dvh` rather than `vh` because iOS Safari's
   address bar changes the viewport height as you scroll, and `vh` is the taller
   of the two measurements.
+
+  `border-box`, because a max-height on a content box caps only the content:
+  the 22px of padding each side went on top, and the cap was 44px short. Mac
+  and Linux fonts kept the menu under it anyway; Windows' Segoe UI, with taller
+  lines, ran it past both edges again. The widths include that padding to match.
 */
 .menu,
 .gameover {
+  box-sizing: border-box;
   max-height: calc(100dvh - 24px);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -2323,6 +2329,12 @@ body {
   the fold. Short screens get it on one line: the names go, the door stays.
 */
 @media (max-height: 520px) {
+  /* Windows' taller system font fits on one screen only with tighter spacing. */
+  .menu {
+    gap: 4px;
+    padding: 12px 22px;
+  }
+
   .menu__fields {
     padding: 7px 10px;
     gap: 10px;
@@ -2335,5 +2347,16 @@ body {
 
   .menu__fields-teaser {
     display: none;
+  }
+
+  /*
+    However tall the fonts make the rest of the card, the door stays in view:
+    when the menu has to scroll, the fields scroll and "Back to the board"
+    stays pinned to its bottom edge.
+  */
+  .menu__button--quiet {
+    position: sticky;
+    bottom: 0;
+    background: #24272d;
   }
 }
