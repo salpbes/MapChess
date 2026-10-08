@@ -573,6 +573,45 @@ describe('GameLoop assessment', () => {
     expect(ai.evaluations).toBe(before);
   });
 
+  /*
+    The rating asked for on load was still searching when New game was pressed:
+    its answer was dropped as stale, and the new game's own request had been
+    turned away because one was already in flight. So the strip stayed empty
+    until the first move. A board that loads quickly made it every time.
+  */
+  it('asks again when the answer in flight was for a position already left', async () => {
+    const { bus, ai, loop } = withRater();
+    const seen = vi.fn();
+    bus.on('assessment-changed', seen);
+
+    let answer: (score: { kind: 'centipawns'; value: number; depth: number }) => void = () =>
+      undefined;
+    const first = vi.spyOn(ai, 'evaluate').mockImplementationOnce(() => {
+      ai.evaluations += 1;
+      return new Promise((resolve) => {
+        answer = resolve;
+      });
+    });
+
+    loop.start({ white: 'human', black: 'human' });
+    loop.setAssessing(true);
+    expect(first).toHaveBeenCalledTimes(1);
+
+    loop.newGame({ white: 'human', black: 'human' });
+    answer({ kind: 'centipawns', value: 999, depth: 1 });
+
+    await vi.waitFor(() => {
+      expect(ai.evaluations).toBe(2);
+    });
+    await vi.waitFor(() => {
+      expect(seen).toHaveBeenCalled();
+    });
+    const [{ assessment }] = seen.mock.calls[seen.mock.calls.length - 1] as [
+      { assessment: { number: string } | null },
+    ];
+    expect(assessment?.number).toBe('+1.2');
+  });
+
   it('does not rate a finished game', async () => {
     const engine = new ChessEngine();
     for (const move of FOOLS_MATE) engine.move(move);

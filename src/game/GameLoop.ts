@@ -363,11 +363,15 @@ export class GameLoop {
     const generation = this.generation;
     const fen = engine.fen;
     const turn = engine.turn;
+    let stale = false;
     this.analysis = ai
       .evaluate(fen)
       .then((score) => {
         // The board has moved on; a stale opinion is worse than none.
-        if (generation !== this.generation || fen !== this.deps.engine.fen) return;
+        if (generation !== this.generation || fen !== this.deps.engine.fen) {
+          stale = true;
+          return;
+        }
         bus.emit('assessment-changed', { assessment: score === null ? null : assess(score, turn) });
       })
       .catch((error: unknown) => {
@@ -375,6 +379,9 @@ export class GameLoop {
       })
       .finally(() => {
         this.analysis = null;
+        // The request for the position actually on the board was turned away
+        // while this one was in flight, so it is asked for now instead.
+        if (stale) this.requestAssessment();
       });
   }
 
