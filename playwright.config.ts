@@ -29,6 +29,19 @@ const ORIGIN = `http://localhost:${PORT}`;
 */
 const ON_CI = process.env.CI !== undefined;
 
+/*
+  Headless Chromium on Windows ignores the graphics card and renders WebGL with
+  SwiftShader, on the CPU. Three workers each drawing the board that way held a
+  12-core desktop at 100% for over ten minutes without finishing. Naming the
+  ANGLE backend puts the board back on the GPU: D3D11 on Windows, Metal on a
+  Mac. Linux is left alone: GitHub's runners have no GPU to ask for, and
+  SwiftShader is the only renderer they can use.
+*/
+const GPU_ARGS: Partial<Record<NodeJS.Platform, string[]>> = {
+  win32: ['--use-angle=d3d11'],
+  darwin: ['--use-angle=metal'],
+};
+
 export default defineConfig({
   testDir: './tests/e2e',
   // Vitest owns `tests/**/*.test.ts`; the two suites never see each other.
@@ -56,6 +69,7 @@ export default defineConfig({
     baseURL: ORIGIN,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    launchOptions: { args: GPU_ARGS[process.platform] ?? [] },
   },
 
   projects: [
