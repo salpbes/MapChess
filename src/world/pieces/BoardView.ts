@@ -19,6 +19,9 @@ import type { MoveAnimator } from './MoveAnimator';
 import type { PieceLayer } from './PieceLayer';
 
 export class BoardView implements IBoardView {
+  /** Bumped by every `showPosition`, so a move in flight can tell it was overtaken. */
+  private resyncs = 0;
+
   public constructor(
     private readonly pieces: PieceLayer,
     private readonly highlights: HighlightLayer,
@@ -32,6 +35,7 @@ export class BoardView implements IBoardView {
   }
 
   public showPosition(pieces: readonly PlacedPiece[]): void {
+    this.resyncs += 1;
     this.animator.flush();
     this.pieces.sync(pieces);
   }
@@ -53,7 +57,14 @@ export class BoardView implements IBoardView {
       }
     }
 
+    const resyncs = this.resyncs;
     await Promise.all(travels);
+
+    // The board was rebuilt from the engine while the piece was in the air —
+    // new piece models arriving, say. The engine already holds this move, so
+    // the rebuild placed everything where it belongs, and there is nothing
+    // left to relocate or capture.
+    if (this.resyncs !== resyncs) return;
 
     if (move.capturedSquare !== null) {
       const victim = this.pieces.release(move.capturedSquare);
